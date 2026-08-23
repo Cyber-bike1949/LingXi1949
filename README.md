@@ -16,7 +16,7 @@ Bridge local and remote terminal sessions to your notes, with reusable workflows
 
 English / [简体中文](./README_ZH.md)
 
-[Install](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Screenshots](#visual-tour) · [Report Issues](https://github.com/Cyber-bike/termesh/issues) · [Telegram](https://t.me/+t6oRqhaw8c1jNzE1)
+[Install](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Screenshots](#visual-tour) · [Report Issues](https://github.com/Cyber-bike/QueQiao/issues) · [Telegram](https://t.me/+t6oRqhaw8c1jNzE1)
 
 <p align="center">
   <img src="assets/termy-workspace-overview.png" width="980" alt="Termy main workspace preview with Obsidian, Codex CLI, OpenCode, and Claude Code" />
@@ -74,7 +74,7 @@ Magpie Bridge is built for people who work across notes, terminals, AI coding se
 ### Privacy and Network Access
 
 - Magpie Bridge does not include telemetry or analytics.
-- Magpie Bridge downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
+- Magpie Bridge downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike/QueQiao/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
 - Terminal sessions run local shell commands and user-configured workflows. Those commands may read files, modify files, or access the network according to the shell command or external CLI being run.
 - Magpie Bridge starts local WebSocket connections for its PTY backend and optional IDE bridge. These connections are used for local terminal transport and editor-context handoff.
 - Context-aware AI launchers can pass the active note path, selection, editor context, and vault/workspace path to local CLI tools. The Codex integration writes a vault-local helper skill under `.agents/skills/termy-obsidian-context/`.
@@ -166,14 +166,14 @@ Magpie Bridge is not yet listed in the official Obsidian Community Plugins direc
 
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. Open BRAT settings and choose **Add beta plugin**.
-3. Enter `Cyber-bike/termesh`.
+3. Enter `Cyber-bike/QueQiao`.
 4. Install the plugin and enable it in **Settings → Community plugins**.
 
 ### Manual install
 
 Community Plugins and BRAT installations automatically download the verified platform-native runtime when remote devices are first used. Manual installation is only needed for offline environments:
 
-1. Download the matching `termesh-<version>-<platform>.zip` complete package from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases), for example `win32-x64` on Windows x64.
+1. Download the matching `termesh-<version>-<platform>.zip` complete package from [GitHub Releases](https://github.com/Cyber-bike/QueQiao/releases), for example `win32-x64` on Windows x64.
 2. Extract the release files into `.obsidian/plugins/termesh/` inside your vault.
 3. Reload Obsidian.
 4. Enable Magpie Bridge in **Settings → Community plugins**.
@@ -189,7 +189,7 @@ Official Agent builds are currently available for **Linux x64** and **Windows x6
 Run the installer as the ordinary user who will own the remote shell, not as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike/termesh/main/agent/packaging/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike/QueQiao/main/agent/packaging/install-linux.sh | bash
 ```
 
 The installer downloads the latest Agent, verifies its SHA-256 checksum, installs it to `~/.local/bin`, and starts a systemd user service. It requests `sudo` once to enable lingering so the Agent keeps running after logout; the Agent and remote shells themselves never run as root.
@@ -203,7 +203,7 @@ journalctl --user -u termesh-agent -f
 
 #### Windows x64
 
-1. Download `termesh-agent-win32-x64.exe` and its `.sha256` file from the latest [GitHub Release](https://github.com/Cyber-bike/termesh/releases/latest).
+1. Download `termesh-agent-win32-x64.exe` and its `.sha256` file from the latest [GitHub Release](https://github.com/Cyber-bike/QueQiao/releases/latest).
 2. Verify the checksum with `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`, then compare it with the first value in the `.sha256` file.
 3. Rename it to `termesh-agent.exe`, place it in a permanent directory, and run `termesh-agent.exe run`. Double-clicking the executable does the same thing.
 4. Copy the printed connection code into **Magpie Bridge → Add device**. Keep the Agent running; use Windows Task Scheduler if it should start automatically at sign-in.

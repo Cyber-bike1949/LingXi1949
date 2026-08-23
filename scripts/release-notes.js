@@ -3,7 +3,7 @@
  *
  * Usage:
  *   node scripts/release-notes.js --version 1.3.0
- *   node scripts/release-notes.js --version 1.3.0 --repository Cyber-bike/termesh --output release-body.md
+ *   node scripts/release-notes.js --version 1.3.0 --repository Cyber-bike/QueQiao --output release-body.md
  */
 
 import fs from 'fs';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_CHANGELOG_PATH = path.join(__dirname, '..', 'CHANGELOG.md');
-const DEFAULT_REPOSITORY = 'Cyber-bike/termesh';
+const DEFAULT_REPOSITORY = 'Cyber-bike/QueQiao';
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
