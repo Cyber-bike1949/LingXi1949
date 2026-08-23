@@ -81,8 +81,8 @@ import embeddedChangelogContent from '../CHANGELOG.md';
 
 // Import terminal styles
 
-const REPOSITORY_URL = 'https://github.com/jiang-zhong-xi/Termy';
-const CHANGELOG_URL = `${REPOSITORY_URL}/blob/master/CHANGELOG.md`;
+const REPOSITORY_URL = 'https://github.com/Cyber-bike/termesh';
+const CHANGELOG_URL = `${REPOSITORY_URL}/blob/main/CHANGELOG.md`;
 const EMBEDDED_CHANGELOG_SOURCE_PATH = 'CHANGELOG.md';
 const ALWAYS_ON_TOP_TAB_BADGE_CLASS = 'termy-always-on-top-tab-badge';
 const DIRECTORY_TREE_DROP_HIGHLIGHT_CLASS = 'termy-directory-tree-drop-target';

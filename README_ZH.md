@@ -16,7 +16,7 @@
 
 简体中文 / [English](./README.md)
 
-[安装](#安装) · [快速上手](#快速上手) · [功能特性](#功能特性) · [界面导览](#界面导览) · [问题反馈](https://github.com/jiang-zhong-xi/Termy/issues) · [Telegram 群组](https://t.me/+t6oRqhaw8c1jNzE1)
+[安装](#安装) · [快速上手](#快速上手) · [功能特性](#功能特性) · [界面导览](#界面导览) · [问题反馈](https://github.com/Cyber-bike/termesh/issues) · [Telegram 群组](https://t.me/+t6oRqhaw8c1jNzE1)
 
 <p align="center">
   <img src="assets/termy-workspace-overview.png" width="980" alt="Termy 主工作区预览，包含 Obsidian、Codex CLI、OpenCode 和 Claude Code" />
@@ -74,7 +74,7 @@ Termesh 面向同时使用笔记、终端、AI 编码工具和多台设备的用
 ### 隐私与网络访问
 
 - Termesh 不包含遥测或分析功能。
-- Termesh 会在需要时从 [GitHub Releases](https://github.com/jiang-zhong-xi/Termy/releases) 下载与当前平台匹配的原生 PTY server。首次使用远程设备时，会优先从 unpkg 下载固定版本、与当前平台匹配的 iroh `.node` 运行库，并依次回退到 jsDelivr 和 GitHub Releases。原生下载均使用插件内置的 SHA-256 校验；离线模式会禁用这些下载和所有更新检查。
+- Termesh 会在需要时从 [GitHub Releases](https://github.com/Cyber-bike/termesh/releases) 下载与当前平台匹配的原生 PTY server。首次使用远程设备时，会优先从 unpkg 下载固定版本、与当前平台匹配的 iroh `.node` 运行库，并依次回退到 jsDelivr 和 GitHub Releases。原生下载均使用插件内置的 SHA-256 校验；离线模式会禁用这些下载和所有更新检查。
 - 终端会话会运行本地 shell 命令和用户配置的工作流。这些命令可能会根据实际运行的 shell 命令或外部 CLI 读取文件、修改文件或访问网络。
 - Termesh 会启动本地 WebSocket 连接，用于 PTY 后端和可选 IDE bridge。这些连接仅用于本地终端传输和编辑器上下文接力。
 - 上下文感知的 AI 启动器可以把活动笔记路径、选区、编辑器上下文以及 vault/workspace 路径传递给本地 CLI 工具。Codex 集成会在 vault 内写入本地 helper skill：`.agents/skills/termy-obsidian-context/`。
@@ -159,28 +159,20 @@ Termesh 面向同时使用笔记、终端、AI 编码工具和多台设备的用
 > [!WARNING]
 > Termesh 使用原生 PTY 后端，因此仅支持 Obsidian 桌面端。
 
-### 通过 Obsidian 社区插件市场安装（推荐）
+### 使用 BRAT 安装（当前推荐方式）
 
-Termesh 已上架官方 Obsidian Community Plugins 列表。
-
-1. 打开 **设置 → 社区插件**，如已开启 **受限模式（Restricted mode）** 请先关闭。
-2. 点击 **浏览（Browse）**，搜索 `Termesh`。
-3. 依次点击 **安装（Install）** 与 **启用（Enable）**。
-
-### 使用 BRAT 安装（提前体验最新版）
-
-如果想在版本进入社区市场之前抢先体验，可以使用 BRAT 跟随最新 tag。
+Termesh 尚未上架官方 Obsidian Community Plugins 列表（提交审核中），因此在通过审核之前，推荐使用 BRAT 安装。
 
 1. 安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat)。
 2. 打开 BRAT 设置，选择 **Add beta plugin**。
-3. 输入 `jiang-zhong-xi/Termy`。
+3. 输入 `Cyber-bike/termesh`。
 4. 安装插件，并在 **设置 → 社区插件** 中启用。
 
 ### 手动安装
 
 通过社区市场或 BRAT 安装后，首次使用远程设备时会自动下载并校验当前平台的原生运行库。只有离线环境需要手动安装完整包：
 
-1. 从 [GitHub Releases](https://github.com/jiang-zhong-xi/Termy/releases) 下载与当前平台匹配的 `termesh-<version>-<platform>.zip` 完整包，例如 Windows x64 使用 `win32-x64`。
+1. 从 [GitHub Releases](https://github.com/Cyber-bike/termesh/releases) 下载与当前平台匹配的 `termesh-<version>-<platform>.zip` 完整包，例如 Windows x64 使用 `win32-x64`。
 2. 解压到当前 vault 的 `.obsidian/plugins/termesh/` 目录。
 3. 重启或重新加载 Obsidian。
 4. 在 **设置 → 社区插件** 中启用 Termesh。
@@ -196,7 +188,7 @@ Termesh 已上架官方 Obsidian Community Plugins 列表。
 请使用将来拥有远程 shell 的普通用户执行，不要切换到 root：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jiang-zhong-xi/Termy/main/agent/packaging/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike/termesh/main/agent/packaging/install-linux.sh | bash
 ```
 
 脚本会下载最新版 Agent、校验 SHA-256、安装到 `~/.local/bin`，并启动 systemd 用户服务。安装时会请求一次 `sudo` 来启用 lingering，使退出登录后 Agent 仍能运行；Agent 和远程 shell 本身始终以普通用户运行。
@@ -210,7 +202,7 @@ journalctl --user -u termesh-agent -f
 
 #### Windows x64
 
-1. 从最新 [GitHub Release](https://github.com/jiang-zhong-xi/Termy/releases/latest) 下载 `termesh-agent-win32-x64.exe` 和对应的 `.sha256` 文件。
+1. 从最新 [GitHub Release](https://github.com/Cyber-bike/termesh/releases/latest) 下载 `termesh-agent-win32-x64.exe` 和对应的 `.sha256` 文件。
 2. 执行 `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`，与 `.sha256` 文件中的第一个值核对。
 3. 将其重命名为 `termesh-agent.exe` 并放到固定目录，执行 `termesh-agent.exe run`；直接双击该程序也会启动 Agent。
 4. 把打印出的连接码粘贴到 **Termesh → 添加设备**。Agent 需要保持运行；如需登录后自动启动，可使用 Windows 任务计划程序。

@@ -28,7 +28,7 @@ test('renderReleaseBody describes the package without requiring CHANGELOG.md as 
   const body = renderReleaseBody({
     version: '1.3.0',
     changelogSection: '### Added\n- Embedded changelog support.',
-    repository: 'jiang-zhong-xi/Termy',
+    repository: 'Cyber-bike/termesh',
   });
 
   assert.match(body, /Download the `termesh-1\.3\.0-<platform>\.zip` asset matching your platform/);

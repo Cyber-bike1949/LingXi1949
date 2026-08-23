@@ -1,6 +1,6 @@
 import type { BinaryDownloadSource } from '../../settings/settings';
 
-export const GITHUB_RELEASE_REPOSITORY = 'jiang-zhong-xi/Termy';
+export const GITHUB_RELEASE_REPOSITORY = 'Cyber-bike/termesh';
 
 interface BinaryInfo {
   filename: string;

@@ -16,7 +16,7 @@ Open local and remote terminal sessions from one device home, with reusable work
 
 English / [简体中文](./README_ZH.md)
 
-[Install](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Screenshots](#visual-tour) · [Report Issues](https://github.com/jiang-zhong-xi/Termy/issues) · [Telegram](https://t.me/+t6oRqhaw8c1jNzE1)
+[Install](#installation) · [Quick Start](#quick-start) · [Features](#features) · [Screenshots](#visual-tour) · [Report Issues](https://github.com/Cyber-bike/termesh/issues) · [Telegram](https://t.me/+t6oRqhaw8c1jNzE1)
 
 <p align="center">
   <img src="assets/termy-workspace-overview.png" width="980" alt="Termy main workspace preview with Obsidian, Codex CLI, OpenCode, and Claude Code" />
@@ -74,7 +74,7 @@ Termesh is built for people who work across notes, terminals, AI coding sessions
 ### Privacy and Network Access
 
 - Termesh does not include telemetry or analytics.
-- Termesh downloads the matching native PTY server from [GitHub Releases](https://github.com/jiang-zhong-xi/Termy/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
+- Termesh downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
 - Terminal sessions run local shell commands and user-configured workflows. Those commands may read files, modify files, or access the network according to the shell command or external CLI being run.
 - Termesh starts local WebSocket connections for its PTY backend and optional IDE bridge. These connections are used for local terminal transport and editor-context handoff.
 - Context-aware AI launchers can pass the active note path, selection, editor context, and vault/workspace path to local CLI tools. The Codex integration writes a vault-local helper skill under `.agents/skills/termy-obsidian-context/`.
@@ -160,28 +160,20 @@ Termesh is built for people who work across notes, terminals, AI coding sessions
 > [!WARNING]
 > Termesh is desktop-only because it uses a native PTY backend.
 
-### Install from the Obsidian Community Plugins (recommended)
+### Install with BRAT (recommended for now)
 
-Termesh is now listed in the official Obsidian Community Plugins directory.
-
-1. Open **Settings → Community plugins** and turn off **Restricted mode** if it is enabled.
-2. Click **Browse** and search for `Termesh`.
-3. Click **Install**, then **Enable**.
-
-### Install with BRAT (early updates)
-
-Use BRAT if you want to track the latest tagged build before it ships to the community directory.
+Termesh is not yet listed in the official Obsidian Community Plugins directory, so BRAT is the recommended install path until that submission is approved.
 
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. Open BRAT settings and choose **Add beta plugin**.
-3. Enter `jiang-zhong-xi/Termy`.
+3. Enter `Cyber-bike/termesh`.
 4. Install the plugin and enable it in **Settings → Community plugins**.
 
 ### Manual install
 
 Community Plugins and BRAT installations automatically download the verified platform-native runtime when remote devices are first used. Manual installation is only needed for offline environments:
 
-1. Download the matching `termesh-<version>-<platform>.zip` complete package from [GitHub Releases](https://github.com/jiang-zhong-xi/Termy/releases), for example `win32-x64` on Windows x64.
+1. Download the matching `termesh-<version>-<platform>.zip` complete package from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases), for example `win32-x64` on Windows x64.
 2. Extract the release files into `.obsidian/plugins/termesh/` inside your vault.
 3. Reload Obsidian.
 4. Enable Termesh in **Settings → Community plugins**.
@@ -197,7 +189,7 @@ Official Agent builds are currently available for **Linux x64** and **Windows x6
 Run the installer as the ordinary user who will own the remote shell, not as root:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/jiang-zhong-xi/Termy/main/agent/packaging/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike/termesh/main/agent/packaging/install-linux.sh | bash
 ```
 
 The installer downloads the latest Agent, verifies its SHA-256 checksum, installs it to `~/.local/bin`, and starts a systemd user service. It requests `sudo` once to enable lingering so the Agent keeps running after logout; the Agent and remote shells themselves never run as root.
@@ -211,7 +203,7 @@ journalctl --user -u termesh-agent -f
 
 #### Windows x64
 
-1. Download `termesh-agent-win32-x64.exe` and its `.sha256` file from the latest [GitHub Release](https://github.com/jiang-zhong-xi/Termy/releases/latest).
+1. Download `termesh-agent-win32-x64.exe` and its `.sha256` file from the latest [GitHub Release](https://github.com/Cyber-bike/termesh/releases/latest).
 2. Verify the checksum with `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`, then compare it with the first value in the `.sha256` file.
 3. Rename it to `termesh-agent.exe`, place it in a permanent directory, and run `termesh-agent.exe run`. Double-clicking the executable does the same thing.
 4. Copy the printed connection code into **Termesh → Add device**. Keep the Agent running; use Windows Task Scheduler if it should start automatically at sign-in.

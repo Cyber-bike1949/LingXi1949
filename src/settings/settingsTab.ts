@@ -85,7 +85,7 @@ export class TerminalSettingTab extends PluginSettingTab {
     feedbackContainer.appendText(t('settings.header.feedbackText'));
     feedbackContainer.createEl('a', {
       text: t('settings.header.feedbackLink'),
-      href: 'https://github.com/jiang-zhong-xi/Termy'
+      href: 'https://github.com/Cyber-bike/termesh'
     });
     feedbackContainer.createSpan({ cls: 'settings-feedback-separator', text: ' · ' });
     feedbackContainer.createEl('a', {

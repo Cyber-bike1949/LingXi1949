@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const MAX_REDIRECTS = 5;
 const DOWNLOAD_IDLE_TIMEOUT_MS = 15_000;
-const GITHUB_RELEASE_REPOSITORY = 'jiang-zhong-xi/Termy';
+const GITHUB_RELEASE_REPOSITORY = 'Cyber-bike/termesh';
 const IROH_VERSION = '1.1.0';
 
 const RUNTIME_ASSETS: Record<string, {
