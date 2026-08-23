@@ -70,7 +70,7 @@ type BridgeClientState = {
 const IDE_TOOLS = [
   {
     name: 'closeAllDiffTabs',
-    description: 'Close all Claude Code diff tabs in the editor. In Termesh this is a no-op.',
+    description: 'Close all Claude Code diff tabs in the editor. In Magpie Bridge this is a no-op.',
     inputSchema: EMPTY_OBJECT_SCHEMA,
     annotations: {
       readOnlyHint: true,
@@ -106,7 +106,7 @@ const IDE_TOOLS = [
   },
   {
     name: 'getDiagnostics',
-    description: 'Get editor diagnostics. Obsidian/Termesh currently returns an empty diagnostics list.',
+    description: 'Get editor diagnostics. Obsidian/Magpie Bridge currently returns an empty diagnostics list.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -384,7 +384,7 @@ export class ClaudeCodeIdeBridge {
     const lockfile = {
       pid: process.pid,
       workspaceFolders,
-      ideName: 'Termesh (Obsidian)',
+      ideName: 'Magpie Bridge (Obsidian)',
       transport: 'ws',
       runningInWindows: process.platform === 'win32',
       authToken: this.authToken,
@@ -521,7 +521,7 @@ export class ClaudeCodeIdeBridge {
         version: this.version,
       },
       instructions:
-        'This Termesh bridge exposes the active Obsidian file and selection to compatible agent CLIs.',
+        'This Magpie Bridge integration exposes the active Obsidian file and selection to compatible agent CLIs.',
     });
   }
 

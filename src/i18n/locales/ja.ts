@@ -20,11 +20,11 @@ export const ja: TranslationKeys = {
   },
 
   plugin: {
-    name: 'Termesh',
-    loadingMessage: 'Termesh プラグインを読み込み中',
-    loadedMessage: 'Termesh プラグインを読み込みました',
-    unloadingMessage: 'Termesh プラグインをアンロード中',
-    unloadedMessage: 'Termesh プラグインをアンロードしました',
+    name: 'Magpie Bridge',
+    loadingMessage: 'Magpie Bridge プラグインを読み込み中',
+    loadedMessage: 'Magpie Bridge プラグインを読み込みました',
+    unloadingMessage: 'Magpie Bridge プラグインをアンロード中',
+    unloadedMessage: 'Magpie Bridge プラグインをアンロードしました',
   },
 
   home: {
@@ -105,8 +105,8 @@ export const ja: TranslationKeys = {
   },
 
   commands: {
-    openTerminal: 'Termeshを開く',
-    showChangelog: 'Termesh: 更新ログを表示',
+    openTerminal: 'Magpie Bridgeを開く',
+    showChangelog: 'Magpie Bridge: 更新ログを表示',
     terminalToggleDirectoryTree: 'ターミナル: ディレクトリツリーを切り替え',
     terminalSearch: 'ターミナル: 検索',
     terminalClear: 'ターミナル: 画面をクリア',
@@ -129,7 +129,7 @@ export const ja: TranslationKeys = {
   },
 
   ribbon: {
-    terminalTooltip: 'Termeshを開く',
+    terminalTooltip: 'Magpie Bridgeを開く',
   },
 
   visibility: {
@@ -214,7 +214,7 @@ export const ja: TranslationKeys = {
       advanced: '詳細設定',
     },
     header: {
-      title: 'Termesh',
+      title: 'Magpie Bridge',
       feedbackText: 'ご利用ありがとうございます。フィードバックはこちら: ',
       feedbackLink: 'GitHub',
       communityLink: 'Telegram',
@@ -359,7 +359,7 @@ export const ja: TranslationKeys = {
       offlineMode: 'オフラインモード',
       offlineModeDesc: '有効にするとバイナリのバージョン確認と自動ダウンロードをスキップ',
       binaryDownloadSource: 'バイナリのダウンロード元',
-      binaryDownloadSourceDesc: 'Termesh のネイティブバイナリを GitHub Release または Cloudflare R2 のどちらからダウンロードするか選択します',
+      binaryDownloadSourceDesc: 'Magpie Bridge のネイティブバイナリを GitHub Release または Cloudflare R2 のどちらからダウンロードするか選択します',
       binaryDownloadSourceGithubRelease: 'GitHub Release',
       binaryDownloadSourceCloudflareR2: 'Cloudflare R2',
       binaryDownloadNow: '今すぐバイナリをダウンロード',
@@ -376,7 +376,7 @@ export const ja: TranslationKeys = {
   modals: {
     changelog: {
       title: '更新ログ',
-      subtitle: 'Termesh {{version}} の更新内容',
+      subtitle: 'Magpie Bridge {{version}} の更新内容',
       loading: '更新ログを読み込み中...',
       unavailable: 'このバージョンの更新ログを読み込めませんでした。',
       openRelease: 'リリースページを開く',
@@ -393,7 +393,7 @@ export const ja: TranslationKeys = {
     launcherInstall: {
       titleNotInstalled: '{{name}} はインストールされていません',
       titleUpdate: '{{name}} を更新',
-      descriptionNotInstalled: 'Termesh は PATH 上で「{{command}}」を見つけられませんでした。CLI をインストールしてから再度お試しください。',
+      descriptionNotInstalled: 'Magpie Bridge は PATH 上で「{{command}}」を見つけられませんでした。CLI をインストールしてから再度お試しください。',
       descriptionUpdate: '{{name}} の新しいリリースが利用可能です ({{local}} → {{latest}})。下記のコマンドをシステムターミナルで実行して更新してください。',
       detectedCommand: '検出されたコマンド',
       versionLabel: 'バージョン',
@@ -402,7 +402,7 @@ export const ja: TranslationKeys = {
       cardTitleUpgradeOneClick: 'ワンクリックでアップグレード',
       cardDescInstall: 'このコマンドをコピーしてシステムターミナルで実行してください。シェルから実行ファイルが見えるようになると、このランチャーは自動的に検出します。',
       cardDescUpgrade: 'このコマンドをコピーしてシステムターミナルで実行し、アップグレードしてください。新しいバージョンがシェルから到達可能になると、このランチャーは自動的に検出します。',
-      cardDescUpgradeOneClick: '「今すぐ更新」をクリックすると Termesh ターミナルでこのコマンドが実行されます。コピーして手動で実行することもできます。',
+      cardDescUpgradeOneClick: '「今すぐ更新」をクリックすると Magpie Bridge ターミナルでこのコマンドが実行されます。コピーして手動で実行することもできます。',
       buttonCopy: 'コピー',
       buttonClose: '閉じる',
       buttonOpenDocs: 'インストールドキュメントを開く',

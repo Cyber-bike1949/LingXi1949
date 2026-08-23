@@ -1,10 +1,10 @@
 # 开发指南
 
-想参与贡献 Termesh 的人从这一份文档看起就够了：各部分是什么、怎么构建和测试、提交前要遵守哪些规则。（English version: [development.md](development.md)。）
+想参与贡献 Magpie Bridge 的人从这一份文档看起就够了：各部分是什么、怎么构建和测试、提交前要遵守哪些规则。（English version: [development.md](development.md)。）
 
 ## 1. 总览
 
-Termesh 是一个给 Obsidian 内嵌真实终端的插件，还带一个可选的远程终端功能：Windows/桌面版 Obsidian 作为控制端，通过 `iroh`（QUIC）与目标设备（Windows 或无桌面 Ubuntu）上的 `termesh-agent` 直连，不需要账号，也不需要自建服务端。
+Magpie Bridge 是一个给 Obsidian 内嵌真实终端的插件，还带一个可选的远程终端功能：Windows/桌面版 Obsidian 作为控制端，通过 `iroh`（QUIC）与目标设备（Windows 或无桌面 Ubuntu）上的 `termesh-agent` 直连，不需要账号，也不需要自建服务端。
 
 | 目录 | 内容 |
 | --- | --- |
@@ -123,7 +123,7 @@ cargo build --manifest-path agent/Cargo.toml
 以下条目直接来自 [Obsidian 官方开发者政策](https://docs.obsidian.md/Developer+policies#Not+allowed)，违反任何一条都会导致插件被社区列表拒绝，已上架的会被下架。拿不准时就问自己一句："一个理性的人会不会把这个描述成下面某一条？"——会的话就不要做。
 
 - **不能混淆代码来隐藏其用途。** `main.js` 用 esbuild 的 `minify: true` 压缩体积是允许的，因为 GitHub 上的可读 TypeScript 源码才是上游真相——不要在此之上再加编码字符串、运行时解码的函数体、不透明打包器或基于 eval 的加载器。
-- **不能插入广告**，无论动态还是静态，除非它出现在 Termesh 自己的界面里（设置页、自己的弹窗/视图），且确实与 Termesh 本身相关。
+- **不能插入广告**，无论动态还是静态，除非它出现在 Magpie Bridge 自己的界面里（设置页、自己的弹窗/视图），且确实与 Magpie Bridge 本身相关。
 - **不能包含客户端遥测。** 不允许分析 SDK、使用情况上报、错误上报端点，或任何"首次运行打个招呼"式的行为。允许的出站网络调用只有：从 GitHub Release 下载对应版本的 `termy-server` 二进制；下载固定版本、对应平台的 iroh 原生运行时（unpkg/jsDelivr/GitHub Release，SHA-256 校验，离线模式下禁用）；到 PTY 后端和 Claude Code IDE bridge 的纯本地 WebSocket 连接；以及默认关闭的 AI 启动器更新检查（同样受离线模式抑制）。这个开关必须保持默认关闭。
 - **不能包含插件自更新机制。** 只有 Obsidian 自己的插件更新器能替换 `main.js`/`styles.css`/`manifest.json`。唯一允许的例外是把匹配的原生 `termy-server` 二进制下载到 `<plugin>/binaries/`——它是单独版本化的原生资源，经 SHA-256 校验，受离线模式禁用控制，且绝不会覆盖插件的 JS/CSS/JSON 文件。
 - **不能加载网络资源。** 所有字体、图片、图标都要通过 esbuild 的 `loader` 表或 `assets/` 打进包里，样式表里不要出现 `https://...` 的引用。

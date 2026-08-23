@@ -1,16 +1,16 @@
 <div align="center">
 
-# Termesh
+# Magpie Bridge
 
-<img src="assets/termy-logo-selection.png" width="150" alt="Termesh logo" />
+<img src="assets/termy-logo-selection.png" width="150" alt="Magpie Bridge logo" />
 
-*A device-aware terminal mesh for Obsidian*
+*Not a prompt box. A bridge from your notes to your agent.*
 
-Open local and remote terminal sessions from one device home, with reusable workflows, AI CLI context handoff, and a native Rust PTY backend.
+Bridge local and remote terminal sessions to your notes, with reusable workflows, AI CLI context handoff, and a native Rust PTY backend.
 
-[![Version](https://img.shields.io/badge/version-1.4.4-7c3aed?style=for-the-badge)](./manifest.json)
+[![Version](https://img.shields.io/badge/version-1.5.0-7c3aed?style=for-the-badge)](./manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-Desktop%20Only-8b5cf6?style=for-the-badge)](https://obsidian.md/)
-[![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=termesh)
+[![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=queqiao)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](./LICENSE)
 [![PTY](https://img.shields.io/badge/backend-Rust%20PTY-f97316?style=for-the-badge)](./rust-servers)
 
@@ -26,9 +26,9 @@ English / [简体中文](./README_ZH.md)
 
 ---
 
-## Why Termesh?
+## Why Magpie Bridge?
 
-Termesh is built for people who work across notes, terminals, AI coding sessions, and more than one device. Its device home keeps local and paired remote terminals in one place while preserving the editor context that makes an Obsidian-native terminal useful.
+Magpie Bridge is built for people who work across notes, terminals, AI coding sessions, and more than one device. Its device home keeps local and paired remote terminals in one place while preserving the editor context that makes an Obsidian-native terminal useful.
 
 - **Native PTY backend**: Rust keeps the backend lean and avoids extra bridge runtimes.
 - **Real terminal UX**: xterm.js frontend with search, copy/paste, prompt navigation, split panes, and multi-session support.
@@ -65,20 +65,20 @@ Termesh is built for people who work across notes, terminals, AI coding sessions
 ### AI & Coding Integrations
 
 > [!NOTE]
-> Claude Code, OpenCode, or Codex sessions started from an external terminal are ordinary CLI processes outside Termesh's Obsidian integration layer, so they cannot automatically know the active note, vault/workspace root, or editor selection.
+> Claude Code, OpenCode, or Codex sessions started from an external terminal are ordinary CLI processes outside Magpie Bridge's Obsidian integration layer, so they cannot automatically know the active note, vault/workspace root, or editor selection.
 
-- Termesh starts AI CLIs inside the current vault context, where the active note, selection, open files, and workspace root can be available to coding tasks.
-- Claude Code and OpenCode use Termesh's IDE bridge; Codex uses a vault-local Skill at `.agents/skills/termy-obsidian-context/SKILL.md`.
+- Magpie Bridge starts AI CLIs inside the current vault context, where the active note, selection, open files, and workspace root can be available to coding tasks.
+- Claude Code and OpenCode use Magpie Bridge's IDE bridge; Codex uses a vault-local Skill at `.agents/skills/termy-obsidian-context/SKILL.md`.
 - The built-in Codex launcher starts `codex` directly, without MCP registration or global CLI configuration changes.
 
 ### Privacy and Network Access
 
-- Termesh does not include telemetry or analytics.
-- Termesh downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
+- Magpie Bridge does not include telemetry or analytics.
+- Magpie Bridge downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
 - Terminal sessions run local shell commands and user-configured workflows. Those commands may read files, modify files, or access the network according to the shell command or external CLI being run.
-- Termesh starts local WebSocket connections for its PTY backend and optional IDE bridge. These connections are used for local terminal transport and editor-context handoff.
+- Magpie Bridge starts local WebSocket connections for its PTY backend and optional IDE bridge. These connections are used for local terminal transport and editor-context handoff.
 - Context-aware AI launchers can pass the active note path, selection, editor context, and vault/workspace path to local CLI tools. The Codex integration writes a vault-local helper skill under `.agents/skills/termy-obsidian-context/`.
-- Optional: when **Check for AI launcher updates** is enabled in settings, Termesh queries `https://registry.npmjs.org` for the latest Claude Code and Codex CLI releases, and `https://api.github.com` for the latest OpenCode release. The setting is **off by default** and offline mode disables it regardless of the toggle.
+- Optional: when **Check for AI launcher updates** is enabled in settings, Magpie Bridge queries `https://registry.npmjs.org` for the latest Claude Code and Codex CLI releases, and `https://api.github.com` for the latest OpenCode release. The setting is **off by default** and offline mode disables it regardless of the toggle.
 
 ### Appearance & Ergonomics
 
@@ -142,7 +142,7 @@ Termesh is built for people who work across notes, terminals, AI coding sessions
 | Command | What it does |
 | --- | --- |
 | `Open terminal` | Opens a new terminal using your configured placement rules. |
-| `Termesh: show changelog` | Opens the bundled changelog modal. |
+| `Magpie Bridge: show changelog` | Opens the bundled changelog modal. |
 | `Terminal: split horizontal / split vertical` | Splits the active terminal. |
 | `Terminal: send selection` | Sends the current editor selection to the active terminal. |
 | `Terminal: send current note` | Sends the full current note content. |
@@ -158,11 +158,11 @@ Termesh is built for people who work across notes, terminals, AI coding sessions
 - Windows, macOS, or Linux
 
 > [!WARNING]
-> Termesh is desktop-only because it uses a native PTY backend.
+> Magpie Bridge is desktop-only because it uses a native PTY backend.
 
 ### Install with BRAT (recommended for now)
 
-Termesh is not yet listed in the official Obsidian Community Plugins directory, so BRAT is the recommended install path until that submission is approved.
+Magpie Bridge is not yet listed in the official Obsidian Community Plugins directory, so BRAT is the recommended install path until that submission is approved.
 
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. Open BRAT settings and choose **Add beta plugin**.
@@ -176,13 +176,13 @@ Community Plugins and BRAT installations automatically download the verified pla
 1. Download the matching `termesh-<version>-<platform>.zip` complete package from [GitHub Releases](https://github.com/Cyber-bike/termesh/releases), for example `win32-x64` on Windows x64.
 2. Extract the release files into `.obsidian/plugins/termesh/` inside your vault.
 3. Reload Obsidian.
-4. Enable Termesh in **Settings → Community plugins**.
+4. Enable Magpie Bridge in **Settings → Community plugins**.
 
 ### Install a remote Agent
 
 The plugin is the controller. Each remote computer also needs `termesh-agent`, which runs as the signed-in ordinary user and exposes that user's shell. No account or separate pairing service is required.
 
-Official Agent builds are currently available for **Linux x64** and **Windows x64**. A macOS Agent is not currently published; macOS can still run the Termesh plugin and local terminals.
+Official Agent builds are currently available for **Linux x64** and **Windows x64**. A macOS Agent is not currently published; macOS can still run the Magpie Bridge plugin and local terminals.
 
 #### Linux x64 (Ubuntu 22.04/24.04)
 
@@ -194,7 +194,7 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-bike/termesh/main/agent/packa
 
 The installer downloads the latest Agent, verifies its SHA-256 checksum, installs it to `~/.local/bin`, and starts a systemd user service. It requests `sudo` once to enable lingering so the Agent keeps running after logout; the Agent and remote shells themselves never run as root.
 
-When installation finishes, copy the printed connection code into **Termesh → Add device**. Show it again or inspect logs with:
+When installation finishes, copy the printed connection code into **Magpie Bridge → Add device**. Show it again or inspect logs with:
 
 ```bash
 ~/.local/bin/termesh-agent status
@@ -206,13 +206,13 @@ journalctl --user -u termesh-agent -f
 1. Download `termesh-agent-win32-x64.exe` and its `.sha256` file from the latest [GitHub Release](https://github.com/Cyber-bike/termesh/releases/latest).
 2. Verify the checksum with `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`, then compare it with the first value in the `.sha256` file.
 3. Rename it to `termesh-agent.exe`, place it in a permanent directory, and run `termesh-agent.exe run`. Double-clicking the executable does the same thing.
-4. Copy the printed connection code into **Termesh → Add device**. Keep the Agent running; use Windows Task Scheduler if it should start automatically at sign-in.
+4. Copy the printed connection code into **Magpie Bridge → Add device**. Keep the Agent running; use Windows Task Scheduler if it should start automatically at sign-in.
 
 See the [Agent deployment and operations guide](docs/%E4%BD%BF%E7%94%A8/operations.md) for configuration, startup, upgrades, removal, and troubleshooting on each platform.
 
 ## Quick Start
 
-1. Open Termesh from the ribbon, command palette, or empty-tab action to choose a device.
+1. Open Magpie Bridge from the ribbon, command palette, or empty-tab action to choose a device.
 2. Choose your shell and terminal placement behavior in settings.
 3. Try the built-in workflows from the status bar menu.
 4. Send your current selection, note, or file path into the terminal.
@@ -259,7 +259,7 @@ graph LR
 
 ## License
 
-Termesh is licensed under [GPL-3.0](./LICENSE).
+Magpie Bridge is licensed under [GPL-3.0](./LICENSE).
 
 ## Credits
 
@@ -272,6 +272,6 @@ Termesh is licensed under [GPL-3.0](./LICENSE).
 
 **Made with ❤️ for Obsidian power users**
 
-If Termesh helps your workflow, consider starring the project.
+If Magpie Bridge helps your workflow, consider starring the project.
 
 </div>

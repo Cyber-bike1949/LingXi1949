@@ -1,10 +1,10 @@
 # Development Guide
 
-This is the single entry point for anyone setting up a local environment to work on Termesh: what the pieces are, how to build and test each of them, and the rules a contribution has to follow. (中文版见 [development_ZH.md](development_ZH.md)。)
+This is the single entry point for anyone setting up a local environment to work on Magpie Bridge: what the pieces are, how to build and test each of them, and the rules a contribution has to follow. (中文版见 [development_ZH.md](development_ZH.md)。)
 
 ## 1. Overview
 
-Termesh is an Obsidian plugin that embeds a real terminal in a note-taking app, plus an optional remote-terminal feature: a Windows/desktop Obsidian control device drives a `termesh-agent` process on a target device (Windows or headless Ubuntu) over a direct `iroh` (QUIC) connection, no account or self-hosted server required.
+Magpie Bridge is an Obsidian plugin that embeds a real terminal in a note-taking app, plus an optional remote-terminal feature: a Windows/desktop Obsidian control device drives a `termesh-agent` process on a target device (Windows or headless Ubuntu) over a direct `iroh` (QUIC) connection, no account or self-hosted server required.
 
 | Path | Content |
 | --- | --- |
@@ -123,7 +123,7 @@ cargo build --manifest-path agent/Cargo.toml
 These come straight from [Obsidian's developer policy](https://docs.obsidian.md/Developer+policies#Not+allowed). Violating any of them gets a plugin rejected from the community list and, if already shipped, removed. When in doubt, ask: "could a reasonable person describe this as one of the items below?" If yes, don't ship it.
 
 - **No obfuscation.** `main.js` is minified by esbuild for size, which is fine because the readable TypeScript source on GitHub is the upstream truth — don't add encoded strings, runtime-decoded bodies, opaque packers, or eval-based loaders on top of that.
-- **No ads**, dynamic or static, anywhere outside Termesh's own UI surfaces (settings tab, its own modals/views), and only when genuinely related to Termesh itself.
+- **No ads**, dynamic or static, anywhere outside Magpie Bridge's own UI surfaces (settings tab, its own modals/views), and only when genuinely related to Magpie Bridge itself.
 - **No client-side telemetry.** No analytics SDKs, usage pings, error-reporting endpoints, or "phone home" behavior. The only outbound network calls allowed: downloading the matching `termy-server` binary from GitHub Releases; downloading the fixed-version platform `.node` iroh runtime (unpkg/jsDelivr/GitHub Releases, SHA-256 verified, disabled by offline mode); the local-only WebSocket connections to the PTY backend and the Claude Code IDE bridge; and the optional, off-by-default AI launcher update check (also suppressed by offline mode). That setting must stay off by default.
 - **No plugin self-update mechanism.** Obsidian's own updater is the only acceptable path for `main.js`/`styles.css`/`manifest.json`. The one allowed exception is downloading the matching native `termy-server` binary into `<plugin>/binaries/` — a separately versioned native asset, SHA-256 verified, disabled by offline mode, and it must never overwrite plugin JS/CSS/JSON.
 - **No network-loaded assets.** Bundle every font, image, or icon via esbuild's `loader` table or `assets/`; don't reference `https://...` URLs from stylesheets.

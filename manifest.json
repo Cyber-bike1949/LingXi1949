@@ -1,9 +1,9 @@
 {
-  "id": "termesh",
-  "name": "Termesh",
-  "version": "1.4.6",
+  "id": "queqiao",
+  "name": "Magpie Bridge",
+  "version": "1.5.0",
   "minAppVersion": "1.8.7",
-  "description": "A device-aware terminal mesh with local and remote sessions, reusable workflows, and AI CLI context handoff.",
+  "description": "Bridge your notes to AI agents — rich markdown and linked context replace the single prompt box, with local and remote terminal sessions.",
   "author": "Jiang ZhongXi",
   "authorUrl": "https://github.com/Cyber-bike",
   "isDesktopOnly": true

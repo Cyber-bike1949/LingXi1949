@@ -20,11 +20,11 @@ export const en: TranslationKeys = {
   },
 
   plugin: {
-    name: 'Termesh',
-    loadingMessage: 'Termesh plugin loading',
-    loadedMessage: 'Termesh plugin loaded',
-    unloadingMessage: 'Termesh plugin unloading',
-    unloadedMessage: 'Termesh plugin unloaded',
+    name: 'Magpie Bridge',
+    loadingMessage: 'Magpie Bridge plugin loading',
+    loadedMessage: 'Magpie Bridge plugin loaded',
+    unloadingMessage: 'Magpie Bridge plugin unloading',
+    unloadedMessage: 'Magpie Bridge plugin unloaded',
   },
 
   home: {
@@ -106,7 +106,7 @@ export const en: TranslationKeys = {
 
   commands: {
     openTerminal: 'Open terminal',
-    showChangelog: 'Termesh: Show changelog',
+    showChangelog: 'Magpie Bridge: Show changelog',
     terminalSearch: 'Terminal: search',
     terminalToggleDirectoryTree: 'Terminal: toggle directory tree',
     terminalClear: 'Terminal: clear screen',
@@ -214,7 +214,7 @@ export const en: TranslationKeys = {
       advanced: 'Advanced',
     },
     header: {
-      title: 'Termesh',
+      title: 'Magpie Bridge',
       feedbackText: 'Thanks for using! Feedback welcome: ',
       feedbackLink: 'GitHub',
       communityLink: 'Telegram',
@@ -376,7 +376,7 @@ export const en: TranslationKeys = {
   modals: {
     changelog: {
       title: 'Changelog',
-      subtitle: 'Updated in Termesh {{version}}',
+      subtitle: 'Updated in Magpie Bridge {{version}}',
       loading: 'Loading changelog...',
       unavailable: 'Unable to load the changelog for this version right now.',
       openRelease: 'Open release page',
@@ -393,7 +393,7 @@ export const en: TranslationKeys = {
     launcherInstall: {
       titleNotInstalled: '{{name}} is not installed',
       titleUpdate: 'Update {{name}}',
-      descriptionNotInstalled: 'Termesh could not find "{{command}}" on your PATH. Install the CLI on your machine, then come back and try again.',
+      descriptionNotInstalled: 'Magpie Bridge could not find "{{command}}" on your PATH. Install the CLI on your machine, then come back and try again.',
       descriptionUpdate: 'A newer release of {{name}} is available ({{local}} → {{latest}}). Run the command below in your system terminal to upgrade.',
       detectedCommand: 'Detected command',
       versionLabel: 'Version',

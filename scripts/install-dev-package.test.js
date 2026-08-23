@@ -64,11 +64,11 @@ test('migrateEnabledPluginId replaces an enabled legacy ID without duplicates', 
 
   try {
     fs.mkdirSync(pluginsDir);
-    fs.writeFileSync(enabledPluginsPath, JSON.stringify(['termesh', 'hi-note', 'termy']));
+    fs.writeFileSync(enabledPluginsPath, JSON.stringify(['queqiao', 'hi-note', 'termesh']));
 
     assert.equal(migrateEnabledPluginId(pluginsDir), true);
     assert.deepEqual(JSON.parse(fs.readFileSync(enabledPluginsPath, 'utf8')), [
-      'termesh',
+      'queqiao',
       'hi-note',
     ]);
   } finally {
@@ -97,13 +97,13 @@ test('migrateLegacyPluginData preserves settings when changing plugin IDs', () =
   const pluginsDir = path.join(tempDir, 'plugins');
 
   try {
-    fs.mkdirSync(path.join(pluginsDir, 'termy'), { recursive: true });
     fs.mkdirSync(path.join(pluginsDir, 'termesh'), { recursive: true });
-    fs.writeFileSync(path.join(pluginsDir, 'termy', 'data.json'), '{"shell":"pwsh"}');
+    fs.mkdirSync(path.join(pluginsDir, 'queqiao'), { recursive: true });
+    fs.writeFileSync(path.join(pluginsDir, 'termesh', 'data.json'), '{"shell":"pwsh"}');
 
     assert.equal(migrateLegacyPluginData(pluginsDir), true);
     assert.deepEqual(
-      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'termesh', 'data.json'), 'utf8')),
+      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'queqiao', 'data.json'), 'utf8')),
       { shell: 'pwsh' },
     );
   } finally {
@@ -111,19 +111,19 @@ test('migrateLegacyPluginData preserves settings when changing plugin IDs', () =
   }
 });
 
-test('migrateLegacyPluginData does not overwrite existing Termy settings', () => {
+test('migrateLegacyPluginData does not overwrite existing current-ID settings', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'termesh-plugin-data-'));
   const pluginsDir = path.join(tempDir, 'plugins');
 
   try {
-    fs.mkdirSync(path.join(pluginsDir, 'termy'), { recursive: true });
     fs.mkdirSync(path.join(pluginsDir, 'termesh'), { recursive: true });
-    fs.writeFileSync(path.join(pluginsDir, 'termy', 'data.json'), '{"shell":"legacy"}');
-    fs.writeFileSync(path.join(pluginsDir, 'termesh', 'data.json'), '{"shell":"current"}');
+    fs.mkdirSync(path.join(pluginsDir, 'queqiao'), { recursive: true });
+    fs.writeFileSync(path.join(pluginsDir, 'termesh', 'data.json'), '{"shell":"legacy"}');
+    fs.writeFileSync(path.join(pluginsDir, 'queqiao', 'data.json'), '{"shell":"current"}');
 
     assert.equal(migrateLegacyPluginData(pluginsDir), false);
     assert.deepEqual(
-      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'termesh', 'data.json'), 'utf8')),
+      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'queqiao', 'data.json'), 'utf8')),
       { shell: 'current' },
     );
   } finally {
