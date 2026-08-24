@@ -6,6 +6,12 @@ import test from 'node:test';
 
 import { LocalDirectoryTreeSource } from './directoryTreeSource.ts';
 
+// watch()'s debounce uses `window.setTimeout`/`window.clearTimeout` (required by the
+// obsidianmd lint rule), but this suite runs under plain Node, which has no `window`.
+if (typeof globalThis.window === 'undefined') {
+  (globalThis as { window?: Window }).window = globalThis as unknown as Window;
+}
+
 function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'termy-dirtree-'));
 }

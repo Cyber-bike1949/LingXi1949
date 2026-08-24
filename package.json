@@ -1,5 +1,5 @@
 {
-  "name": "queqiao",
+  "name": "lingxi",
   "version": "1.5.0",
   "type": "module",
   "description": "Bridge your Obsidian notes to AI CLI agents. Rich markdown and note links replace the flat prompt box, backed by local and remote terminal sessions with a bundled Rust PTY backend.",

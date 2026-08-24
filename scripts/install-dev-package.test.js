@@ -64,11 +64,11 @@ test('migrateEnabledPluginId replaces an enabled legacy ID without duplicates', 
 
   try {
     fs.mkdirSync(pluginsDir);
-    fs.writeFileSync(enabledPluginsPath, JSON.stringify(['queqiao', 'hi-note', 'termesh']));
+    fs.writeFileSync(enabledPluginsPath, JSON.stringify(['lingxi', 'hi-note', 'termesh']));
 
     assert.equal(migrateEnabledPluginId(pluginsDir), true);
     assert.deepEqual(JSON.parse(fs.readFileSync(enabledPluginsPath, 'utf8')), [
-      'queqiao',
+      'lingxi',
       'hi-note',
     ]);
   } finally {
@@ -98,12 +98,12 @@ test('migrateLegacyPluginData preserves settings when changing plugin IDs', () =
 
   try {
     fs.mkdirSync(path.join(pluginsDir, 'termesh'), { recursive: true });
-    fs.mkdirSync(path.join(pluginsDir, 'queqiao'), { recursive: true });
+    fs.mkdirSync(path.join(pluginsDir, 'lingxi'), { recursive: true });
     fs.writeFileSync(path.join(pluginsDir, 'termesh', 'data.json'), '{"shell":"pwsh"}');
 
     assert.equal(migrateLegacyPluginData(pluginsDir), true);
     assert.deepEqual(
-      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'queqiao', 'data.json'), 'utf8')),
+      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'lingxi', 'data.json'), 'utf8')),
       { shell: 'pwsh' },
     );
   } finally {
@@ -117,13 +117,13 @@ test('migrateLegacyPluginData does not overwrite existing current-ID settings', 
 
   try {
     fs.mkdirSync(path.join(pluginsDir, 'termesh'), { recursive: true });
-    fs.mkdirSync(path.join(pluginsDir, 'queqiao'), { recursive: true });
+    fs.mkdirSync(path.join(pluginsDir, 'lingxi'), { recursive: true });
     fs.writeFileSync(path.join(pluginsDir, 'termesh', 'data.json'), '{"shell":"legacy"}');
-    fs.writeFileSync(path.join(pluginsDir, 'queqiao', 'data.json'), '{"shell":"current"}');
+    fs.writeFileSync(path.join(pluginsDir, 'lingxi', 'data.json'), '{"shell":"current"}');
 
     assert.equal(migrateLegacyPluginData(pluginsDir), false);
     assert.deepEqual(
-      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'queqiao', 'data.json'), 'utf8')),
+      JSON.parse(fs.readFileSync(path.join(pluginsDir, 'lingxi', 'data.json'), 'utf8')),
       { shell: 'current' },
     );
   } finally {
