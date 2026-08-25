@@ -285,7 +285,10 @@ mod tests {
 
         assert_eq!(config, Config::default());
         assert_eq!(config.max_concurrent_sessions, 8);
-        assert!(!config.device_name.is_empty(), "hostname default must apply");
+        assert!(
+            !config.device_name.is_empty(),
+            "hostname default must apply"
+        );
         assert!(config.receive_root.is_absolute());
     }
 
@@ -399,7 +402,9 @@ mod tests {
 
         // The original survives because validation runs before any write.
         assert_eq!(
-            Config::load_or_default(&path).unwrap().max_concurrent_sessions,
+            Config::load_or_default(&path)
+                .unwrap()
+                .max_concurrent_sessions,
             8
         );
     }

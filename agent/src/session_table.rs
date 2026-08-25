@@ -44,7 +44,11 @@ impl SessionTable {
         }
     }
 
-    pub fn open(&mut self, session_id: Uuid, pty: PtySession) -> Result<&mut SessionHandle, AgentError> {
+    pub fn open(
+        &mut self,
+        session_id: Uuid,
+        pty: PtySession,
+    ) -> Result<&mut SessionHandle, AgentError> {
         if self.sessions.contains_key(&session_id) {
             return Err(AgentError::Protocol(format!(
                 "session {session_id} is already open"
@@ -118,7 +122,8 @@ mod tests {
 
     fn spawn_session() -> PtySession {
         #[cfg(unix)]
-        let (session, reader) = PtySession::spawn("/bin/sh", &[], None, 80, 24).expect("sh should start");
+        let (session, reader) =
+            PtySession::spawn("/bin/sh", &[], None, 80, 24).expect("sh should start");
         #[cfg(windows)]
         let (session, reader) =
             PtySession::spawn("cmd.exe", &[], None, 80, 24).expect("cmd should start");
@@ -171,7 +176,10 @@ mod tests {
 
         table.close(first);
         assert_eq!(table.count(), 1);
-        assert!(table.contains(second), "closing one must not affect the other");
+        assert!(
+            table.contains(second),
+            "closing one must not affect the other"
+        );
     }
 
     #[test]
@@ -189,11 +197,12 @@ mod tests {
         table.open(Uuid::new_v4(), spawn_session()).unwrap();
 
         let rejected = table.open(Uuid::new_v4(), spawn_session());
-        assert!(matches!(
-            rejected,
-            Err(AgentError::SessionLimitReached(1))
-        ));
-        assert_eq!(table.count(), 1, "the rejected session must not be admitted");
+        assert!(matches!(rejected, Err(AgentError::SessionLimitReached(1))));
+        assert_eq!(
+            table.count(),
+            1,
+            "the rejected session must not be admitted"
+        );
     }
 
     #[test]
@@ -282,7 +291,8 @@ mod tests {
                     // appears before the shell's real "GRANDCHILD=<pid>"
                     // output. Same trap pty.rs's extract_pid documents.
                     pid = seen.split("GRANDCHILD=").skip(1).find_map(|rest| {
-                        let digits: String = rest.chars().take_while(char::is_ascii_digit).collect();
+                        let digits: String =
+                            rest.chars().take_while(char::is_ascii_digit).collect();
                         digits.parse::<i32>().ok()
                     });
                 }
@@ -301,7 +311,9 @@ mod tests {
         drop(table.close(id));
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
-        while std::time::Instant::now() < deadline && std::path::Path::new(&format!("/proc/{pid}")).exists() {
+        while std::time::Instant::now() < deadline
+            && std::path::Path::new(&format!("/proc/{pid}")).exists()
+        {
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
         assert!(

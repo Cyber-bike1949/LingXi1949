@@ -26,9 +26,9 @@ use std::sync::{Arc, Mutex};
 
 use iroh::endpoint::{Connection, RecvStream, SendStream, VarInt};
 use iroh::Endpoint;
+use std::path::Path;
 use tokio::sync::mpsc;
 use uuid::Uuid;
-use std::path::Path;
 
 use crate::config::ShellConfig;
 use crate::fs_browse;
@@ -112,7 +112,10 @@ async fn dispatch_connection(
         alpn if alpn == ALPN_TRANSFER => {
             // Phase C. Closing with PROTOCOL_ERROR (doc 13) is more honest
             // than accepting a manifest this build cannot act on.
-            connection.close(VarInt::from_u32(0x02), b"PROTOCOL_ERROR: transfer not supported yet");
+            connection.close(
+                VarInt::from_u32(0x02),
+                b"PROTOCOL_ERROR: transfer not supported yet",
+            );
         }
         other => {
             tracing::warn!(alpn = %String::from_utf8_lossy(other), "unknown ALPN");
@@ -124,11 +127,17 @@ async fn dispatch_connection(
 /// Serves one admitted controller until its connection dies. Holding `_slot`
 /// for the whole body is what enforces doc 7.7 - it drops (reopening the
 /// gate) only after every session has been torn down.
-async fn serve_controller(connection: Connection, _slot: ControllerSlot, options: Arc<ServeOptions>) {
+async fn serve_controller(
+    connection: Connection,
+    _slot: ControllerSlot,
+    options: Arc<ServeOptions>,
+) {
     let remote = connection.remote_id();
     tracing::info!(remote = %remote.fmt_short(), "controller connected");
 
-    let table = Arc::new(Mutex::new(SessionTable::new(options.max_concurrent_sessions)));
+    let table = Arc::new(Mutex::new(SessionTable::new(
+        options.max_concurrent_sessions,
+    )));
 
     loop {
         match connection.accept_bi().await {
@@ -150,7 +159,10 @@ async fn serve_controller(connection: Connection, _slot: ControllerSlot, options
     // the handles terminates each PTY's whole process tree.
     let orphaned = table.lock().expect("session table poisoned").close_all();
     if !orphaned.is_empty() {
-        tracing::info!(count = orphaned.len(), "terminating sessions with the connection");
+        tracing::info!(
+            count = orphaned.len(),
+            "terminating sessions with the connection"
+        );
     }
     drop(orphaned);
 }
@@ -273,7 +285,10 @@ async fn serve_terminal_session(
         shell: shell.clone(),
     });
     if write_frame(&mut send, &opened).await.is_err() {
-        table.lock().expect("session table poisoned").close(session_id);
+        table
+            .lock()
+            .expect("session table poisoned")
+            .close(session_id);
         return;
     }
     tracing::info!(session = %session_id, %shell, "terminal session opened");
@@ -349,7 +364,10 @@ async fn serve_terminal_session(
         let _ = write_frame(&mut send, &Frame::Close(payload)).await;
     }
     let _ = send.finish();
-    table.lock().expect("session table poisoned").close(session_id);
+    table
+        .lock()
+        .expect("session table poisoned")
+        .close(session_id);
     tracing::info!(session = %session_id, "terminal session closed");
 }
 
@@ -569,7 +587,10 @@ fn resolve_transfer_root(
     }
     if let Some(id) = session_id {
         let mut table = table.lock().expect("session table poisoned");
-        if let Some(cwd) = table.get_mut(id).and_then(|handle| handle.last_known_cwd.clone()) {
+        if let Some(cwd) = table
+            .get_mut(id)
+            .and_then(|handle| handle.last_known_cwd.clone())
+        {
             return cwd;
         }
     }
@@ -803,7 +824,10 @@ fn spawn_output_pump(mut reader: Box<dyn std::io::Read + Send>, tx: mpsc::Sender
                             exit_code: event.exit_code(),
                         });
                     }
-                    if tx.blocking_send(PtyEvent::Output(buf[..n].to_vec())).is_err() {
+                    if tx
+                        .blocking_send(PtyEvent::Output(buf[..n].to_vec()))
+                        .is_err()
+                    {
                         break;
                     }
                 }
@@ -819,7 +843,9 @@ fn spawn_output_pump(mut reader: Box<dyn std::io::Read + Send>, tx: mpsc::Sender
 mod tests {
     use super::*;
     use crate::identity::DeviceIdentity;
-    use crate::p2p::{bind_endpoint, connection_code, loopback_addr, parse_connection_code, EndpointProfile};
+    use crate::p2p::{
+        bind_endpoint, connection_code, loopback_addr, parse_connection_code, EndpointProfile,
+    };
     use crate::termstream::{
         FsEntry, FsListPayload, OpenPayload, ResizePayload, TransferChunkPayload,
         TransferCompletePayload, TransferEntry, TransferFileEndPayload,
@@ -840,7 +866,10 @@ mod tests {
             redact("cannot start /usr/local/bin/fish: no such file"),
             "cannot start <path> no such file"
         );
-        assert_eq!(redact(r"error at C:\Users\a\shell.exe here"), "error at <path> here");
+        assert_eq!(
+            redact(r"error at C:\Users\a\shell.exe here"),
+            "error at <path> here"
+        );
     }
 
     #[test]
@@ -960,7 +989,12 @@ mod tests {
     /// dropping it deletes the directory.
     async fn start_agent(
         max_sessions: usize,
-    ) -> (Endpoint, String, tokio::task::JoinHandle<()>, tempfile::TempDir) {
+    ) -> (
+        Endpoint,
+        String,
+        tokio::task::JoinHandle<()>,
+        tempfile::TempDir,
+    ) {
         let identity = test_identity();
         let endpoint = bind_endpoint(&identity, EndpointProfile::Loopback)
             .await
@@ -983,7 +1017,9 @@ mod tests {
             .await
             .unwrap();
         let addr = parse_connection_code(code).unwrap();
-        let connection = within(controller.connect(addr, ALPN_TERMINAL)).await.unwrap();
+        let connection = within(controller.connect(addr, ALPN_TERMINAL))
+            .await
+            .unwrap();
         (controller, connection)
     }
 
@@ -1005,7 +1041,9 @@ mod tests {
         let (send, recv) = within(connection.open_bi()).await.unwrap();
         let mut stream = TestStream::new(send, recv);
         stream
-            .send_frame(Frame::FsList(FsListPayload { path: path.to_string() }))
+            .send_frame(Frame::FsList(FsListPayload {
+                path: path.to_string(),
+            }))
             .await;
         stream
     }
@@ -1076,7 +1114,11 @@ mod tests {
             let mut stream = open_fs_stream(&connection, missing.to_str().unwrap()).await;
             match stream.next_frame().await {
                 Frame::Error(payload) => {
-                    assert!(payload.message.starts_with("FS_LIST_FAILED"), "got: {}", payload.message);
+                    assert!(
+                        payload.message.starts_with("FS_LIST_FAILED"),
+                        "got: {}",
+                        payload.message
+                    );
                 }
                 other => panic!("expected error, got {other:?}"),
             }
@@ -1252,7 +1294,11 @@ mod tests {
 
             match stream.next_frame().await {
                 Frame::Error(payload) => {
-                    assert!(payload.message.starts_with("PULL_FAILED"), "got: {}", payload.message);
+                    assert!(
+                        payload.message.starts_with("PULL_FAILED"),
+                        "got: {}",
+                        payload.message
+                    );
                 }
                 other => panic!("expected error, got {other:?}"),
             }
@@ -1446,15 +1492,26 @@ mod tests {
                 .send_frame(Frame::Data(b"echo serve-e2e-marker\n".to_vec()))
                 .await;
             let seen = stream.read_output_until("serve-e2e-marker").await;
-            assert!(seen.contains("serve-e2e-marker"), "shell output must flow back");
+            assert!(
+                seen.contains("serve-e2e-marker"),
+                "shell output must flow back"
+            );
 
             // Resize is observable from inside the session.
             stream
-                .send_frame(Frame::Resize(ResizePayload { cols: 120, rows: 40 }))
+                .send_frame(Frame::Resize(ResizePayload {
+                    cols: 120,
+                    rows: 40,
+                }))
                 .await;
-            stream.send_frame(Frame::Data(b"stty size\n".to_vec())).await;
+            stream
+                .send_frame(Frame::Data(b"stty size\n".to_vec()))
+                .await;
             let seen = stream.read_output_until("40 120").await;
-            assert!(seen.contains("40 120"), "stty must report the resized dimensions");
+            assert!(
+                seen.contains("40 120"),
+                "stty must report the resized dimensions"
+            );
 
             // A second concurrent session on the same connection (doc 4
             // decision 4), fully independent.
@@ -1528,15 +1585,11 @@ mod tests {
             let pid = within(async {
                 let mut seen = seen;
                 loop {
-                    if let Some(pid) = seen
-                        .split("GRANDCHILD=")
-                        .skip(1)
-                        .find_map(|rest| {
-                            let digits: String =
-                                rest.chars().take_while(char::is_ascii_digit).collect();
-                            digits.parse::<i32>().ok()
-                        })
-                    {
+                    if let Some(pid) = seen.split("GRANDCHILD=").skip(1).find_map(|rest| {
+                        let digits: String =
+                            rest.chars().take_while(char::is_ascii_digit).collect();
+                        digits.parse::<i32>().ok()
+                    }) {
                         return pid;
                     }
                     match stream.next_frame_inner().await {

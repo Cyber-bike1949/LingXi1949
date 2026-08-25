@@ -166,7 +166,11 @@ pub struct TransferManifestPayload {
     /// to". Takes priority over `sessionId`/`receive_root` when present -
     /// see `resolve_transfer_root` in `serve.rs`. Not root-confined, same
     /// posture as `fsList` (doc §6.5).
-    #[serde(default, skip_serializing_if = "Option::is_none", rename = "targetPath")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "targetPath"
+    )]
     pub target_path: Option<String>,
 }
 
@@ -509,7 +513,11 @@ mod tests {
         let mut decoder = FrameDecoder::new();
         decoder.push(&encoded);
         assert_eq!(decoder.next_frame().unwrap(), Some(frame));
-        assert_eq!(decoder.next_frame().unwrap(), None, "buffer must be drained");
+        assert_eq!(
+            decoder.next_frame().unwrap(),
+            None,
+            "buffer must be drained"
+        );
     }
 
     #[test]
@@ -524,7 +532,10 @@ mod tests {
         }));
         roundtrip(Frame::Data(b"echo hi\n".to_vec()));
         roundtrip(Frame::Data(Vec::new()));
-        roundtrip(Frame::Resize(ResizePayload { cols: 120, rows: 40 }));
+        roundtrip(Frame::Resize(ResizePayload {
+            cols: 120,
+            rows: 40,
+        }));
         roundtrip(Frame::ShellEvent(ShellEventPayload {
             event: "command_end".into(),
             source: Some("osc133".into()),
@@ -706,10 +717,7 @@ mod tests {
     fn an_unknown_kind_byte_is_a_protocol_error() {
         let mut decoder = FrameDecoder::new();
         decoder.push(&[0x7f, 0x00]); // kind 0x7f, zero-length payload
-        assert!(matches!(
-            decoder.next_frame(),
-            Err(AgentError::Protocol(_))
-        ));
+        assert!(matches!(decoder.next_frame(), Err(AgentError::Protocol(_))));
     }
 
     #[test]
@@ -718,10 +726,7 @@ mod tests {
         let mut out = vec![KIND_DATA];
         write_varint(&mut out, MAX_FRAME_LEN + 1);
         decoder.push(&out);
-        assert!(matches!(
-            decoder.next_frame(),
-            Err(AgentError::Protocol(_))
-        ));
+        assert!(matches!(decoder.next_frame(), Err(AgentError::Protocol(_))));
     }
 
     #[test]
@@ -731,10 +736,7 @@ mod tests {
         write_varint(&mut out, 2);
         out.extend_from_slice(b"{}"); // valid JSON, but missing required fields
         decoder.push(&out);
-        assert!(matches!(
-            decoder.next_frame(),
-            Err(AgentError::Protocol(_))
-        ));
+        assert!(matches!(decoder.next_frame(), Err(AgentError::Protocol(_))));
     }
 
     #[test]

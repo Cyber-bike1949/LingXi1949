@@ -15,7 +15,11 @@ use termesh_agent::serve::{self, ServeOptions};
 use termesh_agent::{lock, state};
 
 #[derive(Parser)]
-#[command(name = "termesh-agent", version, about = "Termesh remote terminal agent")]
+#[command(
+    name = "termesh-agent",
+    version,
+    about = "Termesh remote terminal agent"
+)]
 struct Cli {
     /// Defaults to `run` when omitted, so double-clicking termesh-agent.exe on
     /// Windows (which launches it with no arguments) opens a console and
@@ -106,7 +110,10 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             match command {
                 ConfigCommand::Show => {
                     println!("deviceName             {}", config.device_name);
-                    println!("identityKeyPath        {}", config.identity_key_path.display());
+                    println!(
+                        "identityKeyPath        {}",
+                        config.identity_key_path.display()
+                    );
                     println!("receiveRoot            {}", config.receive_root.display());
                     println!("maxConcurrentSessions  {}", config.max_concurrent_sessions);
                     println!(
@@ -169,7 +176,11 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 p2p::connection_code(endpoint.addr())
             };
 
-            println!("device    {} ({})", config.device_name, identity.fingerprint());
+            println!(
+                "device    {} ({})",
+                config.device_name,
+                identity.fingerprint()
+            );
             println!();
             println!("connection code (paste it in Termy's \"添加设备\"):");
             println!();
@@ -219,7 +230,10 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             let state_file = state::state_path();
             match state::read(&state_file) {
                 None => {
-                    println!("agent      never run (no state at {})", state_file.display());
+                    println!(
+                        "agent      never run (no state at {})",
+                        state_file.display()
+                    );
                 }
                 Some(state) => {
                     let running = process_alive(state.pid);
@@ -233,7 +247,9 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                             println!("code       {code}");
                         }
                         (true, None) => {
-                            println!("code       unavailable (agent started before it was recorded)");
+                            println!(
+                                "code       unavailable (agent started before it was recorded)"
+                            );
                         }
                         (false, _) => {
                             println!("code       none (start the agent with `termesh-agent run`)");

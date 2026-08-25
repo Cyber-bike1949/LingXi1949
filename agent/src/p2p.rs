@@ -342,11 +342,25 @@ mod tests {
                 let gate = gate.clone();
                 async move {
                     // First controller: admitted, slot held while serving.
-                    let conn1 = agent.accept().await.unwrap().accept().unwrap().await.unwrap();
+                    let conn1 = agent
+                        .accept()
+                        .await
+                        .unwrap()
+                        .accept()
+                        .unwrap()
+                        .await
+                        .unwrap();
                     let slot = admit_controller(&gate, &conn1).expect("first controller admitted");
 
                     // Second controller: refused while the slot is held.
-                    let conn2 = agent.accept().await.unwrap().accept().unwrap().await.unwrap();
+                    let conn2 = agent
+                        .accept()
+                        .await
+                        .unwrap()
+                        .accept()
+                        .unwrap()
+                        .await
+                        .unwrap();
                     assert!(admit_controller(&gate, &conn2).is_none());
 
                     // The first connection is still serviceable after the
@@ -361,7 +375,14 @@ mod tests {
                     drop(slot);
 
                     // Third controller: admitted now that the gate reopened.
-                    let conn3 = agent.accept().await.unwrap().accept().unwrap().await.unwrap();
+                    let conn3 = agent
+                        .accept()
+                        .await
+                        .unwrap()
+                        .accept()
+                        .unwrap()
+                        .await
+                        .unwrap();
                     let slot3 = admit_controller(&gate, &conn3).expect("gate must reopen");
                     drop(slot3);
                     conn3.close(VarInt::from_u32(0), b"");
