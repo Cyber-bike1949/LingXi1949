@@ -1592,9 +1592,8 @@ mod tests {
                     }) {
                         return pid;
                     }
-                    match stream.next_frame_inner().await {
-                        Frame::Data(bytes) => seen.push_str(&String::from_utf8_lossy(&bytes)),
-                        _ => {}
+                    if let Frame::Data(bytes) = stream.next_frame_inner().await {
+                        seen.push_str(&String::from_utf8_lossy(&bytes));
                     }
                 }
             })
