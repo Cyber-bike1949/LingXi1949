@@ -48,8 +48,11 @@ function streamPair(): [ByteStream, ByteStream] {
 /** The agent's end of one fs stream, driven frame-by-frame by each test. */
 class FakeAgent {
   private readonly decoder = new TerminalStreamFrameDecoder();
+  private readonly stream: ByteStream;
 
-  constructor(private readonly stream: ByteStream) {}
+  constructor(stream: ByteStream) {
+    this.stream = stream;
+  }
 
   async send(frame: TerminalStreamFrame): Promise<void> {
     await this.stream.write(encodeTerminalStreamFrame(frame));

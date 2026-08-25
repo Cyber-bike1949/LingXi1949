@@ -1,12 +1,12 @@
 import path from 'node:path';
 
-import { IrohRuntimeInstaller } from './irohRuntimeInstaller';
+import { IrohRuntimeInstaller } from './irohRuntimeInstaller.ts';
 import type {
   IrohRuntimeAssetFetcher,
   IrohRuntimeInstallProgress,
   IrohRuntimePaths,
-} from './irohRuntimeInstaller';
-import type { IrohModule } from './irohStreams';
+} from './irohRuntimeInstaller.ts';
+import type { IrohModule } from './irohStreams.ts';
 
 type ModuleLoader = (modulePath: string) => unknown;
 

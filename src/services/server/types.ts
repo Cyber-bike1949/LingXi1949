@@ -82,11 +82,11 @@ export enum ServerErrorCode {
  * Server manager error
  */
 export class ServerManagerError extends Error {
-  constructor(
-    public code: ServerErrorCode,
-    message: string
-  ) {
+  code: ServerErrorCode;
+
+  constructor(code: ServerErrorCode, message: string) {
     super(message);
+    this.code = code;
     this.name = 'ServerManagerError';
   }
 }

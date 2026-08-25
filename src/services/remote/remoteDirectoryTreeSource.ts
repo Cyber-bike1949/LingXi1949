@@ -57,7 +57,11 @@ async function readOneFrame(stream: ByteStream, decoder: TerminalStreamFrameDeco
 }
 
 export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
-  constructor(private readonly openStream: () => Promise<ByteStream>) {}
+  private readonly openStream: () => Promise<ByteStream>;
+
+  constructor(openStream: () => Promise<ByteStream>) {
+    this.openStream = openStream;
+  }
 
   async list(path: string): Promise<DirectoryEntry[]> {
     const stream = await this.openStream();

@@ -60,7 +60,11 @@ function compareEntries(a: DirectoryEntry, b: DirectoryEntry): number {
  * `FsModule`/`PathModule` comment in `terminalView.ts`).
  */
 export class LocalDirectoryTreeSource implements DirectoryTreeSource {
-  constructor(private readonly fs: MinimalFsModule) {}
+  private readonly fs: MinimalFsModule;
+
+  constructor(fs: MinimalFsModule) {
+    this.fs = fs;
+  }
 
   async list(path: string): Promise<DirectoryEntry[]> {
     const dirents = await this.fs.promises.readdir(path, { withFileTypes: true });

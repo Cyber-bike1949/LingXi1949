@@ -15,13 +15,13 @@ const VAULT_ROOT_LABEL = '/';
 
 export class VaultFolderSuggestModal extends FuzzySuggestModal<TFolder | null> {
   private chosen = false;
+  private readonly folders: TFolder[];
+  private readonly onChoose: (folderPath: string | null) => void;
 
-  constructor(
-    app: App,
-    private readonly folders: TFolder[],
-    private readonly onChoose: (folderPath: string | null) => void,
-  ) {
+  constructor(app: App, folders: TFolder[], onChoose: (folderPath: string | null) => void) {
     super(app);
+    this.folders = folders;
+    this.onChoose = onChoose;
     this.setPlaceholder(t('directoryTree.copyToVaultChooseFolderPlaceholder'));
   }
 

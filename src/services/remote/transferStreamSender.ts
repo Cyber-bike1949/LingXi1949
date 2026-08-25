@@ -56,17 +56,33 @@ async function readOneFrame(stream: ByteStream, decoder: TerminalStreamFrameDeco
 }
 
 export class TransferStreamSender {
+  private readonly openStream: () => Promise<ByteStream>;
+  private readonly transferId: string;
+  private readonly files: CollectedFile[];
+  private readonly readFile: (path: string) => Promise<Uint8Array>;
+  /** Doc §7.6: lands the transfer in this session's cwd instead of the agent's configured receive root, when known. */
+  private readonly sessionId: string | null;
+  /** Directory-tree "drop onto this node" (candidate doc §4.1 point 4): wins outright over sessionId/receive_root when present. */
+  private readonly targetPath: string | null;
+  private readonly callbacks: TransferSenderCallbacks;
+
   constructor(
-    private readonly openStream: () => Promise<ByteStream>,
-    private readonly transferId: string,
-    private readonly files: CollectedFile[],
-    private readonly readFile: (path: string) => Promise<Uint8Array>,
-    /** Doc §7.6: lands the transfer in this session's cwd instead of the agent's configured receive root, when known. */
-    private readonly sessionId: string | null = null,
-    /** Directory-tree "drop onto this node" (candidate doc §4.1 point 4): wins outright over sessionId/receive_root when present. */
-    private readonly targetPath: string | null = null,
-    private readonly callbacks: TransferSenderCallbacks = {},
-  ) {}
+    openStream: () => Promise<ByteStream>,
+    transferId: string,
+    files: CollectedFile[],
+    readFile: (path: string) => Promise<Uint8Array>,
+    sessionId: string | null = null,
+    targetPath: string | null = null,
+    callbacks: TransferSenderCallbacks = {},
+  ) {
+    this.openStream = openStream;
+    this.transferId = transferId;
+    this.files = files;
+    this.readFile = readFile;
+    this.sessionId = sessionId;
+    this.targetPath = targetPath;
+    this.callbacks = callbacks;
+  }
 
   async run(): Promise<TransferOutcome> {
     let stream: ByteStream;

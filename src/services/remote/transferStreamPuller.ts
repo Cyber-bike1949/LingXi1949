@@ -71,11 +71,19 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 }
 
 export class TransferStreamPuller {
+  private readonly openStream: () => Promise<ByteStream>;
+  private readonly path: string;
+  private readonly initialCredit: number;
+
   constructor(
-    private readonly openStream: () => Promise<ByteStream>,
-    private readonly path: string,
-    private readonly initialCredit: number = DEFAULT_INITIAL_CREDIT,
-  ) {}
+    openStream: () => Promise<ByteStream>,
+    path: string,
+    initialCredit: number = DEFAULT_INITIAL_CREDIT,
+  ) {
+    this.openStream = openStream;
+    this.path = path;
+    this.initialCredit = initialCredit;
+  }
 
   async run(): Promise<TransferPullOutcome> {
     let stream: ByteStream;

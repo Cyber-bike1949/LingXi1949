@@ -76,14 +76,23 @@ export class DirectoryTreePanel {
   private readonly expandedPaths = new Set<string>();
   private destroyed = false;
 
+  private readonly source: DirectoryTreeSource;
+  private readonly pathApi: PathApi;
+  private readonly callbacks: DirectoryTreePanelCallbacks;
+  /** The device this tree browses, or `null` for the local filesystem - stamped onto each row's drag payload. */
+  private readonly remoteNodeId: string | null;
+
   constructor(
-    private readonly source: DirectoryTreeSource,
-    private readonly pathApi: PathApi,
-    private readonly callbacks: DirectoryTreePanelCallbacks,
+    source: DirectoryTreeSource,
+    pathApi: PathApi,
+    callbacks: DirectoryTreePanelCallbacks,
     initialDockSide: DockSide = 'right',
-    /** The device this tree browses, or `null` for the local filesystem - stamped onto each row's drag payload. */
-    private readonly remoteNodeId: string | null = null,
+    remoteNodeId: string | null = null,
   ) {
+    this.source = source;
+    this.pathApi = pathApi;
+    this.callbacks = callbacks;
+    this.remoteNodeId = remoteNodeId;
     this.dockSide = initialDockSide;
     this.element = createDiv('directory-tree-panel');
 
