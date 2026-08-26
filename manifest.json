@@ -1,7 +1,7 @@
 {
-  "id": "lingxi1949",
-  "name": "LingXi1949",
-  "version": "1.6.0",
+  "id": "lingxi-bridge",
+  "name": "LingXi",
+  "version": "1.6.1",
   "minAppVersion": "1.8.7",
   "description": "Bridge your notes to AI agents — rich markdown and linked context replace the single prompt box, with local and remote terminal sessions.",
   "author": "Jiang ZhongXi",

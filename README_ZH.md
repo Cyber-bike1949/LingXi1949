@@ -1,16 +1,16 @@
 <div align="center">
 
-# LingXi1949
+# LingXi
 
-<img src="assets/termy-logo-selection.png" width="150" alt="LingXi1949 logo" />
+<img src="assets/termy-logo-selection.png" width="150" alt="LingXi logo" />
 
 *面向 Obsidian 的多设备终端工作台*
 
 从同一个设备首页打开本地或远程终端，并提供分屏、多会话、可复用工作流和 AI CLI 上下文接力。
 
-[![Version](https://img.shields.io/badge/version-1.6.0-7c3aed?style=for-the-badge)](./manifest.json)
+[![Version](https://img.shields.io/badge/version-1.6.1-7c3aed?style=for-the-badge)](./manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-Desktop%20Only-8b5cf6?style=for-the-badge)](https://obsidian.md/)
-[![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=termesh)
+[![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=lingxi-bridge)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](./LICENSE)
 [![PTY](https://img.shields.io/badge/backend-Rust%20PTY-f97316?style=for-the-badge)](./rust-servers)
 
@@ -26,9 +26,9 @@
 
 ---
 
-## 为什么用 LingXi1949？
+## 为什么用 LingXi？
 
-LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的用户。设备首页统一展示本机和已配对设备，同时保留 Obsidian 原生终端最重要的编辑器上下文能力。
+LingXi 面向同时使用笔记、终端、AI 编码工具和多台设备的用户。设备首页统一展示本机和已配对设备，同时保留 Obsidian 原生终端最重要的编辑器上下文能力。
 
 - **原生 PTY 后端**：Rust 后端更轻量，不依赖额外桥接运行时。
 - **真实终端体验**：基于 xterm.js，支持搜索、复制粘贴、提示符导航、分屏和多终端会话。
@@ -65,18 +65,18 @@ LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的
 ### AI 与编码集成
 
 > [!NOTE]
-> 如果使用外部终端启动 Claude Code、OpenCode 或 Codex，它们只是普通 CLI 进程，运行在 LingXi1949 的 Obsidian 集成层之外，无法自动知道活动笔记、vault/workspace 根目录或编辑器选区。
+> 如果使用外部终端启动 Claude Code、OpenCode 或 Codex，它们只是普通 CLI 进程，运行在 LingXi 的 Obsidian 集成层之外，无法自动知道活动笔记、vault/workspace 根目录或编辑器选区。
 
-- LingXi1949 会在当前 vault 上下文中启动 AI CLI，让活动笔记、选区、已打开文件和 workspace 根目录可用于编码任务。
-- Claude Code 和 OpenCode 使用 LingXi1949 的 IDE bridge；Codex 使用 vault 本地 Skill：`.agents/skills/termy-obsidian-context/SKILL.md`。
+- LingXi 会在当前 vault 上下文中启动 AI CLI，让活动笔记、选区、已打开文件和 workspace 根目录可用于编码任务。
+- Claude Code 和 OpenCode 使用 LingXi 的 IDE bridge；Codex 使用 vault 本地 Skill：`.agents/skills/termy-obsidian-context/SKILL.md`。
 - 内置 Codex 启动器直接运行 `codex`，不需要 MCP 注册或全局 CLI 配置修改。
 
 ### 隐私与网络访问
 
-- LingXi1949 不包含遥测或分析功能。
-- LingXi1949 会在需要时从 [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases) 下载与当前平台匹配的原生 PTY server。首次使用远程设备时，会优先从 unpkg 下载固定版本、与当前平台匹配的 iroh `.node` 运行库，并依次回退到 jsDelivr 和 GitHub Releases。原生下载均使用插件内置的 SHA-256 校验；离线模式会禁用这些下载和所有更新检查。
+- LingXi 不包含遥测或分析功能。
+- LingXi 会在需要时从 [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases) 下载与当前平台匹配的原生 PTY server。首次使用远程设备时，会优先从 unpkg 下载固定版本、与当前平台匹配的 iroh `.node` 运行库，并依次回退到 jsDelivr 和 GitHub Releases。原生下载均使用插件内置的 SHA-256 校验；离线模式会禁用这些下载和所有更新检查。
 - 终端会话会运行本地 shell 命令和用户配置的工作流。这些命令可能会根据实际运行的 shell 命令或外部 CLI 读取文件、修改文件或访问网络。
-- LingXi1949 会启动本地 WebSocket 连接，用于 PTY 后端和可选 IDE bridge。这些连接仅用于本地终端传输和编辑器上下文接力。
+- LingXi 会启动本地 WebSocket 连接，用于 PTY 后端和可选 IDE bridge。这些连接仅用于本地终端传输和编辑器上下文接力。
 - 上下文感知的 AI 启动器可以把活动笔记路径、选区、编辑器上下文以及 vault/workspace 路径传递给本地 CLI 工具。Codex 集成会在 vault 内写入本地 helper skill：`.agents/skills/termy-obsidian-context/`。
 
 ### 外观与体验
@@ -141,7 +141,7 @@ LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的
 | 命令 | 作用 |
 | --- | --- |
 | `Open terminal` | 按当前实例布局策略打开一个新终端。 |
-| `LingXi1949：显示更新日志` | 打开内置更新日志弹窗。 |
+| `LingXi：显示更新日志` | 打开内置更新日志弹窗。 |
 | `Terminal: split horizontal / split vertical` | 对活动终端进行分屏。 |
 | `Terminal: send selection` | 将当前编辑器选区发送到活动终端。 |
 | `Terminal: send current note` | 将当前整篇笔记内容发送到活动终端。 |
@@ -157,11 +157,11 @@ LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的
 - Windows、macOS 或 Linux 桌面系统
 
 > [!WARNING]
-> LingXi1949 使用原生 PTY 后端，因此仅支持 Obsidian 桌面端。
+> LingXi 使用原生 PTY 后端，因此仅支持 Obsidian 桌面端。
 
 ### 使用 BRAT 安装（当前推荐方式）
 
-LingXi1949 尚未上架官方 Obsidian Community Plugins 列表（提交审核中），因此在通过审核之前，推荐使用 BRAT 安装。
+LingXi 尚未上架官方 Obsidian Community Plugins 列表（提交审核中），因此在通过审核之前，推荐使用 BRAT 安装。
 
 1. 安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat)。
 2. 打开 BRAT 设置，选择 **Add beta plugin**。
@@ -175,13 +175,13 @@ LingXi1949 尚未上架官方 Obsidian Community Plugins 列表（提交审核�
 1. 从 [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases) 下载与当前平台匹配的 `termesh-<version>-<platform>.zip` 完整包，例如 Windows x64 使用 `win32-x64`。
 2. 解压到当前 vault 的 `.obsidian/plugins/termesh/` 目录。
 3. 重启或重新加载 Obsidian。
-4. 在 **设置 → 社区插件** 中启用 LingXi1949。
+4. 在 **设置 → 社区插件** 中启用 LingXi。
 
 ### 安装远程 Agent
 
 插件是控制端；每台远程电脑还需要运行 `termesh-agent`，它会以当前普通用户的权限提供该用户的 shell。整个过程不需要账号或单独的配对服务。
 
-目前正式发布的 Agent 支持 **Linux x64** 和 **Windows x64**。暂未发布 macOS Agent；macOS 仍可运行 LingXi1949 插件和本地终端。
+目前正式发布的 Agent 支持 **Linux x64** 和 **Windows x64**。暂未发布 macOS Agent；macOS 仍可运行 LingXi 插件和本地终端。
 
 #### Linux x64（Ubuntu 22.04/24.04）
 
@@ -193,7 +193,7 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agen
 
 脚本会下载最新版 Agent、校验 SHA-256、安装到 `~/.local/bin`，并启动 systemd 用户服务。安装时会请求一次 `sudo` 来启用 lingering，使退出登录后 Agent 仍能运行；Agent 和远程 shell 本身始终以普通用户运行。
 
-安装完成后，把打印出的连接码粘贴到 **LingXi1949 → 添加设备**。之后可随时查看连接码和日志：
+安装完成后，把打印出的连接码粘贴到 **LingXi → 添加设备**。之后可随时查看连接码和日志：
 
 ```bash
 ~/.local/bin/termesh-agent status
@@ -205,11 +205,11 @@ journalctl --user -u termesh-agent -f
 1. 从最新 [GitHub Release](https://github.com/Cyber-bike1949/LingXi1949/releases/latest) 下载 `termesh-agent-win32-x64.exe` 和对应的 `.sha256` 文件。
 2. 执行 `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`，与 `.sha256` 文件中的第一个值核对。
 3. 将其重命名为 `termesh-agent.exe` 并放到固定目录，执行 `termesh-agent.exe run`；直接双击该程序也会启动 Agent。
-4. 把打印出的连接码粘贴到 **LingXi1949 → 添加设备**。Agent 需要保持运行；如需登录后自动启动，可使用 Windows 任务计划程序。
+4. 把打印出的连接码粘贴到 **LingXi → 添加设备**。Agent 需要保持运行；如需登录后自动启动，可使用 Windows 任务计划程序。
 
 ## 快速上手
 
-1. 通过左侧 ribbon、命令面板或空标签页按钮打开 LingXi1949，并选择要使用的设备。
+1. 通过左侧 ribbon、命令面板或空标签页按钮打开 LingXi，并选择要使用的设备。
 2. 在设置中配置 shell、终端创建位置和外观。
 3. 从状态栏菜单试运行内置工作流。
 4. 将当前选区、整篇笔记或当前路径发送到终端。
@@ -256,7 +256,7 @@ graph LR
 
 ## 许可证
 
-LingXi1949 使用 [GPL-3.0](./LICENSE) 许可证。
+LingXi 使用 [GPL-3.0](./LICENSE) 许可证。
 
 ## 致谢
 
@@ -269,6 +269,6 @@ LingXi1949 使用 [GPL-3.0](./LICENSE) 许可证。
 
 **用 ❤️ 为 Obsidian 用户构建**
 
-如果 LingXi1949 对你的工作流有帮助，欢迎给项目点一个 Star。
+如果 LingXi 对你的工作流有帮助，欢迎给项目点一个 Star。
 
 </div>

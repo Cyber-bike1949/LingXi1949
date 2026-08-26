@@ -20,7 +20,7 @@ export function copyPackagedRuntime(packageDir, targetDir) {
   }
 }
 
-export function migrateEnabledPluginId(pluginsDir, legacyId = 'termesh', pluginId = 'lingxi1949') {
+export function migrateEnabledPluginId(pluginsDir, legacyId = 'termesh', pluginId = 'lingxi-bridge') {
   const enabledPluginsPath = path.join(path.dirname(pluginsDir), 'community-plugins.json');
   if (!fs.existsSync(enabledPluginsPath)) {
     return false;
@@ -38,7 +38,7 @@ export function migrateEnabledPluginId(pluginsDir, legacyId = 'termesh', pluginI
   return true;
 }
 
-export function migrateLegacyPluginData(pluginsDir, legacyId = 'termesh', pluginId = 'lingxi1949') {
+export function migrateLegacyPluginData(pluginsDir, legacyId = 'termesh', pluginId = 'lingxi-bridge') {
   const legacyDataPath = path.join(pluginsDir, legacyId, 'data.json');
   const targetDataPath = path.join(pluginsDir, pluginId, 'data.json');
   if (!fs.existsSync(legacyDataPath) || fs.existsSync(targetDataPath)) {

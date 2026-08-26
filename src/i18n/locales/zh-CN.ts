@@ -20,11 +20,11 @@ export const zhCN: TranslationKeys = {
   },
 
   plugin: {
-    name: 'LingXi1949',
-    loadingMessage: '正在加载 LingXi1949 插件',
-    loadedMessage: 'LingXi1949 插件已加载',
-    unloadingMessage: '正在卸载 LingXi1949 插件',
-    unloadedMessage: 'LingXi1949 插件已卸载',
+    name: 'LingXi',
+    loadingMessage: '正在加载 LingXi 插件',
+    loadedMessage: 'LingXi 插件已加载',
+    unloadingMessage: '正在卸载 LingXi 插件',
+    unloadedMessage: 'LingXi 插件已卸载',
   },
 
   home: {
@@ -105,8 +105,8 @@ export const zhCN: TranslationKeys = {
   },
 
   commands: {
-    openTerminal: '打开 LingXi1949',
-    showChangelog: 'LingXi1949：显示更新日志',
+    openTerminal: '打开 LingXi',
+    showChangelog: 'LingXi：显示更新日志',
     terminalSearch: '终端：搜索',
     terminalToggleDirectoryTree: '终端：切换目录树',
     terminalClear: '终端：清屏',
@@ -129,7 +129,7 @@ export const zhCN: TranslationKeys = {
   },
 
   ribbon: {
-    terminalTooltip: '打开 LingXi1949',
+    terminalTooltip: '打开 LingXi',
   },
 
   visibility: {
@@ -214,7 +214,7 @@ export const zhCN: TranslationKeys = {
       advanced: '高级选项',
     },
     header: {
-      title: 'LingXi1949',
+      title: 'LingXi',
       feedbackText: '感谢使用！欢迎反馈：',
       feedbackLink: 'GitHub',
       communityLink: 'Telegram 群组',
@@ -359,7 +359,7 @@ export const zhCN: TranslationKeys = {
       offlineMode: '离线模式',
       offlineModeDesc: '启用后，跳过二进制版本检查与自动下载',
       binaryDownloadSource: '二进制下载来源',
-      binaryDownloadSourceDesc: '选择 LingXi1949 原生二进制从 GitHub Release 还是 Cloudflare R2 下载',
+      binaryDownloadSourceDesc: '选择 LingXi 原生二进制从 GitHub Release 还是 Cloudflare R2 下载',
       binaryDownloadSourceGithubRelease: 'GitHub Release',
       binaryDownloadSourceCloudflareR2: 'Cloudflare R2',
       binaryDownloadNow: '立即下载二进制',
@@ -376,7 +376,7 @@ export const zhCN: TranslationKeys = {
   modals: {
     changelog: {
       title: '更新日志',
-      subtitle: 'LingXi1949 {{version}} 更新内容',
+      subtitle: 'LingXi {{version}} 更新内容',
       loading: '正在加载更新日志...',
       unavailable: '暂时无法加载当前版本的更新日志。',
       openRelease: '打开发布页',
@@ -393,7 +393,7 @@ export const zhCN: TranslationKeys = {
     launcherInstall: {
       titleNotInstalled: '{{name}} 尚未安装',
       titleUpdate: '更新 {{name}}',
-      descriptionNotInstalled: 'LingXi1949 在 PATH 中未找到 “{{command}}”。请先在本机安装该 CLI，然后再尝试启动。',
+      descriptionNotInstalled: 'LingXi 在 PATH 中未找到 “{{command}}”。请先在本机安装该 CLI，然后再尝试启动。',
       descriptionUpdate: '{{name}} 有新版本可用（{{local}} → {{latest}}）。在系统终端中运行下面的命令进行升级。',
       detectedCommand: '检测命令',
       versionLabel: '版本',
@@ -402,7 +402,7 @@ export const zhCN: TranslationKeys = {
       cardTitleUpgradeOneClick: '一键升级',
       cardDescInstall: '复制下面的命令并在系统终端中运行。一旦该可执行文件可被 shell 识别，此启动器将自动检测到。',
       cardDescUpgrade: '复制下面的命令并在系统终端中运行以完成升级。新版本对 shell 可见后，此启动器会自动识别。',
-      cardDescUpgradeOneClick: '点击 “立即更新” 在 LingXi1949 终端中运行此命令，或复制后自行运行。',
+      cardDescUpgradeOneClick: '点击 “立即更新” 在 LingXi 终端中运行此命令，或复制后自行运行。',
       buttonCopy: '复制',
       buttonClose: '关闭',
       buttonOpenDocs: '打开安装文档',
