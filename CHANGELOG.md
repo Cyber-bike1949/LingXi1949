@@ -1,9 +1,14 @@
 # Changelog
 
-All notable changes to LingXi will be documented in this file.
+All notable changes to LingXi1949 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.6.2] - 2026-08-26
+
+### Changed
+- Renamed the public plugin display name from LingXi back to **LingXi1949**. The community plugin ID stays `lingxi-bridge` (unaffected — plugin IDs can't contain digits).
 
 ## [1.6.1] - 2026-08-26
 

@@ -1,8 +1,8 @@
 <div align="center">
 
-# LingXi
+# LingXi1949
 
-<img src="assets/termy-logo-selection.png" width="150" alt="LingXi logo" />
+<img src="assets/termy-logo-selection.png" width="150" alt="LingXi1949 logo" />
 
 *Not a prompt box. A bridge from your notes to your agent.*
 
@@ -26,9 +26,9 @@ English / [简体中文](./README_ZH.md)
 
 ---
 
-## Why LingXi?
+## Why LingXi1949?
 
-LingXi is built for people who work across notes, terminals, AI coding sessions, and more than one device. Its device home keeps local and paired remote terminals in one place while preserving the editor context that makes an Obsidian-native terminal useful.
+LingXi1949 is built for people who work across notes, terminals, AI coding sessions, and more than one device. Its device home keeps local and paired remote terminals in one place while preserving the editor context that makes an Obsidian-native terminal useful.
 
 - **Native PTY backend**: Rust keeps the backend lean and avoids extra bridge runtimes.
 - **Real terminal UX**: xterm.js frontend with search, copy/paste, prompt navigation, split panes, and multi-session support.
@@ -65,20 +65,20 @@ LingXi is built for people who work across notes, terminals, AI coding sessions,
 ### AI & Coding Integrations
 
 > [!NOTE]
-> Claude Code, OpenCode, or Codex sessions started from an external terminal are ordinary CLI processes outside LingXi's Obsidian integration layer, so they cannot automatically know the active note, vault/workspace root, or editor selection.
+> Claude Code, OpenCode, or Codex sessions started from an external terminal are ordinary CLI processes outside LingXi1949's Obsidian integration layer, so they cannot automatically know the active note, vault/workspace root, or editor selection.
 
-- LingXi starts AI CLIs inside the current vault context, where the active note, selection, open files, and workspace root can be available to coding tasks.
-- Claude Code and OpenCode use LingXi's IDE bridge; Codex uses a vault-local Skill at `.agents/skills/termy-obsidian-context/SKILL.md`.
+- LingXi1949 starts AI CLIs inside the current vault context, where the active note, selection, open files, and workspace root can be available to coding tasks.
+- Claude Code and OpenCode use LingXi1949's IDE bridge; Codex uses a vault-local Skill at `.agents/skills/termy-obsidian-context/SKILL.md`.
 - The built-in Codex launcher starts `codex` directly, without MCP registration or global CLI configuration changes.
 
 ### Privacy and Network Access
 
-- LingXi does not include telemetry or analytics.
-- LingXi downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
+- LingXi1949 does not include telemetry or analytics.
+- LingXi1949 downloads the matching native PTY server from [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases). On first use of remote devices, it downloads the fixed-version platform-specific iroh `.node` runtime from unpkg, with jsDelivr and GitHub Releases as fallbacks. Native downloads are verified against bundled SHA-256 hashes; offline mode disables them and all update checks.
 - Terminal sessions run local shell commands and user-configured workflows. Those commands may read files, modify files, or access the network according to the shell command or external CLI being run.
-- LingXi starts local WebSocket connections for its PTY backend and optional IDE bridge. These connections are used for local terminal transport and editor-context handoff.
+- LingXi1949 starts local WebSocket connections for its PTY backend and optional IDE bridge. These connections are used for local terminal transport and editor-context handoff.
 - Context-aware AI launchers can pass the active note path, selection, editor context, and vault/workspace path to local CLI tools. The Codex integration writes a vault-local helper skill under `.agents/skills/termy-obsidian-context/`.
-- Optional: when **Check for AI launcher updates** is enabled in settings, LingXi queries `https://registry.npmjs.org` for the latest Claude Code and Codex CLI releases, and `https://api.github.com` for the latest OpenCode release. The setting is **off by default** and offline mode disables it regardless of the toggle.
+- Optional: when **Check for AI launcher updates** is enabled in settings, LingXi1949 queries `https://registry.npmjs.org` for the latest Claude Code and Codex CLI releases, and `https://api.github.com` for the latest OpenCode release. The setting is **off by default** and offline mode disables it regardless of the toggle.
 
 ### Appearance & Ergonomics
 
@@ -142,7 +142,7 @@ LingXi is built for people who work across notes, terminals, AI coding sessions,
 | Command | What it does |
 | --- | --- |
 | `Open terminal` | Opens a new terminal using your configured placement rules. |
-| `LingXi: show changelog` | Opens the bundled changelog modal. |
+| `LingXi1949: show changelog` | Opens the bundled changelog modal. |
 | `Terminal: split horizontal / split vertical` | Splits the active terminal. |
 | `Terminal: send selection` | Sends the current editor selection to the active terminal. |
 | `Terminal: send current note` | Sends the full current note content. |
@@ -158,11 +158,11 @@ LingXi is built for people who work across notes, terminals, AI coding sessions,
 - Windows, macOS, or Linux
 
 > [!WARNING]
-> LingXi is desktop-only because it uses a native PTY backend.
+> LingXi1949 is desktop-only because it uses a native PTY backend.
 
 ### Install with BRAT (recommended for now)
 
-LingXi is not yet listed in the official Obsidian Community Plugins directory, so BRAT is the recommended install path until that submission is approved.
+LingXi1949 is not yet listed in the official Obsidian Community Plugins directory, so BRAT is the recommended install path until that submission is approved.
 
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. Open BRAT settings and choose **Add beta plugin**.
@@ -176,13 +176,13 @@ Community Plugins and BRAT installations automatically download the verified pla
 1. Download the matching `termesh-<version>-<platform>.zip` complete package from [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases), for example `win32-x64` on Windows x64.
 2. Extract the release files into `.obsidian/plugins/termesh/` inside your vault.
 3. Reload Obsidian.
-4. Enable LingXi in **Settings → Community plugins**.
+4. Enable LingXi1949 in **Settings → Community plugins**.
 
 ### Install a remote Agent
 
 The plugin is the controller. Each remote computer also needs `termesh-agent`, which runs as the signed-in ordinary user and exposes that user's shell. No account or separate pairing service is required.
 
-Official Agent builds are currently available for **Linux x64** and **Windows x64**. A macOS Agent is not currently published; macOS can still run the LingXi plugin and local terminals.
+Official Agent builds are currently available for **Linux x64** and **Windows x64**. A macOS Agent is not currently published; macOS can still run the LingXi1949 plugin and local terminals.
 
 #### Linux x64 (Ubuntu 22.04/24.04)
 
@@ -194,7 +194,7 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agen
 
 The installer downloads the latest Agent, verifies its SHA-256 checksum, installs it to `~/.local/bin`, and starts a systemd user service. It requests `sudo` once to enable lingering so the Agent keeps running after logout; the Agent and remote shells themselves never run as root.
 
-When installation finishes, copy the printed connection code into **LingXi → Add device**. Show it again or inspect logs with:
+When installation finishes, copy the printed connection code into **LingXi1949 → Add device**. Show it again or inspect logs with:
 
 ```bash
 ~/.local/bin/termesh-agent status
@@ -206,13 +206,13 @@ journalctl --user -u termesh-agent -f
 1. Download `termesh-agent-win32-x64.exe` and its `.sha256` file from the latest [GitHub Release](https://github.com/Cyber-bike1949/LingXi1949/releases/latest).
 2. Verify the checksum with `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`, then compare it with the first value in the `.sha256` file.
 3. Rename it to `termesh-agent.exe`, place it in a permanent directory, and run `termesh-agent.exe run`. Double-clicking the executable does the same thing.
-4. Copy the printed connection code into **LingXi → Add device**. Keep the Agent running; use Windows Task Scheduler if it should start automatically at sign-in.
+4. Copy the printed connection code into **LingXi1949 → Add device**. Keep the Agent running; use Windows Task Scheduler if it should start automatically at sign-in.
 
 See the [Agent deployment and operations guide](docs/%E4%BD%BF%E7%94%A8/operations.md) for configuration, startup, upgrades, removal, and troubleshooting on each platform.
 
 ## Quick Start
 
-1. Open LingXi from the ribbon, command palette, or empty-tab action to choose a device.
+1. Open LingXi1949 from the ribbon, command palette, or empty-tab action to choose a device.
 2. Choose your shell and terminal placement behavior in settings.
 3. Try the built-in workflows from the status bar menu.
 4. Send your current selection, note, or file path into the terminal.
@@ -259,7 +259,7 @@ graph LR
 
 ## License
 
-LingXi is licensed under [GPL-3.0](./LICENSE).
+LingXi1949 is licensed under [GPL-3.0](./LICENSE).
 
 ## Credits
 
@@ -272,6 +272,6 @@ LingXi is licensed under [GPL-3.0](./LICENSE).
 
 **Made with ❤️ for Obsidian power users**
 
-If LingXi helps your workflow, consider starring the project.
+If LingXi1949 helps your workflow, consider starring the project.
 
 </div>

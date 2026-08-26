@@ -32,7 +32,7 @@ test('renderTermeshCodexSkill emits a discoverable managed Codex skill', () => {
   const skill = renderTermeshCodexSkill();
 
   assert.match(skill, new RegExp(`^---\\nname: ${TERMY_CODEX_SKILL_NAME}\\n`));
-  assert.match(skill, /description: Use when a Codex session launched from the LingXi Obsidian plugin needs/);
+  assert.match(skill, /description: Use when a Codex session launched from the LingXi1949 Obsidian plugin needs/);
   assert.ok(skill.includes(`\`${TERMY_CONTEXT_PATH_ENV}\``));
   assert.ok(skill.includes(TERMY_CODEX_SKILL_MANAGED_MARKER));
   assert.equal(TERMY_CODEX_SKILL_RELATIVE_PATH, `.agents/skills/${TERMY_CODEX_SKILL_NAME}/SKILL.md`);

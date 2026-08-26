@@ -246,7 +246,7 @@ async function downloadAssetWithRedirects(
   onProgress?: DownloadProgress,
 ): Promise<Buffer> {
   return new Promise((resolve, reject) => {
-    const request = https.get(url, { headers: { 'User-Agent': 'LingXi' } }, (response) => {
+    const request = https.get(url, { headers: { 'User-Agent': 'LingXi1949' } }, (response) => {
       const statusCode = response.statusCode ?? 0;
       const location = response.headers.location;
 
