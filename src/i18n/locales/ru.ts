@@ -20,11 +20,11 @@ export const ru: TranslationKeys = {
   },
 
   plugin: {
-    name: 'Lingxi',
-    loadingMessage: 'Загрузка плагина Lingxi',
-    loadedMessage: 'Плагин Lingxi загружен',
-    unloadingMessage: 'Выгрузка плагина Lingxi',
-    unloadedMessage: 'Плагин Lingxi выгружен',
+    name: 'LingXi1949',
+    loadingMessage: 'Загрузка плагина LingXi1949',
+    loadedMessage: 'Плагин LingXi1949 загружен',
+    unloadingMessage: 'Выгрузка плагина LingXi1949',
+    unloadedMessage: 'Плагин LingXi1949 выгружен',
   },
 
   home: {
@@ -105,8 +105,8 @@ export const ru: TranslationKeys = {
   },
 
   commands: {
-    openTerminal: 'Открыть Lingxi',
-    showChangelog: 'Lingxi: показать список изменений',
+    openTerminal: 'Открыть LingXi1949',
+    showChangelog: 'LingXi1949: показать список изменений',
     terminalToggleDirectoryTree: 'Терминал: переключить дерево каталогов',
     terminalSearch: 'Терминал: поиск',
     terminalClear: 'Терминал: очистить экран',
@@ -129,7 +129,7 @@ export const ru: TranslationKeys = {
   },
 
   ribbon: {
-    terminalTooltip: 'Открыть Lingxi',
+    terminalTooltip: 'Открыть LingXi1949',
   },
 
   visibility: {
@@ -214,7 +214,7 @@ export const ru: TranslationKeys = {
       advanced: 'Дополнительно',
     },
     header: {
-      title: 'Lingxi',
+      title: 'LingXi1949',
       feedbackText: 'Спасибо за использование! Обратная связь: ',
       feedbackLink: 'GitHub',
       communityLink: 'Telegram',
@@ -359,7 +359,7 @@ export const ru: TranslationKeys = {
       offlineMode: 'Офлайн-режим',
       offlineModeDesc: 'При включении пропускает проверку версии бинарника и автозагрузку',
       binaryDownloadSource: 'Источник загрузки бинарника',
-      binaryDownloadSourceDesc: 'Выберите, откуда Lingxi загружает нативный бинарник: из GitHub Release или Cloudflare R2',
+      binaryDownloadSourceDesc: 'Выберите, откуда LingXi1949 загружает нативный бинарник: из GitHub Release или Cloudflare R2',
       binaryDownloadSourceGithubRelease: 'GitHub Release',
       binaryDownloadSourceCloudflareR2: 'Cloudflare R2',
       binaryDownloadNow: 'Скачать бинарник сейчас',
@@ -376,7 +376,7 @@ export const ru: TranslationKeys = {
   modals: {
     changelog: {
       title: 'Список изменений',
-      subtitle: 'Обновления в Lingxi {{version}}',
+      subtitle: 'Обновления в LingXi1949 {{version}}',
       loading: 'Загрузка списка изменений...',
       unavailable: 'Не удалось загрузить список изменений для этой версии.',
       openRelease: 'Открыть страницу релиза',
@@ -393,7 +393,7 @@ export const ru: TranslationKeys = {
     launcherInstall: {
       titleNotInstalled: '{{name}} не установлен',
       titleUpdate: 'Обновить {{name}}',
-      descriptionNotInstalled: 'Lingxi не нашёл «{{command}}» в PATH. Установите CLI на свой компьютер, затем повторите попытку.',
+      descriptionNotInstalled: 'LingXi1949 не нашёл «{{command}}» в PATH. Установите CLI на свой компьютер, затем повторите попытку.',
       descriptionUpdate: 'Доступен новый релиз {{name}} ({{local}} → {{latest}}). Выполните команду ниже в системном терминале, чтобы обновиться.',
       detectedCommand: 'Обнаруженная команда',
       versionLabel: 'Версия',
@@ -402,7 +402,7 @@ export const ru: TranslationKeys = {
       cardTitleUpgradeOneClick: 'Обновление в один клик',
       cardDescInstall: 'Скопируйте эту команду и выполните её в системном терминале. Как только исполняемый файл станет доступен из вашей оболочки, лаунчер автоматически его обнаружит.',
       cardDescUpgrade: 'Скопируйте эту команду и выполните её в системном терминале для обновления. Как только новая версия станет доступна из оболочки, лаунчер автоматически её обнаружит.',
-      cardDescUpgradeOneClick: 'Нажмите «Обновить сейчас», чтобы выполнить эту команду в терминале Lingxi, либо скопируйте её и запустите вручную.',
+      cardDescUpgradeOneClick: 'Нажмите «Обновить сейчас», чтобы выполнить эту команду в терминале LingXi1949, либо скопируйте её и запустите вручную.',
       buttonCopy: 'Копировать',
       buttonClose: 'Закрыть',
       buttonOpenDocs: 'Открыть инструкцию по установке',

@@ -1,6 +1,6 @@
 import type { BinaryDownloadSource } from '../../settings/settings';
 
-export const GITHUB_RELEASE_REPOSITORY = 'Cyber-bike/Lingxi';
+export const GITHUB_RELEASE_REPOSITORY = 'Cyber-bike1949/LingXi1949';
 
 interface BinaryInfo {
   filename: string;

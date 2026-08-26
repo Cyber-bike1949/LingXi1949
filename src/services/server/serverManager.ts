@@ -913,7 +913,7 @@ export class ServerManager {
       }
 
       const request = JSON.parse(this.fs.readFileSync(requestPath, 'utf-8')) as DevReloadRequest;
-      if (request.pluginId && request.pluginId !== 'termy' && request.pluginId !== 'termesh' && request.pluginId !== 'lingxi') {
+      if (request.pluginId && request.pluginId !== 'termy' && request.pluginId !== 'termesh' && request.pluginId !== 'lingxi' && request.pluginId !== 'lingxi1949') {
         return false;
       }
       if (request.phase !== DEV_RELOAD_PHASE_INSTALLING) {

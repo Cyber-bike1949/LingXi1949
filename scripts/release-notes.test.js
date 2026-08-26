@@ -28,7 +28,7 @@ test('renderReleaseBody describes the package without requiring CHANGELOG.md as 
   const body = renderReleaseBody({
     version: '1.3.0',
     changelogSection: '### Added\n- Embedded changelog support.',
-    repository: 'Cyber-bike/Lingxi',
+    repository: 'Cyber-bike1949/LingXi1949',
   });
 
   assert.match(body, /Download the `termesh-1\.3\.0-<platform>\.zip` asset matching your platform/);
@@ -49,7 +49,7 @@ test('renderReleaseBody describes the package without requiring CHANGELOG.md as 
   assert.ok(manualIndex !== -1, 'Manual Installation section should be present');
   assert.ok(communityIndex < bratIndex, 'Community Plugins should come before BRAT');
   assert.ok(bratIndex < manualIndex, 'BRAT should come before Manual Installation');
-  assert.match(body, /Click \*\*Browse\*\*, search for `Lingxi`/);
+  assert.match(body, /Click \*\*Browse\*\*, search for `LingXi1949`/);
   assert.match(body, /`termesh-agent-win32-x64\.exe`: Windows x64 remote agent/);
   assert.match(body, /`termesh-agent-linux-x64`: Linux x64 remote agent/);
   assert.match(body, /`termy-relay-linux-x64`: Linux x64 relay server/);

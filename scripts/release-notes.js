@@ -3,7 +3,7 @@
  *
  * Usage:
  *   node scripts/release-notes.js --version 1.3.0
- *   node scripts/release-notes.js --version 1.3.0 --repository Cyber-bike/Lingxi --output release-body.md
+ *   node scripts/release-notes.js --version 1.3.0 --repository Cyber-bike1949/LingXi1949 --output release-body.md
  */
 
 import fs from 'fs';
@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DEFAULT_CHANGELOG_PATH = path.join(__dirname, '..', 'CHANGELOG.md');
-const DEFAULT_REPOSITORY = 'Cyber-bike/Lingxi';
+const DEFAULT_REPOSITORY = 'Cyber-bike1949/LingXi1949';
 
 function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -73,9 +73,9 @@ export function renderReleaseBody({ version, changelogSection, repository = DEFA
     '',
     '### Obsidian Community Plugins (Recommended)',
     '1. Open **Settings → Community plugins** and turn off **Restricted mode** if it is enabled',
-    '2. Click **Browse**, search for `Lingxi`, and click **Install**',
-    '3. Click **Enable** to start using Lingxi',
-    '4. On first use of remote devices, Lingxi automatically downloads and verifies the platform-native runtime',
+    '2. Click **Browse**, search for `LingXi1949`, and click **Install**',
+    '3. Click **Enable** to start using LingXi1949',
+    '4. On first use of remote devices, LingXi1949 automatically downloads and verifies the platform-native runtime',
     '',
     '### BRAT (Early Updates)',
     'Use BRAT if you want to track the latest tagged build before it ships to the community directory.',

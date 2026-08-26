@@ -82,7 +82,7 @@ export function createIrohLoader(
 function createLoadError(error: unknown): Error {
   const detail = error instanceof Error ? error.message : String(error);
   return new Error(
-    `无法加载远程终端原生模块。请检查网络后重试；离线环境请安装 Lingxi 平台完整包。开发安装请先运行 pnpm package。详情：${detail}`,
+    `无法加载远程终端原生模块。请检查网络后重试；离线环境请安装 LingXi1949 平台完整包。开发安装请先运行 pnpm package。详情：${detail}`,
     { cause: error },
   );
 }

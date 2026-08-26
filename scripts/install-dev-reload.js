@@ -23,7 +23,7 @@ function createRequestId() {
 }
 
 export function createDevInstallRequest({
-  pluginId = 'lingxi',
+  pluginId = 'lingxi1949',
   requestId = createRequestId(),
   requestedAt = new Date(),
   activeUntil = new Date(Date.now() + 2 * 60 * 1000),

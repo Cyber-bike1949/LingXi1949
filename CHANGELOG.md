@@ -1,14 +1,19 @@
 # Changelog
 
-All notable changes to Lingxi will be documented in this file.
+All notable changes to LingXi1949 will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] - 2026-08-26
+
+### Changed
+- Renamed the plugin to LingXi1949 (Obsidian community plugin ID `lingxi1949`), replacing the `Lingxi`/`lingxi` name and ID from 1.5.0 because that name/ID was already taken. Internal protocol, binary, and service identifiers remain `termy`/`termesh` for compatibility; only the plugin's public name, ID, and repository references changed.
+
 ## [1.5.0] - 2026-08-23
 
 ### Changed
-- Renamed the plugin to Lingxi (Obsidian community plugin ID `lingxi`), replacing the previous `termesh` listing. The old repository behind the `termesh` listing was deleted, which caused Obsidian's directory sync to delist the plugin; rather than fight to recover that listing, the plugin is re-launching under a new name and ID. Internal protocol, binary, and service identifiers remain `termy`/`termesh` for compatibility; only the plugin's public name, ID, and description changed.
+- Renamed the plugin to LingXi1949 (Obsidian community plugin ID `lingxi1949`), replacing the previous `termesh` listing. The old repository behind the `termesh` listing was deleted, which caused Obsidian's directory sync to delist the plugin; rather than fight to recover that listing, the plugin is re-launching under a new name and ID. Internal protocol, binary, and service identifiers remain `termy`/`termesh` for compatibility; only the plugin's public name, ID, and description changed.
 - Updated the manifest and package description to describe the plugin's positioning: bridging Obsidian notes to AI agents with rich markdown and linked context, instead of a single flat prompt box.
 
 ## [1.4.6] - 2026-08-16

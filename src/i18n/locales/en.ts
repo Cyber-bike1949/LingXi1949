@@ -20,11 +20,11 @@ export const en: TranslationKeys = {
   },
 
   plugin: {
-    name: 'Lingxi',
-    loadingMessage: 'Lingxi plugin loading',
-    loadedMessage: 'Lingxi plugin loaded',
-    unloadingMessage: 'Lingxi plugin unloading',
-    unloadedMessage: 'Lingxi plugin unloaded',
+    name: 'LingXi1949',
+    loadingMessage: 'LingXi1949 plugin loading',
+    loadedMessage: 'LingXi1949 plugin loaded',
+    unloadingMessage: 'LingXi1949 plugin unloading',
+    unloadedMessage: 'LingXi1949 plugin unloaded',
   },
 
   home: {
@@ -106,7 +106,7 @@ export const en: TranslationKeys = {
 
   commands: {
     openTerminal: 'Open terminal',
-    showChangelog: 'Lingxi: Show changelog',
+    showChangelog: 'LingXi1949: Show changelog',
     terminalSearch: 'Terminal: search',
     terminalToggleDirectoryTree: 'Terminal: toggle directory tree',
     terminalClear: 'Terminal: clear screen',
@@ -214,7 +214,7 @@ export const en: TranslationKeys = {
       advanced: 'Advanced',
     },
     header: {
-      title: 'Lingxi',
+      title: 'LingXi1949',
       feedbackText: 'Thanks for using! Feedback welcome: ',
       feedbackLink: 'GitHub',
       communityLink: 'Telegram',
@@ -376,7 +376,7 @@ export const en: TranslationKeys = {
   modals: {
     changelog: {
       title: 'Changelog',
-      subtitle: 'Updated in Lingxi {{version}}',
+      subtitle: 'Updated in LingXi1949 {{version}}',
       loading: 'Loading changelog...',
       unavailable: 'Unable to load the changelog for this version right now.',
       openRelease: 'Open release page',
@@ -393,7 +393,7 @@ export const en: TranslationKeys = {
     launcherInstall: {
       titleNotInstalled: '{{name}} is not installed',
       titleUpdate: 'Update {{name}}',
-      descriptionNotInstalled: 'Lingxi could not find "{{command}}" on your PATH. Install the CLI on your machine, then come back and try again.',
+      descriptionNotInstalled: 'LingXi1949 could not find "{{command}}" on your PATH. Install the CLI on your machine, then come back and try again.',
       descriptionUpdate: 'A newer release of {{name}} is available ({{local}} → {{latest}}). Run the command below in your system terminal to upgrade.',
       detectedCommand: 'Detected command',
       versionLabel: 'Version',

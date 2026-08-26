@@ -85,7 +85,7 @@ export class TerminalSettingTab extends PluginSettingTab {
     feedbackContainer.appendText(t('settings.header.feedbackText'));
     feedbackContainer.createEl('a', {
       text: t('settings.header.feedbackLink'),
-      href: 'https://github.com/Cyber-bike/Lingxi'
+      href: 'https://github.com/Cyber-bike1949/LingXi1949'
     });
     feedbackContainer.createSpan({ cls: 'settings-feedback-separator', text: ' · ' });
     feedbackContainer.createEl('a', {

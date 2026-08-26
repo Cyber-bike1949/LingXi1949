@@ -1,10 +1,10 @@
 {
-  "id": "lingxi",
-  "name": "Lingxi",
-  "version": "1.5.0",
+  "id": "lingxi1949",
+  "name": "LingXi1949",
+  "version": "1.6.0",
   "minAppVersion": "1.8.7",
   "description": "Bridge your notes to AI agents — rich markdown and linked context replace the single prompt box, with local and remote terminal sessions.",
   "author": "Jiang ZhongXi",
-  "authorUrl": "https://github.com/Cyber-bike",
+  "authorUrl": "https://github.com/Cyber-bike1949",
   "isDesktopOnly": true
 }

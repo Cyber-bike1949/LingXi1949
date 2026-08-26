@@ -20,7 +20,7 @@ test('resolves npm CDN and GitHub fallback runtime URLs', () => {
   );
   assert.deepEqual(urls.fallbackUrls, [
     'https://cdn.jsdelivr.net/npm/@number0/iroh-win32-x64-msvc@1.1.0/iroh.win32-x64-msvc.node',
-    'https://github.com/Cyber-bike/Lingxi/releases/download/1.5.0/iroh-runtime-win32-x64.node',
+    'https://github.com/Cyber-bike1949/LingXi1949/releases/download/1.5.0/iroh-runtime-win32-x64.node',
   ]);
   assert.equal(urls.expectedHash, '4fef61d33fc9a903a21cb1a2ae154b1e9576e8e453343b295d7d4d387e44bbe1');
 });
