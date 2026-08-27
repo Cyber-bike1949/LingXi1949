@@ -1,9 +1,9 @@
 {
   "id": "lingxi-bridge",
   "name": "LingXi1949",
-  "version": "1.6.2",
+  "version": "1.6.3",
   "minAppVersion": "1.8.7",
-  "description": "Bridge your notes to AI agents — rich markdown and linked context replace the single prompt box, with local and remote terminal sessions.",
+  "description": "Stop copy-pasting notes into your terminal AI — send the active note, selection, or path straight into Claude Code, Codex, or OpenCode, with local and remote terminals built in.",
   "author": "Jiang ZhongXi",
   "authorUrl": "https://github.com/Cyber-bike1949",
   "isDesktopOnly": true

@@ -198,10 +198,11 @@ export class TerminalView extends ItemView {
     if (!this.searchContainer) return;
 
     // Search input
-    this.searchInput = activeDocument.createElement('input');
-    this.searchInput.type = 'text';
-    this.searchInput.placeholder = t('terminal.search.placeholder');
-    this.searchInput.className = 'terminal-search-input';
+    this.searchInput = this.searchContainer.createEl('input', {
+      type: 'text',
+      placeholder: t('terminal.search.placeholder'),
+      cls: 'terminal-search-input',
+    });
 
     // Search input handler
     this.searchInput.addEventListener('input', () => {
@@ -220,8 +221,6 @@ export class TerminalView extends ItemView {
         this.hideSearch();
       }
     });
-
-    this.searchContainer.appendChild(this.searchInput);
 
     // Previous button
     const prevBtn = this.createSearchButton('chevron-up', t('terminal.search.previous'), () => {
@@ -246,9 +245,7 @@ export class TerminalView extends ItemView {
    * Create a search button
    */
   private createSearchButton(icon: string, title: string, onClick: () => void): HTMLElement {
-    const btn = activeDocument.createElement('button');
-    btn.className = 'terminal-search-btn clickable-icon';
-    btn.title = title;
+    const btn = createEl('button', { cls: 'terminal-search-btn clickable-icon', title });
     setIcon(btn, icon);
     btn.addEventListener('click', onClick);
     return btn;
@@ -576,15 +573,10 @@ export class TerminalView extends ItemView {
     if (!this.terminalContainer) return;
     if (this.dropHintEl && this.dropHintEl.isConnected) return;
 
-    const doc = this.terminalContainer.ownerDocument;
-    const hint = doc.createElement('div');
-    hint.className = 'terminal-drop-hint';
-    const textEl = doc.createElement('div');
-    textEl.className = 'terminal-drop-hint__text';
-    hint.appendChild(textEl);
+    const hint = this.terminalContainer.createDiv({ cls: 'terminal-drop-hint' });
+    hint.createDiv({ cls: 'terminal-drop-hint__text' });
     this.dropHintEl = hint;
     this.updateDropHintText();
-    this.terminalContainer.appendChild(hint);
   }
 
   private getDropHintText(): string {
@@ -623,10 +615,8 @@ export class TerminalView extends ItemView {
   private ensureDropCursorHint(): void {
     if (this.dropCursorHintEl && this.dropCursorHintEl.isConnected) return;
     const doc = this.contentEl.ownerDocument;
-    const hint = doc.createElement('div');
-    hint.className = 'terminal-drop-cursor-hint';
+    const hint = doc.body.createDiv({ cls: 'terminal-drop-cursor-hint' });
     this.dropCursorHintEl = hint;
-    doc.body.appendChild(hint);
   }
 
   private positionDropCursorHint(event: DragEvent): void {
@@ -1667,9 +1657,7 @@ export class TerminalView extends ItemView {
     const existingLayer = this.terminalContainer.querySelector('.terminal-background-image');
     if (existingLayer) return;
 
-    const bgLayer = activeDocument.createElement('div');
-    bgLayer.className = 'terminal-background-image';
-    this.terminalContainer.prepend(bgLayer);
+    this.terminalContainer.createDiv({ cls: 'terminal-background-image', prepend: true });
   }
 
   private applyAppearanceStyleRule(vars: {

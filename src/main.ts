@@ -966,10 +966,11 @@ export default class TerminalPlugin extends Plugin {
     // Create the SVG icon and label
     const iconEl = createTermyLogoSvg(18);
     iconEl.addClass('terminal-status-bar-icon');
-    const labelEl = activeDocument.createElement('span');
-    labelEl.addClass('terminal-status-bar-label');
-    labelEl.textContent = t('plugin.name');
-    this._statusBarItem.append(iconEl, labelEl);
+    this._statusBarItem.appendChild(iconEl);
+    this._statusBarItem.createSpan({
+      cls: 'terminal-status-bar-label',
+      text: t('plugin.name'),
+    });
     
     // Add click handler
     this._statusBarItem.addEventListener('click', (event: MouseEvent) => {
@@ -2154,16 +2155,14 @@ export default class TerminalPlugin extends Plugin {
       }
 
       // Create the "Open terminal" button
-      const terminalAction = activeDocument.createElement('div');
-      terminalAction.className = 'empty-state-action terminal-plugin-terminal-action';
-      terminalAction.textContent = t('commands.openTerminal');
+      const terminalAction = actionsContainer.createDiv({
+        cls: 'empty-state-action terminal-plugin-terminal-action',
+        text: t('commands.openTerminal'),
+      });
       terminalAction.addEventListener('click', () => {
         const leaf = this.findLeafByEmptyView(emptyView);
         void this.activateDeviceHome(leaf ?? undefined);
       });
-
-      // Add it to the actions list
-      actionsContainer.appendChild(terminalAction);
     });
   }
 
@@ -2415,13 +2414,15 @@ export default class TerminalPlugin extends Plugin {
     const scripts = (this.settings.presetScripts ?? []);
     const visibleScripts = scripts.filter(script => script.showInStatusBar ?? true);
     const hideUnavailable = this.settings.hideUnavailableAiLaunchers === true;
-    const menu = activeDocument.createElement('div');
-    menu.className = 'preset-scripts-menu';
-    menu.setAttribute('role', 'menu');
+    const menu = createDiv({
+      cls: 'preset-scripts-menu',
+      attr: { role: 'menu' },
+    });
 
-    const listEl = activeDocument.createElement('div');
-    listEl.className = 'preset-scripts-menu-list';
-    listEl.setAttribute('role', 'none');
+    const listEl = menu.createDiv({
+      cls: 'preset-scripts-menu-list',
+      attr: { role: 'none' },
+    });
 
     // Partition the visible scripts into the AI launcher catalog buckets
     // and the leftover "regular" workflows. The catalog buckets render
@@ -2449,10 +2450,10 @@ export default class TerminalPlugin extends Plugin {
       || regularScripts.length > 0;
 
     if (!hasAnyContent) {
-      const empty = activeDocument.createElement('div');
-      empty.className = 'preset-scripts-menu-item is-disabled';
-      empty.textContent = t('settingsDetails.terminal.presetScriptsEmpty');
-      listEl.appendChild(empty);
+      listEl.createDiv({
+        cls: 'preset-scripts-menu-item is-disabled',
+        text: t('settingsDetails.terminal.presetScriptsEmpty'),
+      });
     }
 
     // Coding agent section
@@ -2470,21 +2471,17 @@ export default class TerminalPlugin extends Plugin {
       this.appendRegularPresetMenuItems(listEl, regularScripts);
     }
 
-    menu.appendChild(listEl);
+    const footerEl = menu.createDiv({ cls: 'preset-scripts-menu-footer' });
 
-    const footerEl = activeDocument.createElement('div');
-    footerEl.className = 'preset-scripts-menu-footer';
-
-    const addItem = activeDocument.createElement('div');
-    addItem.className = 'preset-scripts-menu-item preset-scripts-menu-add';
-    addItem.setAttribute('role', 'menuitem');
-    addItem.textContent = `+ ${t('settingsDetails.terminal.presetScriptsAddMenu')}`;
+    const addItem = footerEl.createDiv({
+      cls: 'preset-scripts-menu-item preset-scripts-menu-add',
+      attr: { role: 'menuitem' },
+      text: `+ ${t('settingsDetails.terminal.presetScriptsAddMenu')}`,
+    });
     addItem.addEventListener('click', () => {
       this.closePresetScriptsMenu();
       this.openPresetScriptCreateModal();
     });
-    footerEl.appendChild(addItem);
-    menu.appendChild(footerEl);
 
     return menu;
   }
@@ -2659,22 +2656,20 @@ export default class TerminalPlugin extends Plugin {
     const title = t('settingsDetails.terminal.aiLauncherCategoryCodingAgent');
     const desc = t('settingsDetails.terminal.aiLauncherCategoryCodingAgentDesc');
 
-    const header = activeDocument.createElement('div');
-    header.className = 'preset-scripts-menu-section-header';
-    header.dataset.category = category;
-    header.setAttribute('role', 'presentation');
+    const header = listEl.createDiv({
+      cls: 'preset-scripts-menu-section-header',
+      attr: { 'data-category': category, role: 'presentation' },
+    });
 
-    const titleEl = activeDocument.createElement('div');
-    titleEl.className = 'preset-scripts-menu-section-title';
-    titleEl.textContent = title;
-    header.appendChild(titleEl);
+    header.createDiv({
+      cls: 'preset-scripts-menu-section-title',
+      text: title,
+    });
 
-    const descEl = activeDocument.createElement('div');
-    descEl.className = 'preset-scripts-menu-section-desc';
-    descEl.textContent = desc;
-    header.appendChild(descEl);
-
-    listEl.appendChild(header);
+    header.createDiv({
+      cls: 'preset-scripts-menu-section-desc',
+      text: desc,
+    });
   }
 
   /**
@@ -2686,21 +2681,22 @@ export default class TerminalPlugin extends Plugin {
     script: PresetScript,
     entry: AiLauncherCatalogEntry,
   ): HTMLElement {
-    const item = activeDocument.createElement('div');
-    item.className = 'preset-scripts-menu-item preset-scripts-menu-launcher';
-    item.setAttribute('role', 'menuitem');
-    item.dataset.scriptId = script.id;
-    item.dataset.launcherCategory = entry.category;
+    const item = createDiv({
+      cls: 'preset-scripts-menu-item preset-scripts-menu-launcher',
+      attr: {
+        role: 'menuitem',
+        'data-script-id': script.id,
+        'data-launcher-category': entry.category,
+      },
+    });
 
-    const iconEl = activeDocument.createElement('div');
-    iconEl.className = 'preset-scripts-menu-icon';
+    const iconEl = item.createDiv({ cls: 'preset-scripts-menu-icon' });
     renderPresetScriptIcon(iconEl, script.icon || 'terminal');
-    item.appendChild(iconEl);
 
-    const labelEl = activeDocument.createElement('div');
-    labelEl.className = 'preset-scripts-menu-label';
-    labelEl.textContent = script.name || t('settingsDetails.terminal.presetScriptsUnnamed');
-    item.appendChild(labelEl);
+    item.createDiv({
+      cls: 'preset-scripts-menu-label',
+      text: script.name || t('settingsDetails.terminal.presetScriptsUnnamed'),
+    });
 
     // Pull the cached snapshot when available so re-opens don't flash
     // through "Checking…" on every click.
@@ -2731,9 +2727,10 @@ export default class TerminalPlugin extends Plugin {
     // for this launcher AND the catalog defines an upgrade command for
     // the current platform. Clicking it routes through the install
     // modal so the user can review the exact command before running it.
-    const updateBtn = activeDocument.createElement('button');
-    updateBtn.className = 'preset-scripts-menu-action-btn preset-scripts-menu-action-update';
-    updateBtn.setAttribute('aria-label', t('settingsDetails.terminal.aiLauncherUpdateAriaLabel'));
+    const updateBtn = item.createEl('button', {
+      cls: 'preset-scripts-menu-action-btn preset-scripts-menu-action-update',
+      attr: { 'aria-label': t('settingsDetails.terminal.aiLauncherUpdateAriaLabel') },
+    });
     setIcon(updateBtn, 'download');
     updateBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -2749,7 +2746,6 @@ export default class TerminalPlugin extends Plugin {
       updateBtn.classList.toggle('is-hidden', !showUpdate);
     };
     refreshUpdateBtnVisibility(cachedSnapshot ?? null);
-    item.appendChild(updateBtn);
 
     // Refresh in the background so the badge & click route stay accurate
     // when the user re-opens the menu after an install or upgrade. We do
@@ -2867,8 +2863,7 @@ export default class TerminalPlugin extends Plugin {
    * from the cached resolver state and refreshes asynchronously.
    */
   private createLauncherStatusBadge(status: AiLauncherStatus): HTMLElement {
-    const badge = activeDocument.createElement('span');
-    badge.className = 'preset-scripts-menu-status-badge';
+    const badge = createSpan({ cls: 'preset-scripts-menu-status-badge' });
     this.applyLauncherBadgeStatus(badge, status);
     return badge;
   }
@@ -3129,51 +3124,50 @@ export default class TerminalPlugin extends Plugin {
     let draggedScriptId: string | null = null;
 
     scripts.forEach((script) => {
-      const item = activeDocument.createElement('div');
-      item.className = 'preset-scripts-menu-item';
-      item.setAttribute('role', 'menuitem');
-      item.setAttribute('draggable', 'true');
-      item.dataset.scriptId = script.id;
+      const item = listEl.createDiv({
+        cls: 'preset-scripts-menu-item',
+        attr: {
+          role: 'menuitem',
+          draggable: 'true',
+          'data-script-id': script.id,
+        },
+      });
 
-      const dragHandle = activeDocument.createElement('div');
-      dragHandle.className = 'preset-scripts-menu-drag-handle';
+      const dragHandle = item.createDiv({ cls: 'preset-scripts-menu-drag-handle' });
       setIcon(dragHandle, 'grip-vertical');
-      item.appendChild(dragHandle);
 
-      const iconEl = activeDocument.createElement('div');
-      iconEl.className = 'preset-scripts-menu-icon';
+      const iconEl = item.createDiv({ cls: 'preset-scripts-menu-icon' });
       renderPresetScriptIcon(iconEl, script.icon || 'terminal');
-      item.appendChild(iconEl);
 
-      const labelEl = activeDocument.createElement('div');
-      labelEl.className = 'preset-scripts-menu-label';
-      labelEl.textContent = script.name || t('settingsDetails.terminal.presetScriptsUnnamed');
-      item.appendChild(labelEl);
+      item.createDiv({
+        cls: 'preset-scripts-menu-label',
+        text: script.name || t('settingsDetails.terminal.presetScriptsUnnamed'),
+      });
 
       setTooltip(item, this.buildPresetScriptTooltip(script), {
         placement: 'top',
         classes: ['preset-script-tooltip'],
       });
 
-      const actionsEl = activeDocument.createElement('div');
-      actionsEl.className = 'preset-scripts-menu-actions';
+      const actionsEl = item.createDiv({ cls: 'preset-scripts-menu-actions' });
 
-      const editBtn = activeDocument.createElement('button');
-      editBtn.className = 'preset-scripts-menu-action-btn';
-      editBtn.setAttribute('aria-label', t('modals.presetScript.titleEdit'));
+      const editBtn = actionsEl.createEl('button', {
+        cls: 'preset-scripts-menu-action-btn',
+        attr: { 'aria-label': t('modals.presetScript.titleEdit') },
+      });
       setIcon(editBtn, 'pencil');
       editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         this.closePresetScriptsMenu();
         this.openPresetScriptEditModal(script);
       });
-      actionsEl.appendChild(editBtn);
 
       const isBuiltIn = DEFAULT_PRESET_SCRIPTS.some(d => d.id === script.id);
       if (!isBuiltIn) {
-        const deleteBtn = activeDocument.createElement('button');
-        deleteBtn.className = 'preset-scripts-menu-action-btn preset-scripts-menu-action-delete';
-        deleteBtn.setAttribute('aria-label', t('common.delete'));
+        const deleteBtn = actionsEl.createEl('button', {
+          cls: 'preset-scripts-menu-action-btn preset-scripts-menu-action-delete',
+          attr: { 'aria-label': t('common.delete') },
+        });
         setIcon(deleteBtn, 'trash');
         deleteBtn.addEventListener('click', (e) => {
           e.stopPropagation();
@@ -3181,9 +3175,7 @@ export default class TerminalPlugin extends Plugin {
           const scriptName = script.name?.trim() || t('settingsDetails.terminal.presetScriptsUnnamed');
           this.confirmAndDeletePresetScript(script.id, scriptName);
         });
-        actionsEl.appendChild(deleteBtn);
       }
-      item.appendChild(actionsEl);
 
       item.addEventListener('dragstart', (e) => {
         draggedItem = item;
@@ -3251,8 +3243,6 @@ export default class TerminalPlugin extends Plugin {
           new Notice(t('notices.presetScript.runFailed', { message }));
         });
       });
-
-      listEl.appendChild(item);
     });
   }
 

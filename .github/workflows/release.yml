@@ -279,6 +279,8 @@ jobs:
     timeout-minutes: 30
     permissions:
       contents: write
+      id-token: write
+      attestations: write
 
     steps:
       - uses: actions/checkout@v5
@@ -371,6 +373,24 @@ jobs:
             find "${package_dir}/node_modules/@number0" -mindepth 2 -maxdepth 2 -type f -name '*.node' -print -quit | grep -q .
             (cd "${package_dir}" && zip -r "../../termesh-${{ github.ref_name }}-${platform}.zip" .)
           done
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+            termesh-${{ github.ref_name }}-*.zip
+            release-assets/iroh-runtime-*.node
+            binaries/termy-server-win32-x64.exe
+            binaries/termy-server-darwin-arm64
+            binaries/termy-server-darwin-x64
+            binaries/termy-server-linux-x64
+            binaries/termy-server-linux-arm64
+            release-assets/termesh-agent-win32-x64.exe
+            release-assets/termesh-agent-linux-x64
+            release-assets/termy-relay-linux-x64
 
       - name: Release
         uses: softprops/action-gh-release@v3

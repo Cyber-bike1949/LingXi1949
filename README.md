@@ -2,13 +2,13 @@
 
 # LingXi1949
 
-<img src="assets/termy-logo-selection.png" width="150" alt="LingXi1949 logo" />
+<img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
 *Not a prompt box. A bridge from your notes to your agent.*
 
 Bridge local and remote terminal sessions to your notes, with reusable workflows, AI CLI context handoff, and a native Rust PTY backend.
 
-[![Version](https://img.shields.io/badge/version-1.6.1-7c3aed?style=for-the-badge)](./manifest.json)
+[![Version](https://img.shields.io/badge/version-1.6.3-7c3aed?style=for-the-badge)](./manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-Desktop%20Only-8b5cf6?style=for-the-badge)](https://obsidian.md/)
 [![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=lingxi-bridge)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](./LICENSE)
@@ -22,19 +22,36 @@ English / [简体中文](./README_ZH.md)
   <img src="assets/termy-workspace-overview.png" width="980" alt="Termy main workspace preview with Obsidian, Codex CLI, OpenCode, and Claude Code" />
 </p>
 
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/remote_termina_en.png" alt="One-click connect to a remote or local terminal" />
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/easy_agent_en.png" alt="Send notes and context to the terminal agent with one click" />
+    </td>
+  </tr>
+</table>
+
 </div>
 
 ---
 
 ## Why LingXi1949?
 
-LingXi1949 is built for people who work across notes, terminals, AI coding sessions, and more than one device. Its device home keeps local and paired remote terminals in one place while preserving the editor context that makes an Obsidian-native terminal useful.
+LingXi1949 is built for people who work across notes, terminals, AI coding sessions, and more than one device. If any of this sounds familiar, that's what it fixes:
+
+| Without LingXi1949 | With LingXi1949 |
+| --- | --- |
+| Copy-pasting note content into a terminal AI, context always a step behind | Send the active selection, full note, or file path straight into Claude Code, Codex CLI, or OpenCode |
+| Reconfiguring terminal access every time you switch computers or connect to a remote machine | One device home manages local terminals and paired remote terminals together |
+| Repeating the same terminal commands, Obsidian commands, and links by hand | Trigger a preset workflow that chains them, launchable from the status bar |
+| Hunting down a file path printed in terminal or AI output | Click the printed reference to jump straight to the matching vault file |
+
+Under the hood:
 
 - **Native PTY backend**: Rust keeps the backend lean and avoids extra bridge runtimes.
 - **Real terminal UX**: xterm.js frontend with search, copy/paste, prompt navigation, split panes, and multi-session support.
-- **Workflow-driven automation**: Run reusable terminal, Obsidian-command, and external-link workflows from the status bar or command palette.
-- **File-aware interactions**: Drag text, files, and folders into the terminal and open file references directly from terminal output.
-- **AI-aware context handoff**: Claude Code, Codex CLI, and OpenCode integrations can inherit active note context from Obsidian.
 - **Desktop-first customization**: Shell selection, tab/split placement rules, theme sync, background images, blur, renderer controls, and Windows input handling.
 
 ## Features
@@ -160,9 +177,14 @@ LingXi1949 is built for people who work across notes, terminals, AI coding sessi
 > [!WARNING]
 > LingXi1949 is desktop-only because it uses a native PTY backend.
 
-### Install with BRAT (recommended for now)
+### Install from Community Plugins
 
-LingXi1949 is not yet listed in the official Obsidian Community Plugins directory, so BRAT is the recommended install path until that submission is approved.
+1. Open **Settings → Community plugins → Browse** and search for **LingXi1949**.
+2. Install the plugin and enable it in **Settings → Community plugins**.
+
+### Install with BRAT (early access to new releases)
+
+BRAT lets you track the latest commits ahead of the next Community Plugins update.
 
 1. Install [BRAT](https://github.com/TfTHacker/obsidian42-brat).
 2. Open BRAT settings and choose **Add beta plugin**.

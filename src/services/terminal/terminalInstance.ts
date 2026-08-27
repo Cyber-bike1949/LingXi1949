@@ -506,7 +506,7 @@ export class TerminalInstance {
 
   private checkRendererSupport(renderer: 'canvas' | 'webgl'): boolean {
     try {
-      const canvas = activeDocument.createElement('canvas');
+      const canvas = createEl('canvas');
       if (renderer === 'canvas') {
         return !!canvas.getContext('2d');
       }
@@ -1187,8 +1187,7 @@ export class TerminalInstance {
       existingMenu.remove();
     }
 
-    const menu = menuDocument.createElement('div');
-    menu.className = 'terminal-context-menu';
+    const menu = menuDocument.body.createDiv({ cls: 'terminal-context-menu' });
     menu.setCssStyles({ left: `${x}px`, top: `${y}px` });
 
     const hasSelection = this.xterm.hasSelection();
@@ -1406,8 +1405,6 @@ export class TerminalInstance {
       'Ctrl+Shift+K'
     ));
 
-    menuDocument.body.appendChild(menu);
-
     // Adjust the menu position
     const rect = menu.getBoundingClientRect();
     if (rect.right > menuWindow.innerWidth) {
@@ -1457,25 +1454,17 @@ export class TerminalInstance {
     if (!enabled) item.addClass('is-disabled');
 
     // Icon
-    const iconEl = menuDocument.createElement('span');
-    iconEl.className = 'terminal-context-menu-icon';
+    const iconEl = item.createSpan({ cls: 'terminal-context-menu-icon' });
     if (!enabled) iconEl.addClass('is-disabled');
     const iconSvg = this.createIconElement(menuDocument, icon);
     if (iconSvg) iconEl.appendChild(iconSvg);
-    item.appendChild(iconEl);
 
     // Text
-    const textEl = menuDocument.createElement('span');
-    textEl.textContent = label;
-    textEl.className = 'terminal-context-menu-text';
-    item.appendChild(textEl);
+    item.createSpan({ cls: 'terminal-context-menu-text', text: label });
 
     // Shortcut
     if (shortcut) {
-      const shortcutEl = menuDocument.createElement('span');
-      shortcutEl.textContent = shortcut;
-      shortcutEl.className = 'terminal-context-menu-shortcut';
-      item.appendChild(shortcutEl);
+      item.createSpan({ cls: 'terminal-context-menu-shortcut', text: shortcut });
     }
 
     if (enabled) {
@@ -1502,40 +1491,27 @@ export class TerminalInstance {
     const container = menuDocument.createElement('div');
     container.className = 'terminal-context-submenu-container';
 
-    const item = menuDocument.createElement('div');
-    item.className = 'terminal-context-menu-item';
+    const item = container.createDiv({ cls: 'terminal-context-menu-item' });
 
     // Icon
-    const iconEl = menuDocument.createElement('span');
-    iconEl.className = 'terminal-context-menu-icon';
+    const iconEl = item.createSpan({ cls: 'terminal-context-menu-icon' });
     const iconSvg = this.createIconElement(menuDocument, icon);
     if (iconSvg) iconEl.appendChild(iconSvg);
-    item.appendChild(iconEl);
 
     // Text
-    const textEl = menuDocument.createElement('span');
-    textEl.textContent = label;
-    textEl.className = 'terminal-context-menu-text';
-    item.appendChild(textEl);
+    item.createSpan({ cls: 'terminal-context-menu-text', text: label });
 
     // Arrow
-    const arrowEl = menuDocument.createElement('span');
-    arrowEl.className = 'terminal-context-submenu-arrow';
+    const arrowEl = item.createSpan({ cls: 'terminal-context-submenu-arrow' });
     const arrowSvg = this.createIconElement(menuDocument, 'chevron-right');
     if (arrowSvg) arrowEl.appendChild(arrowSvg);
-    item.appendChild(arrowEl);
-
-    container.appendChild(item);
 
     // Submenu
-    const submenu = menuDocument.createElement('div');
-    submenu.className = 'terminal-context-submenu';
+    const submenu = container.createDiv({ cls: 'terminal-context-submenu' });
 
     items.forEach(subItem => {
       submenu.appendChild(this.createMenuItem(menuDocument, subItem.label, subItem.icon, true, subItem.onClick, subItem.shortcut));
     });
-
-    container.appendChild(submenu);
 
     // Show the submenu on hover
     item.addEventListener('mouseenter', () => {

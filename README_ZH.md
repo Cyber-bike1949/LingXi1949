@@ -2,13 +2,13 @@
 
 # LingXi1949
 
-<img src="assets/termy-logo-selection.png" width="150" alt="LingXi1949 logo" />
+<img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
 *面向 Obsidian 的多设备终端工作台*
 
 从同一个设备首页打开本地或远程终端，并提供分屏、多会话、可复用工作流和 AI CLI 上下文接力。
 
-[![Version](https://img.shields.io/badge/version-1.6.1-7c3aed?style=for-the-badge)](./manifest.json)
+[![Version](https://img.shields.io/badge/version-1.6.3-7c3aed?style=for-the-badge)](./manifest.json)
 [![Obsidian](https://img.shields.io/badge/Obsidian-Desktop%20Only-8b5cf6?style=for-the-badge)](https://obsidian.md/)
 [![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=lingxi-bridge)
 [![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](./LICENSE)
@@ -22,19 +22,36 @@
   <img src="assets/termy-workspace-overview.png" width="980" alt="Termy 主工作区预览，包含 Obsidian、Codex CLI、OpenCode 和 Claude Code" />
 </p>
 
+<table>
+  <tr>
+    <td width="50%" align="center">
+      <img src="assets/remote_terminaL_cn.png" alt="一键连接远程（本地）终端" />
+    </td>
+    <td width="50%" align="center">
+      <img src="assets/easy_agent_cn.png" alt="笔记与上下文一键发送到终端（Agent）" />
+    </td>
+  </tr>
+</table>
+
 </div>
 
 ---
 
 ## 为什么用 LingXi1949？
 
-LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的用户。设备首页统一展示本机和已配对设备，同时保留 Obsidian 原生终端最重要的编辑器上下文能力。
+LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的用户。如果你也遇到过下面这些情况，这正是它要解决的：
+
+| 没有 LingXi1949 | 用了 LingXi1949 |
+| --- | --- |
+| 手动把笔记内容复制粘贴进终端里的 AI，上下文总是对不上 | 选区、整篇笔记或文件路径一键发送给终端里的 Claude Code、Codex CLI 或 OpenCode |
+| 换电脑或连远程机器要重新配置终端环境 | 设备首页统一管理本地终端和已配对的远程终端 |
+| 终端命令、Obsidian 命令、外部链接要一步步手动执行 | 预设工作流一键组合执行，还能固定在状态栏 |
+| 终端或 AI 输出里的文件路径得手动去 vault 里翻找 | 点击输出中的文件引用直接跳转打开对应文件 |
+
+底层能力：
 
 - **原生 PTY 后端**：Rust 后端更轻量，不依赖额外桥接运行时。
 - **真实终端体验**：基于 xterm.js，支持搜索、复制粘贴、提示符导航、分屏和多终端会话。
-- **工作流驱动自动化**：可从状态栏或命令面板执行终端命令、Obsidian 命令和外部链接组合工作流。
-- **文件感知交互**：支持拖拽文本/文件/目录到终端，也支持从终端输出中直接点击文件引用返回 Obsidian。
-- **AI 上下文接力**：支持 Claude Code、Codex CLI 与 OpenCode 在终端启动时继承当前笔记上下文。
 - **桌面端定制完善**：Shell 选择、分屏/新标签行为、主题同步、背景图、模糊、渲染器切换和 Windows 输入处理都可配置。
 
 ## 功能特性
@@ -159,9 +176,14 @@ LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的
 > [!WARNING]
 > LingXi1949 使用原生 PTY 后端，因此仅支持 Obsidian 桌面端。
 
-### 使用 BRAT 安装（当前推荐方式）
+### 从社区插件市场安装
 
-LingXi1949 尚未上架官方 Obsidian Community Plugins 列表（提交审核中），因此在通过审核之前，推荐使用 BRAT 安装。
+1. 打开 **设置 → 第三方插件 → 浏览**，搜索 **LingXi1949**。
+2. 安装插件，并在 **设置 → 第三方插件** 中启用。
+
+### 使用 BRAT 安装（提前体验新版本）
+
+BRAT 可以让你在社区插件市场同步最新版本之前，提前用上刚发布的版本。
 
 1. 安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat)。
 2. 打开 BRAT 设置，选择 **Add beta plugin**。

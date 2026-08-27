@@ -2455,16 +2455,6 @@
 
 
 
-/* Force show the terminal-internal CJK composition text with proper coloring and styling */
-.xterm .xterm-composition {
-  display: inline-block !important;
-  color: var(--text-normal) !important;
-  border-bottom: 2px solid var(--interactive-accent) !important;
-  background: transparent !important;
-  visibility: visible !important;
-  opacity: 1 !important;
-}
-
 /* ==================== Termesh device home ==================== */
 .termesh-device-home {
   height: 100%;
@@ -2691,9 +2681,9 @@
 
 @media (prefers-reduced-motion: reduce) {
   .termesh-device-card,
-  .termesh-home-refresh svg,
-  .termesh-status-dot {
-    animation: none !important;
-    transition: none !important;
+  .termesh-home-refresh.is-refreshing svg,
+  .termesh-device-status.status-connecting .termesh-status-dot {
+    animation: none;
+    transition: none;
   }
 }

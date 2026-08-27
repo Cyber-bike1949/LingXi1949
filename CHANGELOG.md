@@ -5,6 +5,12 @@ All notable changes to LingXi1949 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.3] - 2026-08-27
+
+### Changed
+- Reframed the community plugin description and README overview around concrete before/after pain points (note-to-terminal-AI context handoff, multi-device terminal management, repeated workflows, file-reference navigation) instead of a technical feature list, so the marketplace listing communicates value at a glance.
+- Corrected the README installation section, which still said the plugin was awaiting Community Plugins directory approval — it is now listed.
+
 ## [1.6.2] - 2026-08-26
 
 ### Changed
