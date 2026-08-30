@@ -44,7 +44,7 @@ import { DEVICE_HOME_VIEW_TYPE, DeviceHomeView } from './ui/home/deviceHomeView'
 import { ChangelogModal } from './ui/changelog/changelogModal';
 import { i18n, t } from './i18n';
 import { debugLog, errorLog } from './utils/logger';
-import { createTermyLogoSvg, createTermyLogoSvgMarkup, TERMY_RIBBON_ICON_ID } from './ui/icons';
+import { createLingXiLogoSvg, createLingXiLogoSvgMarkup, LINGXI_RIBBON_ICON_ID } from './ui/icons';
 import { FeatureVisibilityManager } from './services/visibility';
 import { shell } from 'electron';
 import type { TerminalInstance } from './services/terminal/terminalInstance';
@@ -927,7 +927,7 @@ export default class TerminalPlugin extends Plugin {
       id: 'terminal',
       getVisibility: () => this.settings.visibility,
       ribbon: {
-        icon: TERMY_RIBBON_ICON_ID,
+        icon: LINGXI_RIBBON_ICON_ID,
         tooltip: t('ribbon.terminalTooltip'),
         callback: () => {
           void this.activateDeviceHome();
@@ -943,7 +943,7 @@ export default class TerminalPlugin extends Plugin {
   }
 
   private registerCustomIcons(): void {
-    addIcon(TERMY_RIBBON_ICON_ID, createTermyLogoSvgMarkup());
+    addIcon(LINGXI_RIBBON_ICON_ID, createLingXiLogoSvgMarkup());
   }
 
   /**
@@ -964,7 +964,7 @@ export default class TerminalPlugin extends Plugin {
     this._statusBarItem.setAttr('aria-label', t('ribbon.terminalTooltip'));
 
     // Create the SVG icon and label
-    const iconEl = createTermyLogoSvg(18);
+    const iconEl = createLingXiLogoSvg(18);
     iconEl.addClass('terminal-status-bar-icon');
     this._statusBarItem.appendChild(iconEl);
     this._statusBarItem.createSpan({
@@ -2048,7 +2048,7 @@ export default class TerminalPlugin extends Plugin {
         menu.addItem((item) => {
           item
             .setTitle(t('remote.sendToTerminalExecute'))
-            .setIcon('terminal')
+            .setIcon(LINGXI_RIBBON_ICON_ID)
             .onClick((evt: MouseEvent) => {
               const terminals = listConnectedTerminals(this.app, this);
               showTerminalPickerMenu(evt, terminals, (terminal) => {
@@ -2075,7 +2075,7 @@ export default class TerminalPlugin extends Plugin {
       if (!(view instanceof MarkdownView) || this.noteToolbarSendActionInjected.has(view)) continue;
       this.noteToolbarSendActionInjected.add(view);
 
-      view.addAction('terminal', t('remote.sendToTerminalTooltip'), (evt: MouseEvent) => {
+      view.addAction(LINGXI_RIBBON_ICON_ID, t('remote.sendToTerminalTooltip'), (evt: MouseEvent) => {
         const file = view.file;
         if (!file) return;
         const terminals = listConnectedTerminals(this.app, this);

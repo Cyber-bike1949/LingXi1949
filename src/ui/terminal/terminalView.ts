@@ -680,7 +680,7 @@ export class TerminalView extends ItemView {
     if (!input) {
       debugLog('[Terminal DnD] No usable file path or text in drop payload');
       errorLog('[Terminal DnD] No usable path details:', this.describeDropPayload(dataTransfer));
-      new Notice('LingXi1949: 未获取到可用文本或路径，请确认拖拽来源是否支持文本或文件。');
+      new Notice('Lingxi1949: 未获取到 可用文本或路径，请确认拖拽来源是否支持文本或文件。');
       return;
     }
 

@@ -9,7 +9,7 @@ import type TerminalPlugin from '../main';
 import { TerminalSettingsRenderer } from './renderers/terminalSettingsRenderer';
 import type { RendererContext } from './types';
 import { t } from '../i18n';
-import { createTermyLogoSvg } from '../ui/icons';
+import { createLingXiLogoSvg } from '../ui/icons';
 
 /**
  * Terminal settings tab class
@@ -62,9 +62,9 @@ export class TerminalSettingTab extends PluginSettingTab {
     // Left side: logo + title + changelog button
     const titleGroup = titleRow.createDiv({ cls: 'settings-title-group' });
     
-    // Add the Termy logo
+    // Add the LingXi logo
     const iconContainer = titleGroup.createDiv({ cls: 'settings-title-icon' });
-    iconContainer.appendChild(createTermyLogoSvg(32));
+    iconContainer.appendChild(createLingXiLogoSvg(32));
 
     titleGroup.createDiv({ cls: 'settings-title', text: t('settings.header.title') });
 

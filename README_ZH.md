@@ -1,296 +1,76 @@
 <div align="center">
 
-# LingXi1949
-
 <img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
-*面向 Obsidian 的多设备终端工作台*
+# LingXi1949
 
-从同一个设备首页打开本地或远程终端，并提供分屏、多会话、可复用工作流和 AI CLI 上下文接力。
-
-[![Version](https://img.shields.io/badge/version-1.6.3-7c3aed?style=for-the-badge)](./manifest.json)
-[![Obsidian](https://img.shields.io/badge/Obsidian-Desktop%20Only-8b5cf6?style=for-the-badge)](https://obsidian.md/)
-[![Community Plugin](https://img.shields.io/badge/Obsidian-Community%20Plugin-22c55e?style=for-the-badge)](https://obsidian.md/plugins?id=lingxi-bridge)
-[![License](https://img.shields.io/badge/license-GPL--3.0-blue?style=for-the-badge)](./LICENSE)
-[![PTY](https://img.shields.io/badge/backend-Rust%20PTY-f97316?style=for-the-badge)](./rust-servers)
+连接本地与远程设备，并将笔记上下文交给 AI CLI Agent 的 Obsidian 终端工作台。
 
 简体中文 / [English](./README.md)
 
-[安装](#安装) · [快速上手](#快速上手) · [功能特性](#功能特性) · [界面导览](#界面导览) · [问题反馈](https://github.com/Cyber-bike1949/LingXi1949/issues) · [Telegram 群组](https://t.me/+t6oRqhaw8c1jNzE1)
-
-<p align="center">
-  <img src="assets/termy-workspace-overview.png" width="980" alt="Termy 主工作区预览，包含 Obsidian、Codex CLI、OpenCode 和 Claude Code" />
-</p>
+## 告别繁琐操作
 
 <table>
   <tr>
     <td width="50%" align="center">
-      <img src="assets/remote_terminaL_cn.png" alt="一键连接远程（本地）终端" />
+      <img src="assets/remote_terminal_cn.png" alt="一键连接本地或远程终端" />
     </td>
     <td width="50%" align="center">
-      <img src="assets/easy_agent_cn.png" alt="笔记与上下文一键发送到终端（Agent）" />
+      <img src="assets/easy_agent_cn.png" alt="一键将笔记与上下文发送给终端 Agent" />
     </td>
   </tr>
-</table>
-
-</div>
-
----
-
-## 为什么用 LingXi1949？
-
-LingXi1949 面向同时使用笔记、终端、AI 编码工具和多台设备的用户。如果你也遇到过下面这些情况，这正是它要解决的：
-
-| 没有 LingXi1949 | 用了 LingXi1949 |
-| --- | --- |
-| 手动把笔记内容复制粘贴进终端里的 AI，上下文总是对不上 | 选区、整篇笔记或文件路径一键发送给终端里的 Claude Code、Codex CLI 或 OpenCode |
-| 换电脑或连远程机器要重新配置终端环境 | 设备首页统一管理本地终端和已配对的远程终端 |
-| 终端命令、Obsidian 命令、外部链接要一步步手动执行 | 预设工作流一键组合执行，还能固定在状态栏 |
-| 终端或 AI 输出里的文件路径得手动去 vault 里翻找 | 点击输出中的文件引用直接跳转打开对应文件 |
-
-底层能力：
-
-- **原生 PTY 后端**：Rust 后端更轻量，不依赖额外桥接运行时。
-- **真实终端体验**：基于 xterm.js，支持搜索、复制粘贴、提示符导航、分屏和多终端会话。
-- **桌面端定制完善**：Shell 选择、分屏/新标签行为、主题同步、背景图、模糊、渲染器切换和 Windows 输入处理都可配置。
-
-## 功能特性
-
-### 终端工作区
-
-- 在 Obsidian 内直接运行本地 shell，支持 Windows、macOS 和 Linux。
-- 可使用 `cmd`、PowerShell、PowerShell Core、WSL、Git Bash、`bash`、`zsh` 或自定义 shell 路径。
-- 新终端可打开在当前标签页、新标签页、左/右侧标签组、水平/垂直分屏或新窗口。
-- 支持终端搜索、清屏/清缓冲区、字号调整、提示符导航和正常复制粘贴。
-- 可配置新终端是否靠近已有终端创建、是否自动聚焦、是否默认锁定标签页。
-
-### 工作流与启动器
-
-- 创建包含多个有序动作的预设工作流。
-- 在同一个工作流中组合终端命令、Obsidian 命令和外部链接。
-- 从状态栏菜单、命令面板或自动注册的工作流命令启动。
-- 为每个工作流控制是否显示在状态栏、是否自动打开终端、是否每次新建终端实例，以及是否重命名目标标签页。
-- 内置 Claude Code、Codex CLI、OpenCode 和 Gemini CLI 启动器，开箱即可接入常用 AI CLI。
-
-### Obsidian 感知交互
-
-- 将当前编辑器选区、整篇笔记或活动笔记路径发送到活动终端。
-- 将文本、文件和目录拖拽到终端，自动粘贴文本或解析后的路径。
-- 点击工具、Agent、脚本或编译器输出中的文件引用，快速打开匹配的库内文件或外部路径。
-- 可从命令面板或设置中打开内置更新日志。
-
-### AI 与编码集成
-
-> [!NOTE]
-> 如果使用外部终端启动 Claude Code、OpenCode 或 Codex，它们只是普通 CLI 进程，运行在 LingXi1949 的 Obsidian 集成层之外，无法自动知道活动笔记、vault/workspace 根目录或编辑器选区。
-
-- LingXi1949 会在当前 vault 上下文中启动 AI CLI，让活动笔记、选区、已打开文件和 workspace 根目录可用于编码任务。
-- Claude Code 和 OpenCode 使用 LingXi1949 的 IDE bridge；Codex 使用 vault 本地 Skill：`.agents/skills/termy-obsidian-context/SKILL.md`。
-- 内置 Codex 启动器直接运行 `codex`，不需要 MCP 注册或全局 CLI 配置修改。
-
-### 隐私与网络访问
-
-- LingXi1949 不包含遥测或分析功能。
-- LingXi1949 会在需要时从 [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases) 下载与当前平台匹配的原生 PTY server。首次使用远程设备时，会优先从 unpkg 下载固定版本、与当前平台匹配的 iroh `.node` 运行库，并依次回退到 jsDelivr 和 GitHub Releases。原生下载均使用插件内置的 SHA-256 校验；离线模式会禁用这些下载和所有更新检查。
-- 终端会话会运行本地 shell 命令和用户配置的工作流。这些命令可能会根据实际运行的 shell 命令或外部 CLI 读取文件、修改文件或访问网络。
-- LingXi1949 会启动本地 WebSocket 连接，用于 PTY 后端和可选 IDE bridge。这些连接仅用于本地终端传输和编辑器上下文接力。
-- 上下文感知的 AI 启动器可以把活动笔记路径、选区、编辑器上下文以及 vault/workspace 路径传递给本地 CLI 工具。Codex 集成会在 vault 内写入本地 helper skill：`.agents/skills/termy-obsidian-context/`。
-
-### 外观与体验
-
-- 可跟随 Obsidian 主题，也可自定义前景色和背景色。
-- 支持 Canvas 或 WebGL 渲染；启用背景图时会自动回退到 Canvas。
-- 可配置背景图 URL/路径、不透明度、尺寸、位置、模糊强度和文字透明度。
-- UI 已支持英语、简体中文、日语、韩语和俄语。
-- 支持 Windows 友好的 `win32-input-mode`，适配依赖原生按键事件的 shell。
-
-## 界面导览
-
-<details open>
-<summary><strong>工作区预览</strong></summary>
-<br />
-
-<p align="center">
-  <img src="assets/termy-workspace-overview.png" width="980" alt="Termy 完整工作区预览" />
-</p>
-
-</details>
-
-<details>
-<summary><strong>工作流界面</strong></summary>
-<br />
-
-<table>
   <tr>
-    <td width="34%" align="center">
-      <img src="assets/termy-statusbar-workflows.png" alt="Termy 状态栏工作流菜单" />
-      <br />
-      <sub>状态栏工作流启动菜单</sub>
-    </td>
-    <td width="66%" align="center">
-      <img src="assets/termy-settings-workflows.png" alt="Termy 工作流设置界面，包含 Claude Code、Codex CLI、OpenCode 和 Gemini CLI 内置项" />
-      <br />
-      <sub>工作流配置、实例行为与内置启动项</sub>
+    <td colspan="2" align="center">
+      <video src="assets/operate.mp4" width="980" controls></video>
     </td>
   </tr>
 </table>
 
-<p align="center">
-  <img src="assets/termy-workflow-editor.png" width="900" alt="Termy 预设工作流编辑器，包含动作、备注与上下文感知设置" />
-  <br />
-  <sub>预设工作流编辑器，支持动作顺序、备注与上下文感知配置</sub>
-</p>
+## 主界面
 
-</details>
+<img src="assets/main-interface.png" width="980" alt="LingXi1949 主界面操作演示" />
 
-<details>
-<summary><strong>主题定制</strong></summary>
-<br />
+## Linux Agent
+首次使用需要简单配置下
+```bash
+useradd -m cow
 
-<p align="center">
-  <img src="assets/termy-settings-theme.png" width="900" alt="Termy 主题设置界面，包含背景图、模糊和文字透明度控制" />
-</p>
+sudo usermod -aG sudo cow
 
-</details>
+passwd cow
 
-## 重点命令
+su - cow
+```
 
-| 命令 | 作用 |
-| --- | --- |
-| `Open terminal` | 按当前实例布局策略打开一个新终端。 |
-| `LingXi1949：显示更新日志` | 打开内置更新日志弹窗。 |
-| `Terminal: split horizontal / split vertical` | 对活动终端进行分屏。 |
-| `Terminal: send selection` | 将当前编辑器选区发送到活动终端。 |
-| `Terminal: send current note` | 将当前整篇笔记内容发送到活动终端。 |
-| `Terminal: send current path` | 将当前文件路径发送到活动终端。 |
-| `Terminal: previous prompt / next prompt` | 在提示符历史之间导航。 |
-| `Terminal: last failed command` | 跳转到最近一次失败命令。 |
-
-## 安装
-
-### 环境要求
-
-- Obsidian 桌面端
-- Windows、macOS 或 Linux 桌面系统
-
-> [!WARNING]
-> LingXi1949 使用原生 PTY 后端，因此仅支持 Obsidian 桌面端。
-
-### 从社区插件市场安装
-
-1. 打开 **设置 → 第三方插件 → 浏览**，搜索 **LingXi1949**。
-2. 安装插件，并在 **设置 → 第三方插件** 中启用。
-
-### 使用 BRAT 安装（提前体验新版本）
-
-BRAT 可以让你在社区插件市场同步最新版本之前，提前用上刚发布的版本。
-
-1. 安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat)。
-2. 打开 BRAT 设置，选择 **Add beta plugin**。
-3. 输入 `Cyber-bike1949/LingXi1949`。
-4. 安装插件，并在 **设置 → 社区插件** 中启用。
-
-### 手动安装
-
-通过社区市场或 BRAT 安装后，首次使用远程设备时会自动下载并校验当前平台的原生运行库。只有离线环境需要手动安装完整包：
-
-1. 从 [GitHub Releases](https://github.com/Cyber-bike1949/LingXi1949/releases) 下载与当前平台匹配的 `termesh-<version>-<platform>.zip` 完整包，例如 Windows x64 使用 `win32-x64`。
-2. 解压到当前 vault 的 `.obsidian/plugins/termesh/` 目录。
-3. 重启或重新加载 Obsidian。
-4. 在 **设置 → 社区插件** 中启用 LingXi1949。
-
-### 安装远程 Agent
-
-插件是控制端；每台远程电脑还需要运行 `termesh-agent`，它会以当前普通用户的权限提供该用户的 shell。整个过程不需要账号或单独的配对服务。
-
-目前正式发布的 Agent 支持 **Linux x64** 和 **Windows x64**。暂未发布 macOS Agent；macOS 仍可运行 LingXi1949 插件和本地终端。
-
-#### Linux x64（Ubuntu 22.04/24.04）
-
-请使用将来拥有远程 shell 的普通用户执行，不要切换到 root：
+在 Linux x64 上，以将要使用远程 Shell 的普通用户身份运行安装脚本：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh | bash
 ```
 
-脚本会下载最新版 Agent、校验 SHA-256、安装到 `~/.local/bin`，并启动 systemd 用户服务。安装时会请求一次 `sudo` 来启用 lingering，使退出登录后 Agent 仍能运行；Agent 和远程 shell 本身始终以普通用户运行。
+安装完成后，使用输出的连接码在 LingXi1949 中添加设备。
 
-安装完成后，把打印出的连接码粘贴到 **LingXi1949 → 添加设备**。之后可随时查看连接码和日志：
 
-```bash
-~/.local/bin/termesh-agent status
-journalctl --user -u termesh-agent -f
+## Windows Agent
+
+下载 [Windows x64 Agent 安装包](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/termesh-agent-win32-x64.exe)及其 [SHA-256 校验文件](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/termesh-agent-win32-x64.exe.sha256)。
+
+也可以通过 PowerShell 下载、校验并启动 Agent：
+
+```powershell
+$baseUrl = 'https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download'
+Invoke-WebRequest "$baseUrl/termesh-agent-win32-x64.exe" -OutFile 'termesh-agent.exe'
+Invoke-WebRequest "$baseUrl/termesh-agent-win32-x64.exe.sha256" -OutFile 'termesh-agent.exe.sha256'
+$expectedHash = (Get-Content 'termesh-agent.exe.sha256').Split()[0]
+$actualHash = (Get-FileHash '.\termesh-agent.exe' -Algorithm SHA256).Hash
+if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
+.\termesh-agent.exe run
 ```
 
-#### Windows x64
+保持 Agent 运行，然后使用输出的连接码在 LingXi1949 中添加设备。
 
-1. 从最新 [GitHub Release](https://github.com/Cyber-bike1949/LingXi1949/releases/latest) 下载 `termesh-agent-win32-x64.exe` 和对应的 `.sha256` 文件。
-2. 执行 `Get-FileHash .\termesh-agent-win32-x64.exe -Algorithm SHA256`，与 `.sha256` 文件中的第一个值核对。
-3. 将其重命名为 `termesh-agent.exe` 并放到固定目录，执行 `termesh-agent.exe run`；直接双击该程序也会启动 Agent。
-4. 把打印出的连接码粘贴到 **LingXi1949 → 添加设备**。Agent 需要保持运行；如需登录后自动启动，可使用 Windows 任务计划程序。
+## 插件端使用
 
-## 快速上手
-
-1. 通过左侧 ribbon、命令面板或空标签页按钮打开 LingXi1949，并选择要使用的设备。
-2. 在设置中配置 shell、终端创建位置和外观。
-3. 从状态栏菜单试运行内置工作流。
-4. 将当前选区、整篇笔记或当前路径发送到终端。
-5. 拖拽一个文件或目录到终端，确认路径会被正确解析并插入。
-6. 点击工具或 Agent 输出中的文件引用，直接跳回对应文件。
-
-## 开发
-
-```bash
-pnpm install
-pnpm build
-pnpm build:rust
-pnpm package:zip
-```
-
-| 脚本 | 用途 |
-| --- | --- |
-| `pnpm dev` | 前端构建/监听流程。 |
-| `pnpm build` | TypeScript 检查、生产构建和 bundle smoke check。 |
-| `pnpm build:rust` | 构建原生 PTY 后端二进制。 |
-| `pnpm package:zip` | 生成发布压缩包。 |
-| `pnpm install:dev <vault-path>` | 构建全部内容并安装到本地开发 vault。当仅修改 TypeScript 代码时，可追加 `--no-rust` 跳过原生 PTY 后端的重新编译。 |
-| `pnpm test:terminal` | 编译并运行终端层 Node 测试。 |
-
-完整的贡献指南（环境搭建、各平台构建 Rust Agent、测试、代码风格、必须遵守的 Obsidian 开发者政策红线）见 [docs/development_ZH.md](docs/development_ZH.md)。
-
-## 架构概览
-
-```mermaid
-graph LR
-  A[Obsidian 插件 UI] --> B[xterm.js 终端]
-  B --> C[原生 Rust PTY Server]
-  A --> D[工作流启动器]
-  A --> E[上下文服务]
-  E --> F[Claude/OpenCode IDE Bridge]
-  E --> G[Codex Skill 上下文]
-  D --> H[AI CLI 启动器]
-```
-
-- **前端**：TypeScript、Obsidian Plugin API 和 xterm.js。
-- **后端**：基于 `portable-pty` 的原生 Rust PTY server。
-- **AI 上下文**：Claude Code 和 OpenCode 通过 IDE bridge 集成；Codex 通过 vault 本地 Skill 集成。
-- **打包**：生成的插件资源位于仓库根目录的 `main.js` 和 `styles.css`；原生二进制复制到 `binaries/`。
-
-## 许可证
-
-LingXi1949 使用 [GPL-3.0](./LICENSE) 许可证。
-
-## 致谢
-
-- [xterm.js](https://xtermjs.org/)
-- [portable-pty](https://github.com/wez/wezterm/tree/main/pty)
-
----
-
-<div align="center">
-
-**用 ❤️ 为 Obsidian 用户构建**
-
-如果 LingXi1949 对你的工作流有帮助，欢迎给项目点一个 Star。
+输入连接码添加设备，打开终端，即可在 Obsidian 中开始使用。
 
 </div>
