@@ -21,11 +21,7 @@
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <a href="https://github.com/Cyber-bike1949/LingXi1949/blob/main/assets/operate.mp4">
-        <img src="assets/main-interface.png" width="980" alt="观看 LingXi1949 操作演示视频" />
-      </a>
-      <br />
-      <sub>点击预览图观看操作演示。</sub>
+      <img src="assets/operate.gif" width="980" alt="LingXi1949 操作演示" />
     </td>
   </tr>
 </table>

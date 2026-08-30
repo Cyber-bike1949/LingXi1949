@@ -21,11 +21,7 @@ English / [简体中文](./README_ZH.md)
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <a href="https://github.com/Cyber-bike1949/LingXi1949/blob/main/assets/operate.mp4">
-        <img src="assets/main-interface.png" width="980" alt="Watch the LingXi1949 operation demo video" />
-      </a>
-      <br />
-      <sub>Click the preview to watch the operation demo.</sub>
+      <img src="assets/operate.gif" width="980" alt="LingXi1949 operation demo" />
     </td>
   </tr>
 </table>
