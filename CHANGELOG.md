@@ -5,6 +5,12 @@ All notable changes to LingXi1949 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.5] - 2026-08-31
+
+### Changed
+- Expanded the Chinese and English usage guides with screenshots for drag-and-drop file transfer and one-click note transfer.
+- Replaced the embedded operation video with an animated GIF so the demonstration displays and plays reliably on GitHub.
+
 ## [1.6.4] - 2026-08-30
 
 ### Added
