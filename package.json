@@ -1,6 +1,6 @@
 {
   "name": "lingxi-bridge",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "type": "module",
   "description": "Bridge your Obsidian notes to AI CLI agents. Rich markdown and note links replace the flat prompt box, backed by local and remote terminal sessions with a bundled Rust PTY backend.",
   "main": "main.js",
