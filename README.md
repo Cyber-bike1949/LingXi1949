@@ -21,7 +21,11 @@ English / [简体中文](./README_ZH.md)
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <video src="assets/operate.mp4" width="980" controls></video>
+      <a href="https://github.com/Cyber-bike1949/LingXi1949/blob/main/assets/operate.mp4">
+        <img src="assets/main-interface.png" width="980" alt="Watch the LingXi1949 operation demo video" />
+      </a>
+      <br />
+      <sub>Click the preview to watch the operation demo.</sub>
     </td>
   </tr>
 </table>
@@ -74,4 +78,8 @@ Keep the Agent running, then use its connection code to add the device in LingXi
 
 Add a device with its connection code, open a terminal, and start working from Obsidian.
 
+- Drag and drop notes from Obsidian or files from the terminal to transfer them directly between devices.
+<img src="assets/drag_and_drop.png" width="980" alt="LingXi1949 main interface demonstration" />
+- Send the current note and its related references to the terminal with one click. LingXi1949 automatically finds the referenced notes and includes them in the transfer.
+<img src="assets/one_click.png" width="980" alt="LingXi1949 main interface demonstration" />
 </div>

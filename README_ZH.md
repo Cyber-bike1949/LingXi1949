@@ -21,7 +21,11 @@
   </tr>
   <tr>
     <td colspan="2" align="center">
-      <video src="assets/operate.mp4" width="980" controls></video>
+      <a href="https://github.com/Cyber-bike1949/LingXi1949/blob/main/assets/operate.mp4">
+        <img src="assets/main-interface.png" width="980" alt="观看 LingXi1949 操作演示视频" />
+      </a>
+      <br />
+      <sub>点击预览图观看操作演示。</sub>
     </td>
   </tr>
 </table>
@@ -73,4 +77,11 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 
 输入连接码添加设备，打开终端，即可在 Obsidian 中开始使用。
 
+- Obsidian 笔记和终端中的文件均可通过拖拽，在设备间直接传输。
+
+<img src="assets/drag_and_drop.png" width="980" alt="LingXi1949 main interface demonstration" />
+
+- 当前笔记及其相关引用可一键传输到终端，LingXi1949 会自动查找被引用的笔记并一并传输。
+
+<img src="assets/one_click.png" width="980" alt="LingXi1949 main interface demonstration" />
 </div>
