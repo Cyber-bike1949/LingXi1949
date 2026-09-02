@@ -33,8 +33,10 @@ export const ru: TranslationKeys = {
 
   remote: {
     notConnected: 'Connect to a remote device before sending a note.',
-    dropSingleMarkdown: 'Drop one Markdown note from this vault.',
-    dropRejected: 'Not a Markdown file - the note transfer was rejected.',
+    dropSingleMarkdown: 'Drop notes, attachments, or a directory-tree file to reference them in the agent input.',
+    dropRejected: 'Not a file this terminal can reference - the drop was rejected.',
+    dropFolderNotSupported: 'Folders can\'t be dropped here - drop individual files instead.',
+    dropCrossDeviceNotSupported: 'This file is on a different device than the current terminal - cross-device references are not supported.',
     transferComplete: 'Note transfer complete.',
     transferCompleteAt: 'Note transfer complete: {{path}}',
     transferFailed: 'Note transfer failed: {{message}}',

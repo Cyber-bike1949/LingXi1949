@@ -33,8 +33,10 @@ export const zhCN: TranslationKeys = {
 
   remote: {
     notConnected: '请先连接远程设备再发送笔记。',
-    dropSingleMarkdown: '请从当前仓库拖入一个 Markdown 笔记。',
-    dropRejected: '非 Markdown 文件，已拒绝该笔记传输。',
+    dropSingleMarkdown: '拖入笔记、附件或终端目录树中的文件，即可引用到 agent 输入框。',
+    dropRejected: '不是可引用的文件，已拒绝该次拖拽。',
+    dropFolderNotSupported: '暂不支持拖拽整个文件夹，请拖拽单个文件。',
+    dropCrossDeviceNotSupported: '该文件位于另一台设备上，不支持跨设备引用。',
     transferComplete: '笔记传输完成。',
     transferCompleteAt: '笔记传输完成：{{path}}',
     transferFailed: '笔记传输失败：{{message}}',

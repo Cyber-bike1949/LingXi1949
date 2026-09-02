@@ -79,6 +79,8 @@ export interface TranslationKeys {
     notConnected: string;
     dropSingleMarkdown: string;
     dropRejected: string;
+    dropFolderNotSupported: string;
+    dropCrossDeviceNotSupported: string;
     transferComplete: string;
     transferCompleteAt: string;
     transferFailed: string;

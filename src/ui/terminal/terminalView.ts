@@ -39,6 +39,7 @@ import {
   normalizeVaultPath,
   obsidianUriToVaultPath,
   toPlatformPath,
+  type TerminalPlatform,
 } from '../../services/terminal/terminalPathUtils';
 import { TERMINAL_FILE_URI_REGEX } from '../../services/terminal/terminalFileLinks';
 import type { TerminalSettings } from '../../settings/settings';
@@ -48,7 +49,7 @@ import { t } from '../../i18n';
 import { RenameTerminalModal } from './renameTerminalModal';
 import { capabilities, transition, type RemoteState } from '../../services/remote/remoteState';
 import { createVaultLinkSource, readVaultFile } from '../../services/remote/vaultLinkSource';
-import { checkQuotas, collect } from '../../services/remote/noteCollector';
+import { checkQuotas, collect, type CollectedFile } from '../../services/remote/noteCollector';
 import { DirectoryTreePanel } from './directoryTreePanel';
 import { LocalDirectoryTreeSource } from '../../services/terminal/directoryTreeSource';
 import type { DirectoryTreeSource } from '../../services/terminal/directoryTreeSource';
@@ -56,6 +57,7 @@ import {
   collectVaultEntryForTransfer,
   copyVaultEntryToDirectory,
   copyVaultNoteWithLinksToDirectory,
+  DIRECTORY_TREE_DRAG_MIME,
   type DirectoryTreeDragPayload,
   type FsAccess,
 } from '../../services/terminal/directoryTreeDrop';
@@ -580,10 +582,10 @@ export class TerminalView extends ItemView {
   }
 
   private getDropHintText(): string {
-    // A connected remote terminal only accepts a single Markdown note (the
-    // same constraint `resolveDroppedMarkdownFile` enforces on drop), so
-    // warn about it up front instead of showing the LocalMode-oriented
-    // paste hint, which never applies here.
+    // Dropping onto a connected remote terminal transfers the file and
+    // inserts a reference (`handleRemoteDrop`/`handleDirectoryTreeEntryDropToInput`)
+    // rather than typing raw text, so warn about that up front instead of
+    // showing the LocalMode-oriented paste hint, which never applies here.
     if (this.remoteState === 'Connected') {
       return t('remote.dropSingleMarkdown');
     }
@@ -668,6 +670,16 @@ export class TerminalView extends ItemView {
   }
 
   private async handleDrop(dataTransfer: DataTransfer | null): Promise<void> {
+    // A directory-tree row drop (candidate doc §5.2 source (b)) carries our
+    // own private MIME and never a real OS file, so it must be recognized
+    // before the local/remote branch below - it applies to both, and reads
+    // as a reference-only insert (no vault transfer, the entry is already
+    // where the terminal can see it) rather than either branch's own flow.
+    if (dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) {
+      await this.handleDirectoryTreeEntryDropToInput(dataTransfer);
+      return;
+    }
+
     if (this.remoteState === 'Connected') {
       await this.handleRemoteDrop(dataTransfer);
       return;
@@ -688,10 +700,56 @@ export class TerminalView extends ItemView {
     await this.writeInputToTerminal(input.text, input.usePaste);
   }
 
+  /**
+   * Source (b) of candidate doc §5.2: a file dragged straight from this
+   * terminal's own directory-tree panel onto the terminal's input area (as
+   * opposed to onto another tree row, which is `handleDirectoryTreeDrop`'s
+   * vault→fs copy). The entry already lives wherever this terminal's shell
+   * runs - locally or on the connected device - so this only ever computes
+   * and inserts a reference path; no transfer happens.
+   */
+  private async handleDirectoryTreeEntryDropToInput(dataTransfer: DataTransfer): Promise<void> {
+    let entry: DirectoryTreeDragPayload;
+    try {
+      entry = JSON.parse(dataTransfer.getData(DIRECTORY_TREE_DRAG_MIME)) as DirectoryTreeDragPayload;
+    } catch {
+      return;
+    }
+
+    if (entry.isDirectory) {
+      new Notice(t('remote.dropFolderNotSupported'));
+      return;
+    }
+
+    // The tree can show a different device than the one this terminal is
+    // riding (e.g. the local tree docked next to a remote terminal tab) -
+    // referencing a path from a device this terminal's shell can't see
+    // would insert a path the agent can never actually open.
+    if (entry.nodeId !== this.getRemoteNodeId()) {
+      new Notice(t('remote.dropCrossDeviceNotSupported'));
+      return;
+    }
+
+    const platform = entry.nodeId ? this.guessRemotePathPlatform(entry.path) : undefined;
+    const reference = this.formatAgentReferencePaths([entry.path], { platform });
+    if (reference) {
+      await this.writeInputToTerminal(reference, false);
+    }
+  }
+
+  /**
+   * Source (a) of candidate doc §5.2: one or more notes/attachments dragged
+   * from Obsidian's vault (or an equivalent OS-level file drop that
+   * resolves back to a vault file) onto a connected remote terminal. Each
+   * file is transferred to the terminal's current directory, then a
+   * reference to each is inserted into the terminal input - the same
+   * two-step "land it, then reference it" flow `formatDroppedPaths`
+   * already does for local drops, just over the wire.
+   */
   private async handleRemoteDrop(dataTransfer: DataTransfer | null): Promise<void> {
-    const file = this.resolveDroppedMarkdownFile(dataTransfer);
-    if (!file) {
-      new Notice(t('remote.dropRejected'));
+    const { files, hadFolder } = this.resolveDroppedVaultFilesForRemoteDrop(dataTransfer);
+    if (files.length === 0) {
+      new Notice(t(hadFolder ? 'remote.dropFolderNotSupported' : 'remote.dropRejected'));
       return;
     }
 
@@ -713,18 +771,30 @@ export class TerminalView extends ItemView {
     // that is, the same way `dropCopyDone` already reports a directory-tree
     // drop's destination.
     const targetPath = this.getRemoteDropTargetPath();
+    const platform = this.guessRemotePathPlatform(targetPath);
 
     this.setRemoteState(transition(this.remoteState, { type: 'dropNote' }));
+    const landedPaths: string[] = [];
     try {
-      const collected = collect(createVaultLinkSource(this.app, file));
-      if (!collected.ok) throw new Error(collected.error ?? 'Unable to collect dropped note');
-      const quota = checkQuotas(collected.files);
-      if (!quota.ok) throw new Error(quota.error ?? 'Transfer quota exceeded');
+      for (const file of files) {
+        const source = this.collectRemoteDropSource(file);
+        if (!source.ok) throw new Error(source.error ?? 'Unable to collect dropped file');
+        const quota = checkQuotas(source.files);
+        if (!quota.ok) throw new Error(quota.error ?? 'Transfer quota exceeded');
 
-      const outcome = await connections
-        .createTransferSender(nodeId, crypto.randomUUID(), collected.files, (path) => readVaultFile(this.app, path), null, targetPath)
-        .run();
-      if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
+        const outcome = await connections
+          .createTransferSender(nodeId, crypto.randomUUID(), source.files, source.readFile, null, targetPath)
+          .run();
+        if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
+        landedPaths.push(joinTerminalPaths(targetPath, file.name, platform));
+      }
+
+      if (landedPaths.length > 0) {
+        const reference = this.formatAgentReferencePaths(landedPaths, { platform });
+        if (reference) {
+          await this.writeInputToTerminal(reference, false);
+        }
+      }
       new Notice(t('remote.transferCompleteAt', { path: targetPath }));
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -732,6 +802,87 @@ export class TerminalView extends ItemView {
     } finally {
       this.setRemoteState(transition(this.remoteState, { type: 'transferFinished' }));
     }
+  }
+
+  /**
+   * Splits a dropped vault selection into files transferable to a remote
+   * device and a "did the user try to drop a folder" flag, so the caller
+   * can give the folder-drop notice from candidate doc §5.4's last
+   * acceptance criterion instead of the generic "rejected" one.
+   */
+  private resolveDroppedVaultFilesForRemoteDrop(
+    dataTransfer: DataTransfer | null,
+  ): { files: TFile[]; hadFolder: boolean } {
+    const entries = this.resolveDroppedVaultEntries(dataTransfer);
+    const files: TFile[] = [];
+    let hadFolder = false;
+    for (const entry of entries) {
+      if (entry instanceof TFolder) {
+        hadFolder = true;
+        continue;
+      }
+      files.push(entry);
+    }
+    return { files, hadFolder };
+  }
+
+  /**
+   * A Markdown note keeps the existing "pull in its directly linked
+   * attachments too" behavior (`noteCollector`'s link-following collect);
+   * any other file type (candidate doc §5.2/§5.5 Q1: binary attachments now
+   * in scope too) is sent as itself via the same generic walker the
+   * directory-tree vault→fs copy already uses for non-Markdown entries.
+   */
+  private collectRemoteDropSource(file: TFile): {
+    ok: boolean;
+    error?: string;
+    files: CollectedFile[];
+    readFile: (relativePath: string) => Promise<Uint8Array>;
+  } {
+    if (file.extension.toLowerCase() === 'md') {
+      const result = collect(createVaultLinkSource(this.app, file));
+      return {
+        ok: result.ok,
+        error: result.error,
+        files: result.files,
+        readFile: (path: string) => readVaultFile(this.app, path),
+      };
+    }
+
+    const result = collectVaultEntryForTransfer(file);
+    return { ok: true, files: result.files, readFile: result.readFile };
+  }
+
+  /**
+   * Sniffs a remote path's OS style (see `isWindowsStylePath`'s doc
+   * comment) so path joining/formatting for a dropped reference matches the
+   * *target* device's separators, not the controlling machine's.
+   */
+  private guessRemotePathPlatform(samplePath: string): TerminalPlatform {
+    return isWindowsStylePath(samplePath) ? 'win32' : 'linux';
+  }
+
+  /**
+   * Formats reference paths for entries that are not on the local
+   * filesystem the plugin can `fs.existsSync` against (a remote landing
+   * path we just transferred to, or a directory-tree entry on whichever
+   * device the tree is showing): same Claude-Code-@mention-or-plain-quoted
+   * behavior as `formatDroppedPaths`, but skips the local-disk
+   * cross-check `pathExists` performs, since it would always be checking
+   * the wrong filesystem.
+   */
+  private formatAgentReferencePaths(paths: string[], options: { platform?: TerminalPlatform } = {}): string {
+    if (!this.shouldFormatDroppedPathsAsClaudeCodeReferences()) {
+      return this.quoteDroppedPaths(paths);
+    }
+
+    const terminal = this.terminalInstance;
+    return formatClaudeCodePathReferences(paths, {
+      cwd: terminal?.getAgentSessionStartCwd() ?? terminal?.getCwd(),
+      platform: options.platform,
+      isDirectory: () => false,
+      pathExists: () => true,
+    });
   }
 
   /**
@@ -754,31 +905,15 @@ export class TerminalView extends ItemView {
     return cwd;
   }
 
-  private resolveDroppedMarkdownFile(dataTransfer: DataTransfer | null): TFile | null {
-    if (!dataTransfer || dataTransfer.files.length > 1) return null;
-    const candidates = [
-      dataTransfer.getData('text/plain'),
-      dataTransfer.getData('text/uri-list'),
-      ...Array.from(dataTransfer.files).map((file) => file.name),
-    ].flatMap((candidate) => candidate.split(/\r?\n/));
-    for (const candidate of candidates) {
-      const path = normalizeDroppedMarkdownLinkpath(candidate);
-      if (!path) continue;
-      const direct = this.app.vault.getAbstractFileByPath(normalizeVaultPath(path));
-      if (direct instanceof TFile && direct.extension.toLowerCase() === 'md') return direct;
-      const linked = this.app.metadataCache.getFirstLinkpathDest(path, '');
-      if (linked instanceof TFile && linked.extension.toLowerCase() === 'md') return linked;
-    }
-    return null;
-  }
-
   /**
-   * Like `resolveDroppedMarkdownFile` but not restricted to a single
-   * Markdown note: the directory tree accepts any note, attachment, or
-   * folder dragged from the vault (candidate doc §4.1 point 5). Files and
-   * folders resolve the same way `normalizeDroppedMarkdownLinkpath` already
-   * resolves note links; the name is inherited from that helper, not a
-   * markdown restriction baked into its logic.
+   * Resolves a dropped vault selection to `TFile`/`TFolder` entries: any
+   * note, attachment, or folder dragged from the vault (candidate doc
+   * §4.1 point 5; §5.2/§5.5 Q1 extends this to the remote-drop path too,
+   * not just the directory-tree vault→fs copy this was originally written
+   * for). Files and folders resolve the same way
+   * `normalizeDroppedMarkdownLinkpath` already resolves note links; the
+   * name is inherited from that helper, not a markdown restriction baked
+   * into its logic.
    */
   private resolveDroppedVaultEntries(dataTransfer: DataTransfer | null): Array<TFile | TFolder> {
     if (!dataTransfer) return [];
@@ -1244,8 +1379,13 @@ export class TerminalView extends ItemView {
       return this.quoteDroppedPaths(paths);
     }
 
+    // §5.2/§5.5 Q3: relative to where the agent session started, not the
+    // terminal's live cwd, which can drift once the user `cd`s around
+    // inside an already-running session. Falls back to live cwd when no
+    // session-start snapshot is available (see `getAgentSessionStartCwd`'s
+    // doc comment).
     return formatClaudeCodePathReferences(paths, {
-      cwd: this.terminalInstance?.getCwd(),
+      cwd: this.terminalInstance?.getAgentSessionStartCwd() ?? this.terminalInstance?.getCwd(),
       isDirectory: (path) => this.isDroppedDirectoryPath(path),
       pathExists: (path) => this.fs.existsSync(path),
     });

@@ -231,6 +231,18 @@ export class TerminalInstance {
   private commandMarkers: TerminalCommandMarker[] = [];
   private win32InputModeEnabled = false;
   private claudeCodeSessionState = new ClaudeCodeSessionState();
+  /**
+   * `getCwd()` snapshot taken the moment the Claude Code TUI's startup
+   * handshake is observed (see `observeClaudeCodeXtversionQuery`). Dropped
+   * file references (candidate doc "文件引用拖拽简化" §5.2 Q3) are meant to
+   * be relative to where the agent session started, not to the terminal's
+   * live cwd, which can drift from that if the user `cd`s around inside an
+   * already-running agent session. Fires the same way whether the session
+   * was started by the user typing a launch command or by the plugin's own
+   * launch flow, since it keys off the CLI's own handshake rather than
+   * anything the plugin typed.
+   */
+  private agentSessionStartCwd: string | null = null;
   private webSocketDisconnected = false;
   private sessionRecoveryNeeded = false;
   private sessionRecoveryInProgress = false;
@@ -659,6 +671,7 @@ export class TerminalInstance {
   private resetSessionProtocolState(): void {
     this.win32InputModeEnabled = false;
     this.claudeCodeSessionState.reset();
+    this.agentSessionStartCwd = null;
     this.pendingControlSequenceText = '';
     this.synchronizedOutputCompatibilityState = createSynchronizedOutputCompatibilityState();
   }
@@ -772,12 +785,20 @@ export class TerminalInstance {
   }
 
   private observeClaudeCodeXtversionQuery(): void {
+    const wasActive = this.claudeCodeSessionState.isActive();
     this.claudeCodeSessionState.observeXtversionQuery();
+    if (!wasActive) {
+      this.agentSessionStartCwd = this.getCwd();
+    }
     this.applyTitleChange(this.titleState.setAutomaticTitle('Claude Code'));
   }
 
   private observeClaudeCodeModifyOtherKeysMode(enabled: boolean): void {
+    const wasActive = this.claudeCodeSessionState.isActive();
     this.claudeCodeSessionState.observeModifyOtherKeysMode(enabled);
+    if (enabled && !wasActive) {
+      this.agentSessionStartCwd = this.getCwd();
+    }
     this.applyTitleChange(
       enabled
         ? this.titleState.setAutomaticTitle('Claude Code')
@@ -787,6 +808,7 @@ export class TerminalInstance {
 
   private observeShellPrompt(): void {
     this.claudeCodeSessionState.observeShellPrompt();
+    this.agentSessionStartCwd = null;
     this.applyTitleChange(this.titleState.clearAutomaticTitle());
   }
 
@@ -1900,6 +1922,17 @@ export class TerminalInstance {
 
   isClaudeCodeSession(): boolean {
     return this.claudeCodeSessionState.isActive();
+  }
+
+  /**
+   * The cwd captured when the active Claude Code session started (see
+   * `agentSessionStartCwd`), or `null` when there is no active session or
+   * it started before this snapshot existed (e.g. a session resumed from a
+   * saved scrollback). Callers computing a dropped file's reference path
+   * should fall back to `getCwd()` in that case.
+   */
+  getAgentSessionStartCwd(): string | null {
+    return this.claudeCodeSessionState.isActive() ? this.agentSessionStartCwd : null;
   }
 
   getOptions(): Readonly<TerminalOptions> {
