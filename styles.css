@@ -2623,6 +2623,35 @@
   50% { opacity: 0.35; }
 }
 
+.termesh-device-agent {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.termesh-device-agent-configure {
+  width: 100%;
+}
+
+.termesh-device-agent-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.termesh-device-agent-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+.termesh-device-agent-launch {
+  flex-shrink: 0;
+}
+
 .termesh-device-error {
   margin-top: 10px;
   color: var(--text-error);

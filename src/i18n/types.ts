@@ -73,6 +73,27 @@ export interface TranslationKeys {
     pairTooShort: string;
     pairUnparseable: string;
     operationFailed: string;
+    agentConfigure: string;
+    agentLaunch: string;
+    agentDetecting: string;
+    agentInstalling: string;
+    agentInstallFailed: string;
+    agentLaunching: string;
+    agentConfigTitle: string;
+    agentConfigAgent: string;
+    agentConfigAgentCustom: string;
+    agentConfigAgentName: string;
+    agentConfigAgentNamePlaceholder: string;
+    agentConfigProvider: string;
+    agentConfigProviderPlaceholder: string;
+    agentConfigModel: string;
+    agentConfigModelPlaceholder: string;
+    agentConfigApiKey: string;
+    agentConfigApiKeyPlaceholder: string;
+    agentConfigSave: string;
+    agentConfigRemove: string;
+    agentConfigSaved: string;
+    agentConfigRemoved: string;
   };
 
   remote: {
@@ -262,6 +283,12 @@ export interface TranslationKeys {
       launcherUpdated: string;
       launcherOnLatest: string;
       launcherCopied: string;
+      installCommandUnavailable: string;
+      installing: string;
+      installFailed: string;
+    };
+    deviceAgent: {
+      notConfigured: string;
     };
   };
 

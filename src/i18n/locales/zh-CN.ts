@@ -28,7 +28,7 @@ export const zhCN: TranslationKeys = {
   },
 
   home: {
-    title: '设备', description: '从本机或已配对设备打开新终端。', refresh: '刷新设备状态', refreshing: '正在刷新...', addDevice: '添加设备', addDeviceDescription: '粘贴 Agent 显示的设备码', localDevice: '本机', localDeviceDescription: '在当前设备上打开终端', available: '可用', openTerminal: '打开终端', deviceName: '设备名称', deviceNamePlaceholder: '可选的显示名称', connectionCode: '设备码', connectionCodePlaceholder: '粘贴 endpoint 设备码', addingDevice: '正在添加...', deviceAdded: '设备已添加。', moreActions: '更多设备操作', disconnect: '断开连接', removeDevice: '移除设备', removeDeviceTitle: '移除设备？', removeDeviceDescription: '将从本机删除“{{name}}”及其设备码。', deviceRemoved: '设备已移除。', returnHome: '返回设备首页', neverConnected: '从未连接', lastConnected: '上次连接：{{time}}', statusDisconnected: '未连接', statusConnecting: '连接中', statusConnected: '已连接', statusError: '连接失败', pairEmpty: '请粘贴设备码。', pairWrongPrefix: '这不是有效的 endpoint 设备码。', pairBadCharacters: '设备码包含无效字符。', pairTooShort: '设备码不完整。', pairUnparseable: '无法解析设备码，请从 Agent 重新复制。', operationFailed: '设备操作失败：{{message}}',
+    title: '设备', description: '从本机或已配对设备打开新终端。', refresh: '刷新设备状态', refreshing: '正在刷新...', addDevice: '添加设备', addDeviceDescription: '粘贴 Agent 显示的设备码', localDevice: '本机', localDeviceDescription: '在当前设备上打开终端', available: '可用', openTerminal: '打开终端', deviceName: '设备名称', deviceNamePlaceholder: '可选的显示名称', connectionCode: '设备码', connectionCodePlaceholder: '粘贴 endpoint 设备码', addingDevice: '正在添加...', deviceAdded: '设备已添加。', moreActions: '更多设备操作', disconnect: '断开连接', removeDevice: '移除设备', removeDeviceTitle: '移除设备？', removeDeviceDescription: '将从本机删除“{{name}}”及其设备码。', deviceRemoved: '设备已移除。', returnHome: '返回设备首页', neverConnected: '从未连接', lastConnected: '上次连接：{{time}}', statusDisconnected: '未连接', statusConnecting: '连接中', statusConnected: '已连接', statusError: '连接失败', pairEmpty: '请粘贴设备码。', pairWrongPrefix: '这不是有效的 endpoint 设备码。', pairBadCharacters: '设备码包含无效字符。', pairTooShort: '设备码不完整。', pairUnparseable: '无法解析设备码，请从 Agent 重新复制。', operationFailed: '设备操作失败：{{message}}', agentConfigure: '配置 Agent', agentLaunch: '启动 {{name}}', agentDetecting: '正在检测 {{name}}…', agentInstalling: '正在安装 {{name}}…', agentInstallFailed: '{{name}} 安装失败。', agentLaunching: '正在启动 {{name}}…', agentConfigTitle: '配置 Agent', agentConfigAgent: 'Agent', agentConfigAgentCustom: '自定义…', agentConfigAgentName: '显示名称', agentConfigAgentNamePlaceholder: '可选的显示名称', agentConfigProvider: 'Provider', agentConfigProviderPlaceholder: 'Provider 名称，或兼容 API 的 Base URL', agentConfigModel: '模型', agentConfigModelPlaceholder: '模型名称', agentConfigApiKey: 'API Key', agentConfigApiKeyPlaceholder: '以明文保存在本设备上', agentConfigSave: '保存', agentConfigRemove: '移除配置', agentConfigSaved: 'Agent 配置已保存。', agentConfigRemoved: 'Agent 配置已移除。',
   },
 
   remote: {
@@ -207,6 +207,12 @@ export const zhCN: TranslationKeys = {
       launcherUpdated: '{{name}} 已更新到 {{version}}。',
       launcherOnLatest: '{{name}} 已是最新版本（{{version}}）。',
       launcherCopied: '已复制安装命令到剪贴板',
+      installCommandUnavailable: '当前平台暂无 {{name}} 的自动安装命令',
+      installing: '正在安装 {{name}}…',
+      installFailed: '{{name}} 安装失败',
+    },
+    deviceAgent: {
+      notConfigured: '请先为该设备配置 Agent。',
     },
   },
 

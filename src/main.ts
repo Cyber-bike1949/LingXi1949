@@ -6,6 +6,7 @@ import {
   DEFAULT_PRESET_SCRIPTS,
   DEFAULT_TERMINAL_SETTINGS,
   normalizeRemoteRelayUrl,
+  type DeviceAgentConfig,
   type PresetScript,
   type PresetWorkflowAction,
   type TerminalSettings,
@@ -55,6 +56,7 @@ import {
 import { getLeafForTerminalRoute } from './services/terminal/terminalLeafRouting';
 import {
   AI_LAUNCHER_CATALOG,
+  buildAgentLaunchCommand,
   getAiLauncherEntry,
   getInstallCommandForPlatform,
   getUpgradeCommandForPlatform,
@@ -63,6 +65,7 @@ import {
   type AiLauncherCatalogEntry,
   type AiLauncherStatus,
 } from './services/terminal/aiLauncherCatalog';
+import { isWindowsStylePath } from './services/terminal/terminalPathUtils';
 import {
   detectCommandAvailability,
   type CommandAvailability,
@@ -113,6 +116,9 @@ type ElectronRemoteRuntime = {
   getCurrentWindow?: () => ElectronBrowserWindowLike;
 };
 
+/** Stage of `launchAgentOnDevice`'s flow, for the device card's progress label. */
+type DeviceAgentLaunchStage = 'detecting' | 'installing' | 'installFailed' | 'launching';
+
 /**
  * Main class for the Obsidian Terminal plugin
  */
@@ -129,6 +135,14 @@ export default class TerminalPlugin extends Plugin {
   private _loadIroh: (() => Promise<IrohModule>) | null = null;
   private _irohRuntimeInstallProgress: IrohRuntimeInstallProgress | null = null;
   private readonly _irohRuntimeProgressListeners = new Set<() => void>();
+
+  /**
+   * Per-device (`nodeId`) stage of the "device card → launch agent" flow
+   * (§2.3.4/§2.3.5), mirroring the `_irohRuntimeInstallProgress` pattern
+   * above so `deviceHomeView.ts` can render it the same way.
+   */
+  private readonly _deviceAgentLaunchProgress: Map<string, DeviceAgentLaunchStage> = new Map();
+  private readonly _deviceAgentLaunchProgressListeners = new Set<() => void>();
   private _claudeCodeIdeBridge: ClaudeCodeIdeBridge | null = null;
   private _agentContextBridge: AgentContextBridge | null = null;
   private _changelogContentCache: string | null = null;
@@ -316,6 +330,36 @@ export default class TerminalPlugin extends Plugin {
   onIrohRuntimeInstallProgressChange(listener: () => void): () => void {
     this._irohRuntimeProgressListeners.add(listener);
     return () => this._irohRuntimeProgressListeners.delete(listener);
+  }
+
+  getDeviceAgentLaunchProgress(nodeId: string): DeviceAgentLaunchStage | null {
+    return this._deviceAgentLaunchProgress.get(nodeId) ?? null;
+  }
+
+  onDeviceAgentLaunchProgressChange(listener: () => void): () => void {
+    this._deviceAgentLaunchProgressListeners.add(listener);
+    return () => this._deviceAgentLaunchProgressListeners.delete(listener);
+  }
+
+  private setDeviceAgentLaunchProgress(nodeId: string, stage: DeviceAgentLaunchStage | null): void {
+    if (stage === null) this._deviceAgentLaunchProgress.delete(nodeId);
+    else this._deviceAgentLaunchProgress.set(nodeId, stage);
+    for (const listener of this._deviceAgentLaunchProgressListeners) listener();
+  }
+
+  /** The configured agent for `nodeId` (§2.3.1), or null when none is set up yet. */
+  getDeviceAgentConfig(nodeId: string): DeviceAgentConfig | null {
+    return this.settings.deviceAgentConfigs[nodeId] ?? null;
+  }
+
+  async setDeviceAgentConfig(nodeId: string, config: DeviceAgentConfig): Promise<void> {
+    this.settings.deviceAgentConfigs[nodeId] = config;
+    await this.saveSettings();
+  }
+
+  async removeDeviceAgentConfig(nodeId: string): Promise<void> {
+    delete this.settings.deviceAgentConfigs[nodeId];
+    await this.saveSettings();
   }
 
   getDeviceConnectionManager(): DeviceConnectionManager {
@@ -811,6 +855,7 @@ export default class TerminalPlugin extends Plugin {
       serverConnection: this.normalizeServerConnectionSettings(loaded?.serverConnection),
       remoteConnection: this.normalizeRemoteConnectionSettings(loaded?.remoteConnection),
       pairedDevices: this.normalizePairedDevices(loaded?.pairedDevices),
+      deviceAgentConfigs: this.normalizeDeviceAgentConfigs(loaded?.deviceAgentConfigs),
       controllerIdentitySeed: normalizeControllerIdentitySeed(loaded?.controllerIdentitySeed),
       // Ensure the presetScripts config exists
       presetScripts: normalizedPresetScripts,
@@ -827,6 +872,7 @@ export default class TerminalPlugin extends Plugin {
     this.settings.pairedDevices = this._pairedDeviceStore
       ? this._pairedDeviceStore.toJSON()
       : this.normalizePairedDevices(this.settings.pairedDevices);
+    this.settings.deviceAgentConfigs = this.normalizeDeviceAgentConfigs(this.settings.deviceAgentConfigs);
     this.settings.controllerIdentitySeed = normalizeControllerIdentitySeed(this.settings.controllerIdentitySeed);
     await this.saveData(this.settings);
     
@@ -917,6 +963,27 @@ export default class TerminalPlugin extends Plugin {
    */
   private normalizePairedDevices(value: unknown): TerminalSettings['pairedDevices'] {
     return PairedDeviceStore.fromJSON(value).toJSON();
+  }
+
+  /**
+   * Drops malformed entries (missing/wrong-typed fields - a hand-edited or
+   * downgraded `data.json`) instead of aborting the whole load, same
+   * tolerance `PairedDeviceStore.fromJSON` applies to `pairedDevices`.
+   */
+  private normalizeDeviceAgentConfigs(value: unknown): TerminalSettings['deviceAgentConfigs'] {
+    const result: TerminalSettings['deviceAgentConfigs'] = {};
+    if (!value || typeof value !== 'object') return result;
+
+    for (const [nodeId, entry] of Object.entries(value as Record<string, unknown>)) {
+      if (nodeId.trim() === '' || !entry || typeof entry !== 'object') continue;
+      const { agentId, agentName, provider, model, apiKey } = entry as Record<string, unknown>;
+      if (typeof agentId !== 'string' || agentId.trim() === '') continue;
+      if (typeof agentName !== 'string' || typeof provider !== 'string' || typeof model !== 'string') continue;
+      if (apiKey !== null && typeof apiKey !== 'string') continue;
+
+      result[nodeId] = { agentId, agentName, provider, model, apiKey: apiKey ?? null };
+    }
+    return result;
   }
 
   /**
@@ -1066,12 +1133,29 @@ export default class TerminalPlugin extends Plugin {
   }
 
   async openRemoteTerminal(nodeId: string, noteName = this.getActiveNoteName()): Promise<void> {
+    const terminalService = await this.getTerminalService();
+    const terminal = await this.createRemoteTerminalInstance(nodeId, noteName, terminalService);
+    await this.openPreparedTerminal(terminal, terminalService);
+  }
+
+  /**
+   * Connects to `nodeId` if needed and creates (but does not yet display)
+   * a terminal instance backed by that device's transport. Factored out of
+   * {@link openRemoteTerminal} so {@link launchAgentOnDevice} can run its
+   * detect/install/launch sequence against the exact terminal that gets
+   * shown to the user, instead of guessing which terminal a second,
+   * separate `openRemoteTerminal` call would have produced.
+   */
+  private async createRemoteTerminalInstance(
+    nodeId: string,
+    noteName: string | null,
+    terminalService: TerminalService,
+  ): Promise<TerminalInstance> {
     const connections = this.getDeviceConnectionManager();
     if (!connections.isConnected(nodeId)) {
       await connections.connect(nodeId);
     }
 
-    const terminalService = await this.getTerminalService();
     const terminal = await terminalService.createTerminalWithTransport(
       connections.createTerminalTransport(nodeId),
     );
@@ -1084,8 +1168,96 @@ export default class TerminalPlugin extends Plugin {
         t('terminal.defaultTitle'),
       ));
     }
+    return terminal;
+  }
 
-    await this.openPreparedTerminal(terminal, terminalService);
+  /**
+   * Device card "启动 <agent>" flow (§2.3.5 G11): open a terminal on
+   * `nodeId`, detect/auto-install the configured agent's CLI there if
+   * needed (§2.3.3/§2.3.4 - same auto-install policy as the local path,
+   * see §5 of the design doc), then type the launch command built from the
+   * device's stored provider/model/apiKey.
+   */
+  async launchAgentOnDevice(nodeId: string): Promise<void> {
+    const config = this.getDeviceAgentConfig(nodeId);
+    if (!config) {
+      new Notice(t('notices.deviceAgent.notConfigured'), 5000);
+      return;
+    }
+
+    const terminalService = await this.getTerminalService();
+    let terminal: TerminalInstance;
+    try {
+      terminal = await this.createRemoteTerminalInstance(nodeId, this.getActiveNoteName(), terminalService);
+      await this.openPreparedTerminal(terminal, terminalService);
+    } catch (error) {
+      new Notice(t('home.operationFailed', {
+        message: error instanceof Error ? error.message : String(error),
+      }), 7000);
+      return;
+    }
+
+    try {
+      // Best-effort remote OS sniff (§1.3.1/§2.3.3): only win32 vs. not can
+      // be told apart from a sample path; darwin/linux remotes both read as
+      // 'linux' here, which is fine since install/detect commands only
+      // branch on win32 vs. POSIX.
+      const platform: NodeJS.Platform = isWindowsStylePath(terminal.getInitialCwd()) ? 'win32' : 'linux';
+      const entry = getAiLauncherEntry(config.agentId);
+
+      if (entry?.detectCommand) {
+        this.setDeviceAgentLaunchProgress(nodeId, 'detecting');
+        const detectCommand = this.buildRemoteDetectCommand(entry.detectCommand, platform);
+        const detectResult = await this.runCommandAndWait(terminal, detectCommand, 15_000);
+        const installed = !detectResult.timedOut && detectResult.exitCode === 0;
+
+        if (!installed) {
+          const installCommand = getInstallCommandForPlatform(entry, platform);
+          if (!installCommand) {
+            new Notice(t('notices.presetScript.installCommandUnavailable', {
+              name: config.agentName || entry.presetId,
+            }), 6000);
+            return;
+          }
+
+          this.setDeviceAgentLaunchProgress(nodeId, 'installing');
+          const installResult = await this.runCommandAndWait(terminal, installCommand);
+          if (installResult.timedOut || installResult.exitCode !== 0) {
+            new Notice(t('notices.presetScript.installFailed', {
+              name: config.agentName || entry.presetId,
+            }), 6000);
+            this.setDeviceAgentLaunchProgress(nodeId, 'installFailed');
+            window.setTimeout(() => this.setDeviceAgentLaunchProgress(nodeId, null), 4000);
+            return;
+          }
+        }
+      }
+
+      this.setDeviceAgentLaunchProgress(nodeId, 'launching');
+      const baseCommand = this.getAgentLaunchBaseCommand(config.agentId);
+      const launchCommand = buildAgentLaunchCommand(config.agentId, baseCommand, config, platform);
+      terminal.write(`${launchCommand}\r`);
+    } finally {
+      this.setDeviceAgentLaunchProgress(nodeId, null);
+    }
+  }
+
+  /** `where <cli>` on win32, `command -v <cli>` everywhere else (§2.3.3). */
+  private buildRemoteDetectCommand(cliName: string, platform: NodeJS.Platform): string {
+    return platform === 'win32' ? `where ${cliName}` : `command -v ${cliName}`;
+  }
+
+  /**
+   * The base launch command for a catalog agent id, reusing whatever the
+   * user's own preset script for it currently says (so a customized
+   * command - e.g. extra flags - carries over to the device-card launch
+   * path too) rather than hardcoding `claude`/`codex`/`opencode` again.
+   * Falls back to the id itself for a non-catalog agent (Q6 extensibility).
+   */
+  private getAgentLaunchBaseCommand(agentId: string): string {
+    const script = this.settings.presetScripts.find((candidate) => candidate.id === agentId);
+    const command = script?.actions.find((action) => action.enabled && action.type === 'terminal-command');
+    return command?.value.trim() || agentId;
   }
 
   isRemoteTerminal(terminal: TerminalInstance): boolean {
@@ -1880,19 +2052,18 @@ export default class TerminalPlugin extends Plugin {
   }
 
   /**
-   * Run a preset script, but route through the install modal when the entry
-   * is a catalog-backed AI launcher whose CLI is not installed. The status
-   * bar menu and the command palette share this path so behaviour stays
-   * consistent across surfaces.
+   * Run a preset script. When the entry is a catalog-backed AI launcher
+   * whose CLI is not installed, `runPresetScript` now installs it
+   * automatically (candidate doc "Agent 启动流程简化" §6.2/§6.5 Q7 - decided
+   * 2026-09-03 to apply to the local launch path too, not just the remote
+   * device-card one) instead of stopping at the install-guidance modal that
+   * used to gate this. The status bar menu and the command palette share
+   * this path so behaviour stays consistent across surfaces.
    */
   private runAiAwarePresetScript(script: PresetScript): void {
     const entry = getAiLauncherEntry(script.id);
     if (entry && entry.detectCommand) {
       const cached = this._aiLauncherSnapshots.get(entry.presetId);
-      if (cached?.readiness === 'not-installed') {
-        this.openLauncherInstallModal(script, entry, cached);
-        return;
-      }
       if (cached?.readiness === 'update-available') {
         const local = cached.local ?? '?';
         const latest = cached.latest ?? '?';
@@ -1906,6 +2077,83 @@ export default class TerminalPlugin extends Plugin {
     this.runPresetScript(script).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(t('notices.presetScript.runFailed', { message }));
+    });
+  }
+
+  /**
+   * Types the catalog install command into `terminal` and waits for it to
+   * finish (via shell-integration `command_end` events, see
+   * `runCommandAndWait`) when the cached readiness for `scriptId` says it
+   * isn't installed yet. A no-op for anything not in the catalog, anything
+   * the cache hasn't flagged as `not-installed` (covers `ready`, `unknown`,
+   * and "not checked yet" alike - this only ever narrows what already ran
+   * unprompted before, never blocks a launch on a guess), or anything the
+   * catalog has no install command for on this platform.
+   */
+  private async ensureAiLauncherInstalledInTerminal(scriptId: string, terminal: TerminalInstance): Promise<void> {
+    const entry = getAiLauncherEntry(scriptId);
+    if (!entry || !entry.detectCommand) return;
+
+    const cached = this._aiLauncherSnapshots.get(entry.presetId);
+    if (cached?.readiness !== 'not-installed') return;
+
+    const installCommand = getInstallCommandForPlatform(entry);
+    if (!installCommand) {
+      new Notice(t('notices.presetScript.installCommandUnavailable', { name: entry.presetId }), 6000);
+      return;
+    }
+
+    const notice = new Notice(t('notices.presetScript.installing', { name: entry.presetId }), 0);
+    try {
+      const result = await this.runCommandAndWait(terminal, installCommand);
+      if (result.timedOut || result.exitCode !== 0) {
+        new Notice(t('notices.presetScript.installFailed', { name: entry.presetId }), 6000);
+        return;
+      }
+      await this.refreshAiLauncherSnapshot(entry);
+    } finally {
+      notice.hide();
+    }
+  }
+
+  /**
+   * Types `command` into `terminal`, followed by Enter, and resolves once
+   * shell integration reports the command finished (`ShellEvent`'s
+   * `command_end`, OSC 133/633 - already parsed by `TerminalInstance` for
+   * the command-history/title features, just not previously exposed to a
+   * caller wanting to await one specific command). Falls back to
+   * `timedOut: true` when no `command_end` arrives in time - e.g. the
+   * remote/local shell has no shell-integration hooks active - so a caller
+   * always gets an answer instead of hanging forever.
+   *
+   * `TerminalInstance.onShellEvent` is a single-callback slot, not a
+   * subscriber list (nothing else currently claims it - see the type's own
+   * doc comment), so this always clears it back to a no-op before
+   * resolving rather than leaving a stale listener attached to a terminal
+   * the caller is about to hand back to the user.
+   */
+  private runCommandAndWait(
+    terminal: TerminalInstance,
+    command: string,
+    timeoutMs = 300_000,
+  ): Promise<{ exitCode: number | null; timedOut: boolean }> {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (result: { exitCode: number | null; timedOut: boolean }) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timer);
+        terminal.onShellEvent(() => {});
+        resolve(result);
+      };
+
+      const timer = window.setTimeout(() => finish({ exitCode: null, timedOut: true }), timeoutMs);
+      terminal.onShellEvent((event) => {
+        if (event.type === 'command_end') {
+          finish({ exitCode: event.exitCode, timedOut: false });
+        }
+      });
+      terminal.write(`${command}\r`);
     });
   }
 
@@ -3303,6 +3551,37 @@ export default class TerminalPlugin extends Plugin {
       return;
     }
 
+    const resolved = await this.resolveTerminalForPresetScript(normalizedScript);
+    if (!resolved) {
+      new Notice(t('notices.presetScript.terminalUnavailable'));
+      return;
+    }
+    const { terminalView, terminal } = resolved;
+
+    await this.ensureAiLauncherInstalledInTerminal(script.id, terminal);
+
+    const title = (normalizedScript.terminalTitle || '').trim();
+    if (title) {
+      terminal.setTitle(title);
+      this.updateLeafHeader(terminalView.leaf);
+    }
+    const normalizedCommand = this.normalizePresetScriptCommand(terminalCommand);
+    terminal.write(normalizedCommand);
+    this.focusTerminalView(terminalView, terminal);
+  }
+
+  /**
+   * Same terminal-resolution priority `runPresetScript` always applied
+   * inline (active terminal, else a new one for `runInNewTerminal`, else
+   * auto-open when none is active) - pulled out so the pre-launch
+   * auto-install step (`ensureAiLauncherInstalledInTerminal`, candidate doc
+   * §6.2/§6.5 Q7) types the install command into the *same* terminal the
+   * script itself is about to run in, not whichever one happens to be
+   * focused at the moment the user clicked launch.
+   */
+  private async resolveTerminalForPresetScript(
+    normalizedScript: PresetScript,
+  ): Promise<{ terminalView: TerminalView; terminal: TerminalInstance } | null> {
     let terminalView = this.getActiveTerminalView();
     if (normalizedScript.runInNewTerminal) {
       await this.activateTerminalView(this.getLeafForNewTerminal());
@@ -3312,20 +3591,8 @@ export default class TerminalPlugin extends Plugin {
       terminalView = this.getActiveTerminalView();
     }
 
-    if (!terminalView) {
-      new Notice(t('notices.presetScript.terminalUnavailable'));
-      return;
-    }
-
-    const terminal = await terminalView.waitForTerminalInstance();
-    const title = (normalizedScript.terminalTitle || '').trim();
-    if (title) {
-      terminal.setTitle(title);
-      this.updateLeafHeader(terminalView.leaf);
-    }
-    const normalizedCommand = this.normalizePresetScriptCommand(terminalCommand);
-    terminal.write(normalizedCommand);
-    this.focusTerminalView(terminalView, terminal);
+    if (!terminalView) return null;
+    return { terminalView, terminal: await terminalView.waitForTerminalInstance() };
   }
 
   private buildWorkflowTerminalCommand(actions: PresetWorkflowAction[]): string {

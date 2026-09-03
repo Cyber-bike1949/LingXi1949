@@ -1,7 +1,12 @@
 /**
- * Modal shown when a user clicks an AI launcher whose underlying CLI is not
- * installed, or when the user explicitly opens the install dialog from a
- * launcher that has an update available.
+ * Manual install-guidance modal for an AI launcher. As of the 2026-09-03
+ * auto-install decision (design doc §5) this is no longer the default path
+ * when a launcher's CLI is missing — `runAiAwarePresetScript` and
+ * `launchAgentOnDevice` in main.ts now install automatically instead of
+ * opening this modal. It stays reachable as a manual troubleshooting entry
+ * point (e.g. the settings page's "view install guidance" action) for a
+ * user who wants to see or copy the command by hand, or who has an update
+ * available and wants to review it before running it.
  *
  * The modal:
  *
@@ -12,9 +17,9 @@
  *      the current platform, copy-paste friendly.
  *   4. Lets the user open the official docs or attempt the launcher anyway.
  *
- * It deliberately does NOT execute the install command itself. The user has
- * to paste it into a shell themselves. This keeps Termy on the right side
- * of Obsidian's "no plugin-driven updates of native dependencies" policy.
+ * This modal itself still only displays the command — it does not execute
+ * it. (The automatic path elsewhere does; see the doc comment on
+ * `AiLauncherCatalogEntry.installCommands` in aiLauncherCatalog.ts.)
  */
 
 import type { App } from 'obsidian';
