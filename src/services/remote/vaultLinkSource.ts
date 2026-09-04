@@ -53,6 +53,27 @@ export function createVaultLinkSourceForPath(app: App, path: string): LinkSource
   return file ? createVaultLinkSource(app, file) : null;
 }
 
+/**
+ * Backlink lookup for R-02: which notes have a resolved link pointing at
+ * `path`. Built from `MetadataCache.resolvedLinks` (a public, documented API)
+ * rather than the newer `getBacklinksForFile`, which isn't in the `obsidian`
+ * package's type declarations this project depends on (design doc §3.2).
+ * Recomputed on demand for each send; no persistent reverse index is kept.
+ */
+export function createVaultBacklinkSource(app: App): (path: string) => string[] {
+  return (path: string): string[] => {
+    const resolvedLinks = app.metadataCache.resolvedLinks;
+    const sources: string[] = [];
+    for (const sourcePath of Object.keys(resolvedLinks)) {
+      if (sourcePath === path) continue;
+      if (Object.hasOwn(resolvedLinks[sourcePath], path)) {
+        sources.push(sourcePath);
+      }
+    }
+    return sources;
+  };
+}
+
 /** Reads a vault file's bytes for sending. */
 export async function readVaultFile(app: App, path: string): Promise<Uint8Array> {
   const file = app.vault.getFileByPath(path);

@@ -148,6 +148,19 @@ export interface TerminalSettings {
   // dropped folder. Off keeps the pre-existing append-a-suffix behavior.
   overwriteOnDuplicateFilename: boolean;
 
+  // v1.9 R-02: when sending a note to the terminal (the two "send to
+  // terminal" entries only, not the directory-tree copy path), also collect
+  // notes that link back to it, recursively. Default on per the requirement;
+  // off reproduces the pre-v1.9 forward-links-only behavior.
+  sendBacklinkedNotes: boolean;
+
+  // v1.9 R-04-3: above this many files, or this much total size (MB), a
+  // "send to terminal" shows a confirmation modal with the collected count
+  // and size before actually transferring anything, since R-02's backlink
+  // recursion can otherwise pull in far more than the user expects.
+  transferConfirmThresholdFiles: number;
+  transferConfirmThresholdMB: number;
+
   // Debug settings
   enableDebugLog: boolean;
 }
@@ -433,4 +446,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   directoryTreeDockSide: 'right',
   directoryTreeLastCopyToVaultFolder: null,
   overwriteOnDuplicateFilename: true,
+  sendBacklinkedNotes: true,
+  transferConfirmThresholdFiles: 20,
+  transferConfirmThresholdMB: 20,
 };

@@ -87,6 +87,7 @@ export interface TranslationKeys {
     sendToTerminalExecute: string;
     sendToTerminalTooltip: string;
     linkedNotesSkipped: string;
+    transferQuotaExceededByBacklinks: string;
   };
 
   // Terminal
@@ -321,6 +322,12 @@ export interface TranslationKeys {
       lockNewInstanceDesc: string;
       overwriteOnDuplicateFilename: string;
       overwriteOnDuplicateFilenameDesc: string;
+      sendBacklinkedNotes: string;
+      sendBacklinkedNotesDesc: string;
+      transferConfirmThresholdFiles: string;
+      transferConfirmThresholdFilesDesc: string;
+      transferConfirmThresholdSize: string;
+      transferConfirmThresholdSizeDesc: string;
       displaySettings: string;
       displayTabTheme: string;
       displayTabAppearance: string;
@@ -480,6 +487,11 @@ export interface TranslationKeys {
       buttonUpdateNow: string;
       buttonRunAnyway: string;
       buttonRunCurrentVersion: string;
+    };
+    transferConfirm: {
+      title: string;
+      body: string;
+      sendAnyway: string;
     };
   };
 

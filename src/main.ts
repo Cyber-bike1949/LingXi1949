@@ -47,6 +47,7 @@ import {
   type ConnectedTerminal,
 } from './ui/terminal/terminalPickerMenu';
 import { sendNoteRecursively } from './services/remote/sendNoteRecursively';
+import { TransferConfirmModal } from './ui/terminal/transferConfirmModal';
 import { DEVICE_HOME_VIEW_TYPE, DeviceHomeView } from './ui/home/deviceHomeView';
 import { ChangelogModal } from './ui/changelog/changelogModal';
 import { i18n, t } from './i18n';
@@ -2256,12 +2257,24 @@ export default class TerminalPlugin extends Plugin {
     const connections = this.getDeviceConnectionManager();
     const targetPath = terminal.view.getRemoteDropTargetPath();
     try {
-      const result = await sendNoteRecursively(this.app, file, terminal.nodeId, connections, targetPath);
+      const result = await sendNoteRecursively(this.app, file, terminal.nodeId, connections, targetPath, {
+        includeBacklinks: this.settings.sendBacklinkedNotes,
+        confirmBeforeSend: (files) => {
+          const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+          const thresholdBytes = this.settings.transferConfirmThresholdMB * 1024 * 1024;
+          if (files.length <= this.settings.transferConfirmThresholdFiles && totalBytes <= thresholdBytes) {
+            return Promise.resolve(true);
+          }
+          return TransferConfirmModal.confirm(this.app, files.length, totalBytes);
+        },
+      });
       if (!result.success) {
-        new Notice(t('remote.transferFailed', { message: result.message ?? 'Transfer failed' }), 5000);
+        if (result.cancelled) return;
+        const messageKey = result.quotaExceededByBacklinks ? 'remote.transferQuotaExceededByBacklinks' : 'remote.transferFailed';
+        new Notice(t(messageKey, { message: result.message ?? 'Transfer failed' }), 5000);
         return;
       }
-      new Notice(t('remote.transferCompleteAt', { path: targetPath }));
+      new Notice(t('remote.transferCompleteAt', { count: result.fileCount ?? 0, path: targetPath }));
       if (result.skippedNotes.length > 0) {
         const details = result.skippedNotes.map((s) => `${s.path}: ${s.reason}`).join('; ');
         new Notice(t('remote.linkedNotesSkipped', { details }), 8000);

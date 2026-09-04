@@ -1764,6 +1764,46 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
           void this.saveSettings();
         }));
 
+    // v1.9 R-02: send backlinked notes along with "send to terminal"
+    new Setting(behaviorCard)
+      .setName(t('settingsDetails.terminal.sendBacklinkedNotes'))
+      .setDesc(t('settingsDetails.terminal.sendBacklinkedNotesDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.context.plugin.settings.sendBacklinkedNotes)
+        .onChange((value) => {
+          this.context.plugin.settings.sendBacklinkedNotes = value;
+          void this.saveSettings();
+        }));
+
+    // v1.9 R-04-3: confirmation thresholds for "send to terminal"
+    new Setting(behaviorCard)
+      .setName(t('settingsDetails.terminal.transferConfirmThresholdFiles'))
+      .setDesc(t('settingsDetails.terminal.transferConfirmThresholdFilesDesc'))
+      .addText(text => text
+        .setPlaceholder('20')
+        .setValue(String(this.context.plugin.settings.transferConfirmThresholdFiles))
+        .onChange((value) => {
+          const numValue = parseInt(value);
+          if (!isNaN(numValue) && numValue > 0) {
+            this.context.plugin.settings.transferConfirmThresholdFiles = numValue;
+            void this.saveSettings();
+          }
+        }));
+
+    new Setting(behaviorCard)
+      .setName(t('settingsDetails.terminal.transferConfirmThresholdSize'))
+      .setDesc(t('settingsDetails.terminal.transferConfirmThresholdSizeDesc'))
+      .addText(text => text
+        .setPlaceholder('20')
+        .setValue(String(this.context.plugin.settings.transferConfirmThresholdMB))
+        .onChange((value) => {
+          const numValue = parseInt(value);
+          if (!isNaN(numValue) && numValue > 0) {
+            this.context.plugin.settings.transferConfirmThresholdMB = numValue;
+            void this.saveSettings();
+          }
+        }));
+
   }
 
   /**

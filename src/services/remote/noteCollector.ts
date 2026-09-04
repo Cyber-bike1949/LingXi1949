@@ -24,6 +24,13 @@ export interface CollectedFile {
   index: number;
   relativePath: string;
   size: number;
+  /**
+   * How this file entered the collection (v1.9 R-02): unset/'forward' for the
+   * root note and anything reached via its outgoing links, 'backlink' for a
+   * note that links to something already collected (or one of its own
+   * attachments). Display/debug-log only — the wire protocol doesn't carry it.
+   */
+  origin?: 'forward' | 'backlink';
 }
 
 export interface LinkSource {

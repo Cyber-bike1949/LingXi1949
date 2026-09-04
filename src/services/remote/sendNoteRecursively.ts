@@ -11,15 +11,36 @@
 
 import type { App, TFile } from 'obsidian';
 
-import { checkQuotas } from './noteCollector.ts';
+import { checkQuotas, type CollectedFile } from './noteCollector.ts';
 import { collectRecursive, type SkippedNote } from './noteCollectorRecursive.ts';
-import { createVaultLinkSource, createVaultLinkSourceForPath, readVaultFile } from './vaultLinkSource.ts';
+import {
+  createVaultBacklinkSource,
+  createVaultLinkSource,
+  createVaultLinkSourceForPath,
+  readVaultFile,
+} from './vaultLinkSource.ts';
 import type { DeviceConnectionManager } from './deviceConnections.ts';
 
 export interface SendNoteRecursivelyResult {
   success: boolean;
   message?: string;
+  /** True when a quota failure is specifically attributable to backlinked notes (R-02-5). */
+  quotaExceededByBacklinks?: boolean;
+  /** The user declined the R-04-3 confirmation; nothing was sent, no error to show. */
+  cancelled?: boolean;
+  /** Total files actually sent, for the R-04-2 success notice. */
+  fileCount?: number;
   skippedNotes: SkippedNote[];
+}
+
+export interface SendNoteRecursivelyOptions {
+  /** `sendBacklinkedNotes` setting (R-02-2); false reproduces v1.8 forward-only collection. */
+  includeBacklinks: boolean;
+  /**
+   * R-04-3: called with the fully collected file set before anything is
+   * sent. Return false to abort. Omit to always send without asking.
+   */
+  confirmBeforeSend?: (files: CollectedFile[]) => Promise<boolean>;
 }
 
 export async function sendNoteRecursively(
@@ -28,9 +49,12 @@ export async function sendNoteRecursively(
   nodeId: string,
   connections: DeviceConnectionManager,
   targetPath: string,
+  options: SendNoteRecursivelyOptions,
 ): Promise<SendNoteRecursivelyResult> {
-  const collected = collectRecursive(createVaultLinkSource(app, file), (path) =>
-    createVaultLinkSourceForPath(app, path)
+  const collected = collectRecursive(
+    createVaultLinkSource(app, file),
+    (path) => createVaultLinkSourceForPath(app, path),
+    options.includeBacklinks ? createVaultBacklinkSource(app) : undefined,
   );
   if (!collected.ok) {
     return { success: false, message: collected.error ?? 'Unable to collect note', skippedNotes: [] };
@@ -38,7 +62,20 @@ export async function sendNoteRecursively(
 
   const quota = checkQuotas(collected.files);
   if (!quota.ok) {
-    return { success: false, message: quota.error ?? 'Transfer quota exceeded', skippedNotes: collected.skippedNotes };
+    const quotaExceededByBacklinks = collected.files.some((f) => f.origin === 'backlink');
+    return {
+      success: false,
+      message: quota.error ?? 'Transfer quota exceeded',
+      quotaExceededByBacklinks,
+      skippedNotes: collected.skippedNotes,
+    };
+  }
+
+  if (options.confirmBeforeSend) {
+    const proceed = await options.confirmBeforeSend(collected.files);
+    if (!proceed) {
+      return { success: false, cancelled: true, skippedNotes: collected.skippedNotes };
+    }
   }
 
   const outcome = await connections
@@ -49,5 +86,5 @@ export async function sendNoteRecursively(
     return { success: false, message: outcome.message || 'Transfer failed', skippedNotes: collected.skippedNotes };
   }
 
-  return { success: true, skippedNotes: collected.skippedNotes };
+  return { success: true, fileCount: collected.files.length, skippedNotes: collected.skippedNotes };
 }
