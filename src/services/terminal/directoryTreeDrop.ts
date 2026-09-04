@@ -26,6 +26,7 @@ import { checkQuotas, type CollectedFile } from '../remote/noteCollector.ts';
 import { collectRecursive, type SkippedNote } from '../remote/noteCollectorRecursive.ts';
 import { createVaultLinkSource, createVaultLinkSourceForPath, readVaultFile } from '../remote/vaultLinkSource.ts';
 import type { PulledFile } from '../remote/transferStreamPuller.ts';
+import type { DirectoryEntry } from '../remote/terminalStreamFrame.ts';
 import type { DeviceConnectionManager } from '../remote/deviceConnections.ts';
 import { resolveUniqueVaultPath } from './directoryTreeVaultNaming.ts';
 import { debugLog } from '../../utils/logger.ts';
@@ -66,6 +67,33 @@ export interface FsAccess {
 
 export interface CopyResult {
   fileCount: number;
+  /** D-01-5: entries skipped because `checkRelativePath` rejected the resulting vault path, not silently dropped. */
+  skippedCount?: number;
+}
+
+/**
+ * Ensures `vaultPath` exists as a folder, creating it if needed (D-01-3).
+ * A folder that already exists there is left alone - D-01-6: a directory
+ * name collision is a merge, never an overwrite. Callers are expected to
+ * walk from shallow to deep (`sortDirectoriesByDepth`) so a parent is
+ * always created before any child that depends on it existing.
+ */
+async function ensureVaultFolder(app: App, vaultPath: string): Promise<void> {
+  if (vaultPath === '') return; // the vault root always exists
+  const existing = app.vault.getAbstractFileByPath(vaultPath);
+  if (existing instanceof TFolderClass) return;
+  if (existing instanceof TFileClass) {
+    // A file already occupies this path - nothing sane to do but skip the
+    // folder creation; whatever needed to land inside it will itself be
+    // rejected as invalid by the caller's own checkRelativePath check.
+    return;
+  }
+  await app.vault.createFolder(vaultPath);
+}
+
+/** Shallow-to-deep by path segment count, so a parent folder is always created before its children (D-01-3). */
+function sortDirectoriesByDepth(paths: string[]): string[] {
+  return [...paths].sort((a, b) => a.split('/').length - b.split('/').length);
 }
 
 /**
@@ -185,7 +213,19 @@ export async function copyFsEntryToVault(
   }
 
   let fileCount = 0;
+  let skippedCount = 0;
+  // D-01-3/D-01-1: every directory visited is created up front, whether or
+  // not it turns out to hold any files - an empty subdirectory must still
+  // be reflected in the vault, not just directories that happen to contain
+  // a file that gets written anyway.
   const walk = async (srcDir: string, destVaultDir: string): Promise<void> => {
+    const check = checkRelativePath(destVaultDir);
+    if (!check.ok) {
+      skippedCount += 1;
+      return; // skip individually-invalid directories rather than abort the whole copy
+    }
+    await ensureVaultFolder(app, destVaultDir);
+
     const entries = await fsAccess.promises.readdir(srcDir, { withFileTypes: true });
     for (const entry of entries) {
       const srcPath = fsAccess.join(srcDir, entry.name);
@@ -194,8 +234,11 @@ export async function copyFsEntryToVault(
         await walk(srcPath, destPath);
         continue;
       }
-      const check = checkRelativePath(destPath);
-      if (!check.ok) continue; // skip individually-invalid entries rather than abort the whole copy
+      const fileCheck = checkRelativePath(destPath);
+      if (!fileCheck.ok) {
+        skippedCount += 1; // skip individually-invalid entries rather than abort the whole copy
+        continue;
+      }
       const bytes = await fsAccess.promises.readFile(srcPath);
       await writeVaultBinaryResolvingConflict(app, destPath, bytes, overwriteOnDuplicate);
       fileCount += 1;
@@ -203,7 +246,7 @@ export async function copyFsEntryToVault(
     }
   };
   await walk(absolutePath, joinVaultPath(targetVaultFolder, baseName));
-  return { fileCount };
+  return { fileCount, skippedCount };
 }
 
 /**
@@ -219,20 +262,38 @@ export async function copyFsEntryToVault(
 export async function writePulledFilesToVault(
   app: App,
   files: PulledFile[],
+  directories: DirectoryEntry[],
   targetVaultFolder: string,
   overwriteOnDuplicate: boolean,
   onProgress?: CopyProgressCallback,
 ): Promise<CopyResult> {
+  let skippedCount = 0;
+  // D-01-3/D-01-1: every directory the agent reported - including one with
+  // no files under it - is created before any file is written, shallow to
+  // deep so a parent always exists before its children.
+  for (const relativePath of sortDirectoriesByDepth(directories.map((d) => d.relativePath))) {
+    const desired = normalizeVaultPath(joinVaultPath(targetVaultFolder, relativePath));
+    const check = checkRelativePath(desired);
+    if (!check.ok) {
+      skippedCount += 1;
+      continue;
+    }
+    await ensureVaultFolder(app, desired);
+  }
+
   let fileCount = 0;
   for (const file of files) {
     const desired = normalizeVaultPath(joinVaultPath(targetVaultFolder, file.relativePath));
     const check = checkRelativePath(desired);
-    if (!check.ok) continue; // skip individually-invalid entries rather than abort the whole copy
+    if (!check.ok) {
+      skippedCount += 1; // skip individually-invalid entries rather than abort the whole copy
+      continue;
+    }
     await writeVaultBinaryResolvingConflict(app, desired, file.data, overwriteOnDuplicate);
     fileCount += 1;
     onProgress?.(fileCount);
   }
-  return { fileCount };
+  return { fileCount, skippedCount };
 }
 
 /**
@@ -267,6 +328,23 @@ async function writeVaultBinaryResolvingConflict(
 }
 
 /**
+ * D-01-2/Q7: a folder pull that fails with exactly the pre-D-01 "nothing to
+ * send" wording is diagnostic of a peer `termesh-agent` built before D-01 -
+ * a post-fix agent never produces that error for a *folder* request (an
+ * empty folder now succeeds via `directories`; only a missing/unreadable
+ * path still fails, with a different message). Thrown instead of a generic
+ * `Error` so the UI layer can show an upgrade hint instead of the raw wire
+ * error, without the two entry points (picker, explorer-drop) each having
+ * to re-derive the same "is this an old agent" judgment.
+ */
+export class RemoteAgentDirectoryPullUnsupportedError extends Error {
+  constructor() {
+    super('the connected device\'s agent is too old to support folder transfers');
+    this.name = 'RemoteAgentDirectoryPullUnsupportedError';
+  }
+}
+
+/**
  * Copies one directory-tree entry (local or remote, per `entry.nodeId`)
  * into `targetVaultFolder`. Shared by the panel's right-click "复制到
  * Vault" and by dropping a dragged entry onto a folder in Obsidian's real
@@ -284,8 +362,20 @@ export async function copyDirectoryTreeEntryToVault(
   if (entry.nodeId) {
     if (!connections) throw new Error('Remote connection is not available');
     const outcome = await connections.createTransferPuller(entry.nodeId, entry.path).run();
-    if (!outcome.success) throw new Error(outcome.message || 'Pull failed');
-    return writePulledFilesToVault(app, outcome.files, targetVaultFolder, overwriteOnDuplicate, onProgress);
+    if (!outcome.success) {
+      if (entry.isDirectory && /nothing to send/i.test(outcome.message)) {
+        throw new RemoteAgentDirectoryPullUnsupportedError();
+      }
+      throw new Error(outcome.message || 'Pull failed');
+    }
+    return writePulledFilesToVault(
+      app,
+      outcome.files,
+      outcome.directories,
+      targetVaultFolder,
+      overwriteOnDuplicate,
+      onProgress,
+    );
   }
   return copyFsEntryToVault(
     app,
@@ -301,28 +391,36 @@ export async function copyDirectoryTreeEntryToVault(
 
 export interface VaultTransferSource {
   files: CollectedFile[];
+  /** D-01-4: every folder under `entry` - including `entry` itself when it is a folder, even an empty one. */
+  directories: DirectoryEntry[];
   readFile: (relativePath: string) => Promise<Uint8Array>;
 }
 
 /**
- * Walks a vault file or folder into the `{files, readFile}` shape
- * `TransferStreamSender` expects (candidate doc §4.1 point 4, remote drop
- * onto a tree node). A different traversal than `noteCollector.collect()`:
+ * Walks a vault file or folder into the `{files, directories, readFile}`
+ * shape `TransferStreamSender` expects (candidate doc §4.1 point 4, remote
+ * drop onto a tree node). A different traversal than `noteCollector.collect()`:
  * that one gathers a root note plus only its *directly linked* attachments;
  * this walks every file under `entry`, matching what `copyVaultEntryToDirectory`
  * already does for the local case - the remote and local send directions
- * should behave identically except for where the bytes end up.
+ * should behave identically except for where the bytes end up. `directories`
+ * mirrors `agent/src/fs_browse.rs`'s `walk_for_pull`: every folder
+ * encountered is recorded, whether or not it turns out to hold a file, so
+ * an empty one still lands on the far end (D-01-4).
  */
 export function collectVaultEntryForTransfer(entry: TFile | TFolder): VaultTransferSource {
   const filesByPath = new Map<string, TFile>();
+  const directories: DirectoryEntry[] = [];
 
   if (entry instanceof TFileClass) {
     filesByPath.set(entry.name, entry);
   } else {
+    directories.push({ relativePath: entry.name });
     const walk = (folder: TFolder, prefix: string): void => {
       for (const child of folder.children) {
         const relativePath = `${prefix}/${child.name}`;
         if (child instanceof TFolderClass) {
+          directories.push({ relativePath });
           walk(child, relativePath);
         } else if (child instanceof TFileClass) {
           filesByPath.set(relativePath, child);
@@ -341,6 +439,7 @@ export function collectVaultEntryForTransfer(entry: TFile | TFolder): VaultTrans
 
   return {
     files,
+    directories,
     readFile: async (relativePath: string): Promise<Uint8Array> => {
       const file = filesByPath.get(relativePath);
       if (!file) throw new Error(`Unknown file in transfer: ${relativePath}`);

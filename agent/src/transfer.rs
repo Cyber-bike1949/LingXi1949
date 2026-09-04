@@ -47,15 +47,19 @@ pub struct TransferSession {
 
 impl TransferSession {
     /// Validates the manifest and prepares to receive. Every structural rule is
-    /// checked here so a hostile manifest is rejected before any file is
-    /// created, not partway through.
+    /// checked here so a hostile manifest is rejected before any file - or
+    /// directory (v1.9 D-01) - is created, not partway through.
     pub fn new(
         receive_root: PathBuf,
         entries: Vec<Entry>,
+        directories: Vec<String>,
         root_note: &str,
         initial_credit: u64,
     ) -> Result<Self, AgentError> {
-        if entries.is_empty() {
+        // D-01-1/D-01-4: a manifest describing only directories (an empty
+        // folder, or one containing only other empty folders, pushed from
+        // the vault) is no longer empty just because it has no files.
+        if entries.is_empty() && directories.is_empty() {
             return Err(AgentError::Transfer("manifest is empty".into()));
         }
         let mut seen = HashSet::new();
@@ -95,14 +99,38 @@ impl TransferSession {
             )));
         }
 
-        if entries[0].relative_path != root_note {
-            return Err(AgentError::Transfer(
-                "rootNote must be the first entry (doc 10.1)".into(),
-            ));
+        // Every declared directory must also resolve safely under the
+        // receive root - same authoritative check as a file entry, and
+        // validated (but not yet created) before anything is written.
+        let mut resolved_directories = Vec::with_capacity(directories.len());
+        for directory in &directories {
+            let resolved = paths::resolve_under_root(receive_root.as_path(), directory)
+                .map_err(|e| AgentError::Transfer(format!("{directory}: {e}")))?;
+            resolved_directories.push(resolved);
+        }
+
+        // rootNote only names one of `entries` when there is at least one
+        // file (doc 10.1); a directories-only manifest (D-01-4) has no file
+        // to cross-check it against, so it is accepted as-is once it has
+        // passed the same path-safety check every entry gets, below.
+        if let Some(first) = entries.first() {
+            if first.relative_path != root_note {
+                return Err(AgentError::Transfer(
+                    "rootNote must be the first entry (doc 10.1)".into(),
+                ));
+            }
         }
 
         let destination_path = paths::resolve_under_root(&receive_root, root_note)
             .map_err(|e| AgentError::Transfer(format!("{root_note}: {e}")))?;
+
+        // Every check above passed: only now is it safe to touch the
+        // filesystem. Directories are created eagerly (rather than left to
+        // `write_chunk`'s per-file `create_dir_all`) so one with no files
+        // under it - the whole point of D-01-4 - still exists afterward.
+        for resolved in &resolved_directories {
+            std::fs::create_dir_all(resolved)?;
+        }
 
         Ok(Self {
             receive_root,
@@ -307,7 +335,8 @@ mod tests {
 
     fn session(root: &std::path::Path, entries: Vec<Entry>) -> TransferSession {
         let root_note = entries[0].relative_path.clone();
-        TransferSession::new(root.to_path_buf(), entries, &root_note, 4 * 1024 * 1024).unwrap()
+        TransferSession::new(root.to_path_buf(), entries, Vec::new(), &root_note, 4 * 1024 * 1024)
+            .unwrap()
     }
 
     #[test]
@@ -417,21 +446,27 @@ mod tests {
         assert!(TransferSession::new(
             root.clone(),
             vec![entry(0, "a.md", 1), entry(2, "b.md", 1)],
+            Vec::new(),
             "a.md",
             1024
         )
         .is_err());
 
         // rootNote mismatch.
-        assert!(
-            TransferSession::new(root.clone(), vec![entry(0, "a.md", 1)], "other.md", 1024)
-                .is_err()
-        );
+        assert!(TransferSession::new(
+            root.clone(),
+            vec![entry(0, "a.md", 1)],
+            Vec::new(),
+            "other.md",
+            1024
+        )
+        .is_err());
 
         // Duplicate path.
         assert!(TransferSession::new(
             root.clone(),
             vec![entry(0, "a.md", 1), entry(1, "a.md", 1)],
+            Vec::new(),
             "a.md",
             1024
         )
@@ -441,6 +476,7 @@ mod tests {
         assert!(TransferSession::new(
             root.clone(),
             vec![entry(0, "../escape.md", 1)],
+            Vec::new(),
             "../escape.md",
             1024
         )
@@ -450,6 +486,7 @@ mod tests {
         assert!(TransferSession::new(
             root.clone(),
             vec![entry(0, "big.bin", MAX_FILE_BYTES + 1)],
+            Vec::new(),
             "big.bin",
             1024
         )
@@ -459,10 +496,41 @@ mod tests {
         let many: Vec<Entry> = (0..5)
             .map(|i| entry(i, &format!("f{i}.bin"), MAX_FILE_BYTES))
             .collect();
-        assert!(TransferSession::new(root, many, "f0.bin", 1024).is_err());
+        assert!(TransferSession::new(root.clone(), many, Vec::new(), "f0.bin", 1024).is_err());
+
+        // A directory that tries to escape the receive root, even with no
+        // file entries at all.
+        assert!(TransferSession::new(
+            root.clone(),
+            Vec::new(),
+            vec!["../escape".to_string()],
+            "escape",
+            1024
+        )
+        .is_err());
 
         // Nothing should have been created by any of those attempts.
         assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    /// D-01-4: a manifest describing only directories (a folder pushed from
+    /// the vault with no files under it, or only other empty folders) must
+    /// still create them, not be rejected as an empty manifest.
+    #[test]
+    fn a_directories_only_manifest_creates_them_and_completes() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = TransferSession::new(
+            dir.path().to_path_buf(),
+            Vec::new(),
+            vec!["empty-folder".to_string(), "empty-folder/nested".to_string()],
+            "empty-folder",
+            4 * 1024 * 1024,
+        )
+        .unwrap();
+
+        assert!(dir.path().join("empty-folder/nested").is_dir());
+        s.complete().unwrap();
+        assert!(s.is_complete());
     }
 
     #[test]

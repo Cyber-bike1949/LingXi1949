@@ -55,6 +55,7 @@ test('every frame kind round-trips', () => {
         { index: 0, relativePath: 'notes/demo.md', size: 11 },
         { index: 1, relativePath: 'assets/img.png', size: 0 },
       ],
+      directories: [{ relativePath: 'assets' }],
       sessionId: null,
       targetPath: null,
     },
@@ -65,6 +66,7 @@ test('every frame kind round-trips', () => {
       transferId: 'transfer-2',
       rootNote: 'a.md',
       entries: [{ index: 0, relativePath: 'a.md', size: 1 }],
+      directories: [],
       sessionId: 'session-abc',
       targetPath: null,
     },
@@ -75,8 +77,20 @@ test('every frame kind round-trips', () => {
       transferId: 'transfer-3',
       rootNote: 'a.md',
       entries: [{ index: 0, relativePath: 'a.md', size: 1 }],
+      directories: [],
       sessionId: null,
       targetPath: '/home/user/project/notes',
+    },
+  });
+  roundtrip({
+    kind: 'transferManifest',
+    payload: {
+      transferId: 'transfer-4',
+      rootNote: 'empty-folder',
+      entries: [],
+      directories: [{ relativePath: 'empty-folder' }],
+      sessionId: null,
+      targetPath: null,
     },
   });
   roundtrip({ kind: 'transferAccepted', payload: { grantedBytes: 4 * 1024 * 1024 } });
@@ -101,9 +115,14 @@ test('every frame kind round-trips', () => {
         { index: 0, relativePath: 'notes/demo.md', size: 11 },
         { index: 1, relativePath: 'notes/assets/img.png', size: 0 },
       ],
+      directories: [{ relativePath: 'notes/assets' }],
     },
   });
-  roundtrip({ kind: 'transferPullManifest', payload: { entries: [] } });
+  roundtrip({ kind: 'transferPullManifest', payload: { entries: [], directories: [] } });
+  roundtrip({
+    kind: 'transferPullManifest',
+    payload: { entries: [], directories: [{ relativePath: 'empty-folder' }] },
+  });
 });
 
 test('a transferChunk with a large offset round-trips its varint', () => {
@@ -111,6 +130,56 @@ test('a transferChunk with a large offset round-trips its varint', () => {
     kind: 'transferChunk',
     payload: { fileIndex: 1, offset: 60 * 1024 * 1024, data: new Uint8Array(64).fill(7) },
   });
+});
+
+/** Length-prefixes `payload` the same way `encodeTerminalStreamFrame` does, for hand-built old-shape wire bytes. */
+function frameBytes(kind: number, payload: Uint8Array): Uint8Array {
+  const lenBytes: number[] = [];
+  let value = payload.length;
+  for (;;) {
+    const byte = value & 0x7f;
+    value >>>= 7;
+    if (value === 0) {
+      lenBytes.push(byte);
+      break;
+    }
+    lenBytes.push(byte | 0x80);
+  }
+  const out = new Uint8Array(1 + lenBytes.length + payload.length);
+  out[0] = kind;
+  out.set(lenBytes, 1);
+  out.set(payload, 1 + lenBytes.length);
+  return out;
+}
+
+// v1.9 D-01 backward compatibility: a peer built before `directories`
+// existed sends a manifest with no such key at all, not an empty array -
+// decoding must default it to `[]` rather than fail the whole frame.
+test('a manifest with no "directories" key decodes as an empty list', () => {
+  const KIND_TRANSFER_MANIFEST = 0x0a;
+  const KIND_TRANSFER_PULL_MANIFEST = 0x12;
+
+  const oldManifest = JSON.stringify({
+    transferId: 'transfer-old',
+    rootNote: 'a.md',
+    entries: [{ index: 0, relativePath: 'a.md', size: 1 }],
+    sessionId: null,
+    targetPath: null,
+  });
+  const decoder1 = new TerminalStreamFrameDecoder();
+  decoder1.push(frameBytes(KIND_TRANSFER_MANIFEST, new TextEncoder().encode(oldManifest)));
+  const decoded1 = decoder1.nextFrame();
+  assert.equal(decoded1?.kind, 'transferManifest');
+  assert.deepEqual(decoded1?.kind === 'transferManifest' ? decoded1.payload.directories : null, []);
+
+  const oldPullManifest = JSON.stringify({
+    entries: [{ index: 0, relativePath: 'a.md', size: 1 }],
+  });
+  const decoder2 = new TerminalStreamFrameDecoder();
+  decoder2.push(frameBytes(KIND_TRANSFER_PULL_MANIFEST, new TextEncoder().encode(oldPullManifest)));
+  const decoded2 = decoder2.nextFrame();
+  assert.equal(decoded2?.kind, 'transferPullManifest');
+  assert.deepEqual(decoded2?.kind === 'transferPullManifest' ? decoded2.payload.directories : null, []);
 });
 
 test('fsListResult with a malformed entry is a protocol error', () => {

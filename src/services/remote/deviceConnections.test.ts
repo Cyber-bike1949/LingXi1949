@@ -101,7 +101,7 @@ function makeFakeWorld() {
               Array.from(
                 encodeTerminalStreamFrame({
                   kind: 'transferPullManifest',
-                  payload: { entries: [{ index: 0, relativePath: 'a.md', size: 1 }] },
+                  payload: { entries: [{ index: 0, relativePath: 'a.md', size: 1 }], directories: [] },
                 }),
               ),
             );

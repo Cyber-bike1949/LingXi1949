@@ -30,6 +30,7 @@ import { TERMINAL_VIEW_TYPE, TerminalView } from './ui/terminal/terminalView';
 import {
   copyDirectoryTreeEntryToVault,
   DIRECTORY_TREE_DRAG_MIME,
+  RemoteAgentDirectoryPullUnsupportedError,
   type DirectoryTreeDragPayload,
   type FsAccess,
 } from './services/terminal/directoryTreeDrop';
@@ -400,9 +401,10 @@ export default class TerminalPlugin extends Plugin {
 
     const progress = new TransferProgressNotice(t('directoryTree.transferring'));
     try {
+      let skippedCount = 0;
       await withTransferGuard(sourceKey, async () => {
         const connections = entry.nodeId ? this.getDeviceConnectionManager() : null;
-        await copyDirectoryTreeEntryToVault(
+        const result = await copyDirectoryTreeEntryToVault(
           this.app,
           connections,
           this.buildDirectoryTreeFsAccess(),
@@ -411,6 +413,7 @@ export default class TerminalPlugin extends Plugin {
           this.settings.overwriteOnDuplicateFilename,
           (done) => progress.update(done),
         );
+        skippedCount = result.skippedCount ?? 0;
       });
       // Names the actual destination folder rather than a generic "done" -
       // the drop entry point resolves that folder from wherever the mouse
@@ -418,12 +421,23 @@ export default class TerminalPlugin extends Plugin {
       // the user to notice a resolve-target miss (e.g. dropped past the end
       // of the tree and it landed at vault root instead of a subfolder).
       const absoluteFolderPath = this.resolveVaultFolderAbsolutePath(targetFolder);
-      this.showCopyToVaultDoneNotice(absoluteFolderPath ?? (targetFolder === '' ? '/' : targetFolder), absoluteFolderPath);
+      this.showCopyToVaultDoneNotice(
+        absoluteFolderPath ?? (targetFolder === '' ? '/' : targetFolder),
+        absoluteFolderPath,
+        skippedCount,
+      );
       this.settings.directoryTreeLastCopyToVaultFolder = targetFolder;
       void this.saveSettings();
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      new Notice(t('directoryTree.copyToVaultFailed', { message }), 5000);
+      // D-01-2/Q7: a peer agent too old to support folder transfers gets a
+      // dedicated upgrade hint instead of the raw "nothing to send" wire
+      // error, which would otherwise read as a generic, unexplained failure.
+      if (error instanceof RemoteAgentDirectoryPullUnsupportedError) {
+        new Notice(t('directoryTree.remoteAgentTooOldForFolderTransfer'), 8000);
+      } else {
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice(t('directoryTree.copyToVaultFailed', { message }), 5000);
+      }
     } finally {
       progress.hide();
     }
@@ -449,15 +463,20 @@ export default class TerminalPlugin extends Plugin {
    * the OS file manager via Electron's `shell.openPath` (same mechanism
    * `TerminalInstance` already uses for its "open in file manager" action)
    * so the user can jump straight to the copied files without hunting for
-   * them in the vault's file explorer.
+   * them in the vault's file explorer. D-01-5: entries skipped because
+   * their resulting vault path was invalid are surfaced as a count here
+   * rather than silently vanishing - the debug log (`checkRelativePath`'s
+   * caller sites) has the per-entry detail.
    */
-  private showCopyToVaultDoneNotice(displayPath: string, absolutePath: string | null): void {
+  private showCopyToVaultDoneNotice(displayPath: string, absolutePath: string | null, skippedCount = 0): void {
+    const doneKey = skippedCount > 0 ? 'directoryTree.dropCopyDoneWithSkips' : 'directoryTree.dropCopyDone';
+    const doneText = t(doneKey, { path: displayPath, count: String(skippedCount) });
     if (!absolutePath) {
-      new Notice(t('directoryTree.dropCopyDone', { path: displayPath }));
+      new Notice(doneText);
       return;
     }
     const fragment = createFragment((el) => {
-      el.appendText(t('directoryTree.dropCopyDone', { path: displayPath }));
+      el.appendText(doneText);
       const openBtn = el.createEl('button', {
         cls: ['mod-cta', 'termy-notice-open-folder-btn'],
         text: t('directoryTree.openInFileManager'),

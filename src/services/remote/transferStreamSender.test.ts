@@ -7,6 +7,7 @@ import type { ByteStream } from './terminalStreamTransport.ts';
 import {
   encodeTerminalStreamFrame,
   TerminalStreamFrameDecoder,
+  type DirectoryEntry,
   type TerminalStreamFrame,
 } from './terminalStreamFrame.ts';
 
@@ -83,10 +84,20 @@ function setup(
   readFile: (path: string) => Promise<Uint8Array>,
   sessionId: string | null = null,
   targetPath: string | null = null,
+  directories: DirectoryEntry[] = [],
 ) {
   const [clientEnd, agentEnd] = streamPair();
   const agent = new FakeAgent(agentEnd);
-  const sender = new TransferStreamSender(async () => clientEnd, 'transfer-1', files, readFile, sessionId, targetPath);
+  const sender = new TransferStreamSender(
+    async () => clientEnd,
+    'transfer-1',
+    files,
+    readFile,
+    sessionId,
+    targetPath,
+    {},
+    directories,
+  );
   return { sender, agent };
 }
 
@@ -98,7 +109,7 @@ test('a full transfer sends the manifest, chunks, fileEnd and complete, then res
 
   assert.deepEqual(await agent.nextFrame(), {
     kind: 'transferManifest',
-    payload: { transferId: 'transfer-1', rootNote: 'notes/demo.md', entries: [{ index: 0, relativePath: 'notes/demo.md', size: 11 }], sessionId: null, targetPath: null },
+    payload: { transferId: 'transfer-1', rootNote: 'notes/demo.md', entries: [{ index: 0, relativePath: 'notes/demo.md', size: 11 }], directories: [], sessionId: null, targetPath: null },
   });
   await agent.send({ kind: 'transferAccepted', payload: { grantedBytes: 4 * 1024 * 1024 } });
 
@@ -121,6 +132,35 @@ test('a full transfer sends the manifest, chunks, fileEnd and complete, then res
   assert.deepEqual(outcome, { success: true, code: null, message: '' });
 });
 
+test('a directories-only send (an empty folder) uses the first directory as rootNote and sends no chunks', async () => {
+  const { sender, agent } = setup([], async () => new Uint8Array(0), null, null, [
+    { relativePath: 'empty-folder' },
+  ]);
+
+  const run = sender.run();
+
+  assert.deepEqual(await agent.nextFrame(), {
+    kind: 'transferManifest',
+    payload: {
+      transferId: 'transfer-1',
+      rootNote: 'empty-folder',
+      entries: [],
+      directories: [{ relativePath: 'empty-folder' }],
+      sessionId: null,
+      targetPath: null,
+    },
+  });
+  await agent.send({ kind: 'transferAccepted', payload: { grantedBytes: 4 * 1024 * 1024 } });
+
+  const complete = await agent.nextFrame();
+  assert.deepEqual(complete, { kind: 'transferComplete', payload: {} });
+
+  await agent.send({ kind: 'transferResult', payload: { success: true, code: null, message: '' } });
+
+  const outcome = await run;
+  assert.deepEqual(outcome, { success: true, code: null, message: '' });
+});
+
 test('an explicit targetPath is sent on the manifest, taking priority over sessionId', async () => {
   const files = [file(0, 'a.md', 1)];
   const { sender, agent } = setup(files, async () => new TextEncoder().encode('a'), 'session-1', '/home/user/project/notes');
@@ -133,6 +173,7 @@ test('an explicit targetPath is sent on the manifest, taking priority over sessi
       transferId: 'transfer-1',
       rootNote: 'a.md',
       entries: [{ index: 0, relativePath: 'a.md', size: 1 }],
+      directories: [],
       sessionId: 'session-1',
       targetPath: '/home/user/project/notes',
     },

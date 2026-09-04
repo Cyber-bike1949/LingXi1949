@@ -23,6 +23,7 @@ import { RemoteDirectoryTreeSource } from './remoteDirectoryTreeSource.ts';
 import { TransferStreamSender, type TransferSenderCallbacks } from './transferStreamSender.ts';
 import { TransferStreamPuller } from './transferStreamPuller.ts';
 import type { CollectedFile } from './noteCollector.ts';
+import type { DirectoryEntry } from './terminalStreamFrame.ts';
 import {
   ALPN_TERMINAL,
   terminalStreamFactory,
@@ -174,6 +175,7 @@ export class DeviceConnectionManager {
     sessionId: string | null = null,
     targetPath: string | null = null,
     callbacks: TransferSenderCallbacks = {},
+    directories: DirectoryEntry[] = [],
   ): TransferStreamSender {
     const active = this.connections.get(nodeId);
     if (!active) throw new Error('connect to the device before sending a transfer');
@@ -185,6 +187,7 @@ export class DeviceConnectionManager {
       sessionId,
       targetPath,
       callbacks,
+      directories,
     );
   }
 

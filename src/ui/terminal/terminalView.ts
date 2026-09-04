@@ -1186,10 +1186,13 @@ export class TerminalView extends ItemView {
     if (!connections) throw new Error('Remote connection is not available');
 
     for (const entry of entries) {
-      const { files, readFile } = collectVaultEntryForTransfer(entry);
-      if (files.length === 0) continue;
+      const { files, directories, readFile } = collectVaultEntryForTransfer(entry);
+      // D-01-4: an entry that is only empty folders (files.length === 0)
+      // must still be sent, not silently skipped - only a genuinely empty
+      // selection (neither files nor directories) has nothing to do.
+      if (files.length === 0 && directories.length === 0) continue;
       const outcome = await connections
-        .createTransferSender(nodeId, crypto.randomUUID(), files, readFile, null, targetPath)
+        .createTransferSender(nodeId, crypto.randomUUID(), files, readFile, null, targetPath, {}, directories)
         .run();
       if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
       // The wire transfer already ran the whole entry (folder or file) as

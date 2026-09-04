@@ -36,11 +36,11 @@ use crate::p2p::{admit_controller, ControllerGate, ControllerSlot, ALPN_TERMINAL
 use crate::pty::PtySession;
 use crate::session_table::SessionTable;
 use crate::termstream::{
-    ClosePayload, ErrorPayload, Frame, FrameDecoder, FsChangedPayload, FsListPayload,
-    FsListResultPayload, OpenPayload, OpenedPayload, ShellEventPayload, TransferAcceptedPayload,
-    TransferChunkPayload, TransferCreditPayload, TransferEntry, TransferFileEndPayload,
-    TransferManifestPayload, TransferPullManifestPayload, TransferPullRequestPayload,
-    TransferResultPayload,
+    ClosePayload, DirectoryEntry, ErrorPayload, Frame, FrameDecoder, FsChangedPayload,
+    FsListPayload, FsListResultPayload, OpenPayload, OpenedPayload, ShellEventPayload,
+    TransferAcceptedPayload, TransferChunkPayload, TransferCreditPayload, TransferEntry,
+    TransferFileEndPayload, TransferManifestPayload, TransferPullManifestPayload,
+    TransferPullRequestPayload, TransferResultPayload,
 };
 use crate::transfer;
 use crate::AgentError;
@@ -466,10 +466,16 @@ async fn serve_transfer_stream(
             size: e.size,
         })
         .collect();
+    let directories: Vec<String> = manifest
+        .directories
+        .iter()
+        .map(|d| d.relative_path.clone())
+        .collect();
 
     let mut session = match transfer::TransferSession::new(
         receive_root,
         entries,
+        directories,
         &manifest.root_note,
         INITIAL_TRANSFER_CREDIT,
     ) {
@@ -616,13 +622,14 @@ async fn serve_transfer_pull_stream(
     mut decoder: FrameDecoder,
 ) {
     let path = std::path::PathBuf::from(&request.path);
-    let entries = match fs_browse::walk_for_pull(&path) {
-        Ok(entries) => entries,
+    let walked = match fs_browse::walk_for_pull(&path) {
+        Ok(walked) => walked,
         Err(message) => {
             send_error(&mut send, &format!("PULL_FAILED: {}", redact(&message))).await;
             return;
         }
     };
+    let entries = walked.entries;
 
     let manifest_entries: Vec<TransferEntry> = entries
         .iter()
@@ -632,10 +639,33 @@ async fn serve_transfer_pull_stream(
             size: e.size,
         })
         .collect();
+    let manifest_directories: Vec<DirectoryEntry> = walked
+        .directories
+        .into_iter()
+        .map(|relative_path| DirectoryEntry { relative_path })
+        .collect();
     let manifest = Frame::TransferPullManifest(TransferPullManifestPayload {
         entries: manifest_entries,
+        directories: manifest_directories,
     });
     if write_frame(&mut send, &manifest).await.is_err() {
+        return;
+    }
+
+    // A directory pull that turned out to have no files at all (D-01-1: an
+    // empty folder, or one containing only other empty folders) has nothing
+    // left to stream - the manifest above already told the client every
+    // directory to create, so finish here with a success result instead of
+    // falling into the credit/chunk loop below, which has nothing to wait
+    // for.
+    if entries.is_empty() {
+        let result = Frame::TransferResult(TransferResultPayload {
+            success: true,
+            code: None,
+            message: String::new(),
+        });
+        let _ = write_frame(&mut send, &result).await;
+        let _ = send.finish();
         return;
     }
 
@@ -1152,6 +1182,7 @@ mod tests {
             transfer_id: transfer_id.into(),
             root_note: entries[0].relative_path.clone(),
             entries,
+            directories: Vec::new(),
             session_id,
             target_path: None,
         }

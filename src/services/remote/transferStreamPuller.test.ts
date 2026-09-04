@@ -90,7 +90,7 @@ test('pulls a single file and resolves with its content', async () => {
   });
   await agent.send({
     kind: 'transferPullManifest',
-    payload: { entries: [{ index: 0, relativePath: 'demo.md', size: 11 }] },
+    payload: { entries: [{ index: 0, relativePath: 'demo.md', size: 11 }], directories: [] },
   });
 
   const credit = await agent.nextFrame();
@@ -122,6 +122,7 @@ test('pulls a directory with multiple files, reassembling each from its own chun
         { index: 0, relativePath: 'project/readme.md', size: 5 },
         { index: 1, relativePath: 'project/assets/img.png', size: 4 },
       ],
+      directories: [{ relativePath: 'project/assets' }],
     },
   });
   await agent.nextFrame(); // initial credit
@@ -150,6 +151,24 @@ test('pulls a directory with multiple files, reassembling each from its own chun
   assert.deepEqual(Array.from(outcome.files[1].data), [0x89, 0x50, 0x4e, 0x47]);
 });
 
+test('pulling an empty folder resolves successfully with no files, just directories', async () => {
+  const { puller, agent } = setup('/home/user/project/empty-folder');
+  const run = puller.run();
+
+  await agent.nextFrame(); // request
+  await agent.send({
+    kind: 'transferPullManifest',
+    payload: { entries: [], directories: [{ relativePath: 'empty-folder' }] },
+  });
+  await agent.nextFrame(); // initial credit, ignored by the agent for a files-less pull
+  await agent.send({ kind: 'transferResult', payload: { success: true, code: null, message: '' } });
+
+  const outcome = await run;
+  assert.equal(outcome.success, true);
+  assert.equal(outcome.files.length, 0);
+  assert.deepEqual(outcome.directories, [{ relativePath: 'empty-folder' }]);
+});
+
 test('a rejected pull request resolves with the agent-provided error', async () => {
   const { puller, agent } = setup('/no/such/path');
   const run = puller.run();
@@ -157,7 +176,13 @@ test('a rejected pull request resolves with the agent-provided error', async () 
   await agent.send({ kind: 'error', payload: { message: 'PULL_FAILED: no such file' } });
 
   const outcome = await run;
-  assert.deepEqual(outcome, { success: false, code: 'PULL_FAILED', message: 'PULL_FAILED: no such file', files: [] });
+  assert.deepEqual(outcome, {
+    success: false,
+    code: 'PULL_FAILED',
+    message: 'PULL_FAILED: no such file',
+    files: [],
+    directories: [],
+  });
 });
 
 test('a byte-count mismatch at fileEnd is a protocol error, not a silently wrong file', async () => {
@@ -166,7 +191,7 @@ test('a byte-count mismatch at fileEnd is a protocol error, not a silently wrong
   await agent.nextFrame();
   await agent.send({
     kind: 'transferPullManifest',
-    payload: { entries: [{ index: 0, relativePath: 'demo.md', size: 11 }] },
+    payload: { entries: [{ index: 0, relativePath: 'demo.md', size: 11 }], directories: [] },
   });
   await agent.nextFrame();
 
@@ -187,7 +212,7 @@ test('credit is topped up as bytes arrive for a file larger than the initial gra
   await agent.nextFrame(); // request
   await agent.send({
     kind: 'transferPullManifest',
-    payload: { entries: [{ index: 0, relativePath: 'big.bin', size: 5 * 1024 * 1024 }] },
+    payload: { entries: [{ index: 0, relativePath: 'big.bin', size: 5 * 1024 * 1024 }], directories: [] },
   });
 
   const firstCredit = await agent.nextFrame();

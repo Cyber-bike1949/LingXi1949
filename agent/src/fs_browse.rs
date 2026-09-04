@@ -85,13 +85,26 @@ pub struct PullEntry {
     pub size: u64,
 }
 
+/// What `walk_for_pull` found: files ready to be streamed, and every
+/// directory encountered along the way (v1.9 D-01) - including one with no
+/// files in it, and including the root itself when the pulled path is a
+/// directory. The receiving end creates every entry in `directories` before
+/// writing `entries`, so an empty folder (or a folder containing only other
+/// empty folders) still lands on the other side instead of vanishing once
+/// its file list is empty.
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct PullWalkResult {
+    pub entries: Vec<PullEntry>,
+    pub directories: Vec<String>,
+}
+
 /// Collects everything a "copy to vault" pull needs to send for `path`: one
-/// entry if it is a file, or every file under it (recursively, symlinks
-/// skipped rather than followed) if it is a directory - same shape as the
-/// existing inbound `TransferSession` limits (`transfer::MAX_FILE_BYTES` etc.),
-/// reused here so a pull cannot be used to exfiltrate an unbounded amount
-/// of data any more than a push can be used to write one.
-pub fn walk_for_pull(path: &Path) -> Result<Vec<PullEntry>, String> {
+/// entry if it is a file, or every file and directory under it (recursively,
+/// symlinks skipped rather than followed) if it is a directory - same shape
+/// as the existing inbound `TransferSession` limits (`transfer::MAX_FILE_BYTES`
+/// etc.), reused here so a pull cannot be used to exfiltrate an unbounded
+/// amount of data any more than a push can be used to write one.
+pub fn walk_for_pull(path: &Path) -> Result<PullWalkResult, String> {
     let path = expand_user_path(path);
     let metadata = fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
     let base_name = path
@@ -100,8 +113,14 @@ pub fn walk_for_pull(path: &Path) -> Result<Vec<PullEntry>, String> {
         .unwrap_or_else(|| path.to_string_lossy().into_owned());
 
     let mut entries = Vec::new();
+    let mut directories = Vec::new();
     if metadata.is_dir() {
-        walk_dir_for_pull(&path, &base_name, &mut entries).map_err(|e| e.to_string())?;
+        // The pulled directory itself is recorded even when it turns out to
+        // have no children at all - D-01-1: an empty folder must still be
+        // representable, not just an empty folder found while recursing.
+        directories.push(base_name.clone());
+        walk_dir_for_pull(&path, &base_name, &mut entries, &mut directories)
+            .map_err(|e| e.to_string())?;
     } else if metadata.is_file() {
         entries.push(PullEntry {
             index: 0,
@@ -116,7 +135,11 @@ pub fn walk_for_pull(path: &Path) -> Result<Vec<PullEntry>, String> {
         ));
     }
 
-    if entries.is_empty() {
+    // D-01-1: "nothing to send" is now reserved for a path that resolved to
+    // neither a file nor any directory at all - a directory pull always
+    // yields at least its own entry in `directories`, so this branch is
+    // effectively dead for that case and only guards the truly-nothing one.
+    if entries.is_empty() && directories.is_empty() {
         return Err("nothing to send".into());
     }
     let mut total = 0u64;
@@ -133,10 +156,18 @@ pub fn walk_for_pull(path: &Path) -> Result<Vec<PullEntry>, String> {
         return Err(format!("{total} bytes exceeds the transfer limit"));
     }
 
-    Ok(entries)
+    Ok(PullWalkResult {
+        entries,
+        directories,
+    })
 }
 
-fn walk_dir_for_pull(dir: &Path, prefix: &str, out: &mut Vec<PullEntry>) -> io::Result<()> {
+fn walk_dir_for_pull(
+    dir: &Path,
+    prefix: &str,
+    out: &mut Vec<PullEntry>,
+    dirs: &mut Vec<String>,
+) -> io::Result<()> {
     let mut children: Vec<_> = fs::read_dir(dir)?.filter_map(|entry| entry.ok()).collect();
     children.sort_by_key(|entry| entry.file_name());
 
@@ -147,7 +178,8 @@ fn walk_dir_for_pull(dir: &Path, prefix: &str, out: &mut Vec<PullEntry>) -> io::
         let file_type = entry.file_type()?;
 
         if file_type.is_dir() {
-            walk_dir_for_pull(&entry_path, &relative_path, out)?;
+            dirs.push(relative_path.clone());
+            walk_dir_for_pull(&entry_path, &relative_path, out, dirs)?;
         } else if file_type.is_file() {
             out.push(PullEntry {
                 index: out.len(),
@@ -219,12 +251,13 @@ mod tests {
         let file_path = dir.path().join("demo.md");
         fs::write(&file_path, b"hello world").unwrap();
 
-        let entries = walk_for_pull(&file_path).unwrap();
-        assert_eq!(entries.len(), 1);
-        assert_eq!(entries[0].relative_path, "demo.md");
-        assert_eq!(entries[0].absolute_path, file_path);
-        assert_eq!(entries[0].size, 11);
-        assert_eq!(entries[0].index, 0);
+        let result = walk_for_pull(&file_path).unwrap();
+        assert_eq!(result.entries.len(), 1);
+        assert_eq!(result.entries[0].relative_path, "demo.md");
+        assert_eq!(result.entries[0].absolute_path, file_path);
+        assert_eq!(result.entries[0].size, 11);
+        assert_eq!(result.entries[0].index, 0);
+        assert!(result.directories.is_empty(), "a lone file has no directories");
     }
 
     #[test]
@@ -236,20 +269,28 @@ mod tests {
         fs::create_dir(root.join("assets")).unwrap();
         fs::write(root.join("assets/img.png"), b"\x89PNG").unwrap();
 
-        let mut entries = walk_for_pull(&root).unwrap();
-        entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        let mut result = walk_for_pull(&root).unwrap();
+        result.entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
 
-        assert_eq!(entries.len(), 2);
-        assert_eq!(entries[0].relative_path, "project/assets/img.png");
-        assert_eq!(entries[0].size, 4);
-        assert_eq!(entries[1].relative_path, "project/readme.md");
-        assert_eq!(entries[1].size, 9);
+        assert_eq!(result.entries.len(), 2);
+        assert_eq!(result.entries[0].relative_path, "project/assets/img.png");
+        assert_eq!(result.entries[0].size, 4);
+        assert_eq!(result.entries[1].relative_path, "project/readme.md");
+        assert_eq!(result.entries[1].size, 9);
 
-        let indices: std::collections::HashSet<usize> = entries.iter().map(|e| e.index).collect();
+        let indices: std::collections::HashSet<usize> =
+            result.entries.iter().map(|e| e.index).collect();
         assert_eq!(
             indices,
             std::collections::HashSet::from([0, 1]),
             "indices must be unique"
+        );
+
+        // Both the pulled root itself and the "assets" subdirectory must be
+        // reported, not just directories that turned out to be empty.
+        assert_eq!(
+            result.directories,
+            vec!["project".to_string(), "project/assets".to_string()]
         );
     }
 
@@ -260,13 +301,34 @@ mod tests {
         assert!(walk_for_pull(&missing).is_err());
     }
 
+    /// D-01-1: an empty folder (or one containing only other empty folders)
+    /// must succeed, not be rejected as "nothing to send" - the folder
+    /// itself is representable via `directories` even with zero files.
     #[test]
-    fn walk_for_pull_of_an_empty_directory_is_rejected_as_nothing_to_send() {
+    fn walk_for_pull_of_an_empty_directory_succeeds_as_a_bare_directory_entry() {
         let dir = tempfile::tempdir().unwrap();
         let empty = dir.path().join("empty");
         fs::create_dir(&empty).unwrap();
-        let err = walk_for_pull(&empty).unwrap_err();
-        assert!(err.contains("nothing to send"), "got: {err}");
+
+        let result = walk_for_pull(&empty).unwrap();
+        assert!(result.entries.is_empty());
+        assert_eq!(result.directories, vec!["empty".to_string()]);
+    }
+
+    /// D-01-1: a folder that contains only (nested) empty subfolders and no
+    /// files at all must also succeed and report every level.
+    #[test]
+    fn walk_for_pull_of_nested_empty_directories_reports_every_level() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("outer");
+        fs::create_dir_all(root.join("inner")).unwrap();
+
+        let result = walk_for_pull(&root).unwrap();
+        assert!(result.entries.is_empty());
+        assert_eq!(
+            result.directories,
+            vec!["outer".to_string(), "outer/inner".to_string()]
+        );
     }
 
     #[test]

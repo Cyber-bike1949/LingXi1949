@@ -149,6 +149,19 @@ pub struct TransferEntry {
     pub size: u64,
 }
 
+/// A directory as a first-class transferable entity (v1.9 D-01), distinct
+/// from `TransferEntry`: it carries no size or index, only the relative
+/// path that must exist as a (possibly empty) folder on the receiving end.
+/// Present on both the push (`TransferManifestPayload`) and pull
+/// (`TransferPullManifestPayload`) shapes so an empty folder - or a folder
+/// containing only other empty folders - is representable in either
+/// direction instead of vanishing once its file list is empty.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DirectoryEntry {
+    #[serde(rename = "relativePath")]
+    pub relative_path: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransferManifestPayload {
     #[serde(rename = "transferId")]
@@ -156,6 +169,12 @@ pub struct TransferManifestPayload {
     #[serde(rename = "rootNote")]
     pub root_note: String,
     pub entries: Vec<TransferEntry>,
+    /// v1.9 D-01: every directory under the transferred entry, so an empty
+    /// one (or one containing only other empty ones) still lands on the
+    /// receiving end. `#[serde(default)]` so an older peer that never sends
+    /// this field decodes as an empty list rather than failing to parse.
+    #[serde(default)]
+    pub directories: Vec<DirectoryEntry>,
     /// Doc §7.6: when this names a session with a known cwd, that cwd is
     /// the landing directory instead of `receive_root`.
     #[serde(default, skip_serializing_if = "Option::is_none", rename = "sessionId")]
@@ -234,6 +253,11 @@ pub struct TransferPullRequestPayload {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransferPullManifestPayload {
     pub entries: Vec<TransferEntry>,
+    /// v1.9 D-01: see `TransferManifestPayload::directories`. `#[serde(default)]`
+    /// means a plugin built before this field existed still decodes the
+    /// manifest fine, just without directory information.
+    #[serde(default)]
+    pub directories: Vec<DirectoryEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -594,6 +618,9 @@ mod tests {
                     size: 0,
                 },
             ],
+            directories: vec![DirectoryEntry {
+                relative_path: "assets".into(),
+            }],
             session_id: None,
             target_path: None,
         }));
@@ -605,6 +632,7 @@ mod tests {
                 relative_path: "a.md".into(),
                 size: 1,
             }],
+            directories: vec![],
             session_id: Some(Uuid::nil()),
             target_path: None,
         }));
@@ -616,6 +644,7 @@ mod tests {
                 relative_path: "a.md".into(),
                 size: 1,
             }],
+            directories: vec![],
             session_id: None,
             target_path: Some("/home/user/project/notes".into()),
         }));
@@ -666,10 +695,49 @@ mod tests {
                     size: 0,
                 },
             ],
+            directories: vec![DirectoryEntry {
+                relative_path: "notes/assets".into(),
+            }],
         }));
         roundtrip(Frame::TransferPullManifest(TransferPullManifestPayload {
             entries: vec![],
+            directories: vec![],
         }));
+        roundtrip(Frame::TransferPullManifest(TransferPullManifestPayload {
+            entries: vec![],
+            directories: vec![DirectoryEntry {
+                relative_path: "empty-folder".into(),
+            }],
+        }));
+    }
+
+    /// v1.9 D-01 backward compatibility: a peer built before `directories`
+    /// existed sends a manifest with no such key at all, not an empty
+    /// array. `#[serde(default)]` must decode that as `directories: []`
+    /// rather than failing to parse the whole frame.
+    #[test]
+    fn a_manifest_with_no_directories_key_decodes_as_an_empty_list() {
+        let old_shape = serde_json::json!({
+            "transferId": "transfer-old",
+            "rootNote": "a.md",
+            "entries": [{ "index": 0, "relativePath": "a.md", "size": 1 }],
+        });
+        let payload = serde_json::to_vec(&old_shape).unwrap();
+        let decoded = Frame::from_kind_and_payload(KIND_TRANSFER_MANIFEST, payload).unwrap();
+        match decoded {
+            Frame::TransferManifest(payload) => assert_eq!(payload.directories, Vec::new()),
+            other => panic!("expected TransferManifest, got {other:?}"),
+        }
+
+        let old_pull_shape = serde_json::json!({
+            "entries": [{ "index": 0, "relativePath": "a.md", "size": 1 }],
+        });
+        let payload = serde_json::to_vec(&old_pull_shape).unwrap();
+        let decoded = Frame::from_kind_and_payload(KIND_TRANSFER_PULL_MANIFEST, payload).unwrap();
+        match decoded {
+            Frame::TransferPullManifest(payload) => assert_eq!(payload.directories, Vec::new()),
+            other => panic!("expected TransferPullManifest, got {other:?}"),
+        }
     }
 
     #[test]

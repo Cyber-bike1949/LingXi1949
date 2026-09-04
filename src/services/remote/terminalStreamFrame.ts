@@ -87,10 +87,24 @@ export interface TransferEntry {
   size: number;
 }
 
+/**
+ * A directory as a first-class transferable entity (v1.9 D-01), mirroring
+ * `agent/src/termstream.rs`'s `DirectoryEntry`: no size or index, just the
+ * relative path that must exist as a (possibly empty) folder on the
+ * receiving end. Present on both `TransferManifestPayload` and
+ * `TransferPullManifestPayload` so an empty folder - or one containing only
+ * other empty folders - is representable in either direction.
+ */
+export interface DirectoryEntry {
+  relativePath: string;
+}
+
 export interface TransferManifestPayload {
   transferId: string;
   rootNote: string;
   entries: TransferEntry[];
+  /** v1.9 D-01: every directory under the transferred entry. Absent on an older peer's manifest, which decodes as `[]`. */
+  directories: DirectoryEntry[];
   /** Doc §7.6: a session with a known cwd wins over the agent's configured receive root. */
   sessionId: string | null;
   /** Directory-tree "drop onto this node" (candidate doc §4.1 point 4): wins outright over sessionId/receive_root when present. */
@@ -133,6 +147,8 @@ export interface TransferPullRequestPayload {
 /** Agent -> client, in reply to `transferPullRequest`. See `agent/src/termstream.rs`'s module doc for the rest of the flow. */
 export interface TransferPullManifestPayload {
   entries: TransferEntry[];
+  /** v1.9 D-01: see `TransferManifestPayload.directories`. */
+  directories: DirectoryEntry[];
 }
 
 export type TerminalStreamFrame =
@@ -396,6 +412,27 @@ function decodeTransferEntries(raw: Record<string, unknown>): TransferEntry[] {
   });
 }
 
+/**
+ * v1.9 D-01: a manifest from an agent/plugin built before `directories`
+ * existed simply has no such key, not an empty array - defaulting a missing
+ * key to `[]` is what keeps decoding an older peer's manifest from failing
+ * outright.
+ */
+function decodeDirectoryEntries(raw: Record<string, unknown>): DirectoryEntry[] {
+  const value = raw.directories;
+  if (value === undefined) return [];
+  if (!Array.isArray(value)) {
+    throw new TerminalStreamFrameError('invalid "directories"');
+  }
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null) {
+      throw new TerminalStreamFrameError('invalid entry in "directories"');
+    }
+    const entry = item as Record<string, unknown>;
+    return { relativePath: requireString(entry, 'relativePath') };
+  });
+}
+
 function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFrame {
   switch (kind) {
     case KIND_OPEN: {
@@ -461,6 +498,7 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
           transferId: requireString(raw, 'transferId'),
           rootNote: requireString(raw, 'rootNote'),
           entries: decodeTransferEntries(raw),
+          directories: decodeDirectoryEntries(raw),
           sessionId: optionalString(raw, 'sessionId'),
           targetPath: optionalString(raw, 'targetPath'),
         },
@@ -503,7 +541,10 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
     }
     case KIND_TRANSFER_PULL_MANIFEST: {
       const raw = decodeJson(payload);
-      return { kind: 'transferPullManifest', payload: { entries: decodeTransferEntries(raw) } };
+      return {
+        kind: 'transferPullManifest',
+        payload: { entries: decodeTransferEntries(raw), directories: decodeDirectoryEntries(raw) },
+      };
     }
     default:
       throw new TerminalStreamFrameError(

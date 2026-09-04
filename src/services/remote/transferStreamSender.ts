@@ -23,6 +23,7 @@ import type { CollectedFile } from './noteCollector.ts';
 import {
   encodeTerminalStreamFrame,
   TerminalStreamFrameDecoder,
+  type DirectoryEntry,
   type TerminalStreamFrame,
 } from './terminalStreamFrame.ts';
 import type { ByteStream } from './terminalStreamTransport.ts';
@@ -65,6 +66,8 @@ export class TransferStreamSender {
   /** Directory-tree "drop onto this node" (candidate doc §4.1 point 4): wins outright over sessionId/receive_root when present. */
   private readonly targetPath: string | null;
   private readonly callbacks: TransferSenderCallbacks;
+  /** v1.9 D-01: every directory under the transferred entry, so an empty one (or one with only other empty ones) still lands. */
+  private readonly directories: DirectoryEntry[];
 
   constructor(
     openStream: () => Promise<ByteStream>,
@@ -74,6 +77,7 @@ export class TransferStreamSender {
     sessionId: string | null = null,
     targetPath: string | null = null,
     callbacks: TransferSenderCallbacks = {},
+    directories: DirectoryEntry[] = [],
   ) {
     this.openStream = openStream;
     this.transferId = transferId;
@@ -82,6 +86,7 @@ export class TransferStreamSender {
     this.sessionId = sessionId;
     this.targetPath = targetPath;
     this.callbacks = callbacks;
+    this.directories = directories;
   }
 
   async run(): Promise<TransferOutcome> {
@@ -94,17 +99,24 @@ export class TransferStreamSender {
 
     try {
       const decoder = new TerminalStreamFrameDecoder();
+      // v1.9 D-01-4: `files` can be empty when everything under the
+      // transferred entry is an empty folder - `rootNote` then falls back
+      // to the first directory instead of indexing into an empty array,
+      // since it exists purely to name/validate the transfer, not to point
+      // at a file that may not exist.
+      const rootNote = this.files.length > 0 ? this.files[0].relativePath : this.directories[0]?.relativePath ?? '';
       await stream.write(
         encodeTerminalStreamFrame({
           kind: 'transferManifest',
           payload: {
             transferId: this.transferId,
-            rootNote: this.files[0].relativePath,
+            rootNote,
             entries: this.files.map((file) => ({
               index: file.index,
               relativePath: file.relativePath,
               size: file.size,
             })),
+            directories: this.directories,
             sessionId: this.sessionId,
             targetPath: this.targetPath,
           },

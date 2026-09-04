@@ -17,6 +17,7 @@
 import {
   encodeTerminalStreamFrame,
   TerminalStreamFrameDecoder,
+  type DirectoryEntry,
   type TerminalStreamFrame,
 } from './terminalStreamFrame.ts';
 import type { ByteStream } from './terminalStreamTransport.ts';
@@ -35,6 +36,8 @@ export interface TransferPullOutcome {
   code: string | null;
   message: string;
   files: PulledFile[];
+  /** v1.9 D-01: every directory under the pulled entry - includes the entry itself when it is a directory, even an empty one. */
+  directories: DirectoryEntry[];
 }
 
 /** `PULL_FAILED: no such file`  -> `PULL_FAILED`. Mirrors `terminalStreamTransport.ts`'s local helper. */
@@ -90,7 +93,7 @@ export class TransferStreamPuller {
     try {
       stream = await this.openStream();
     } catch (error) {
-      return { success: false, code: 'PULL_FAILED', message: describeError(error), files: [] };
+      return { success: false, code: 'PULL_FAILED', message: describeError(error), files: [], directories: [] };
     }
 
     try {
@@ -101,7 +104,13 @@ export class TransferStreamPuller {
 
       const first = await readOneFrame(stream, decoder);
       if (first.kind === 'error') {
-        return { success: false, code: errorCode(first.payload.message), message: first.payload.message, files: [] };
+        return {
+          success: false,
+          code: errorCode(first.payload.message),
+          message: first.payload.message,
+          files: [],
+          directories: [],
+        };
       }
       if (first.kind !== 'transferPullManifest') {
         return {
@@ -109,9 +118,11 @@ export class TransferStreamPuller {
           code: 'PROTOCOL_ERROR',
           message: `expected transferPullManifest, got ${first.kind}`,
           files: [],
+          directories: [],
         };
       }
       const entries = first.payload.entries;
+      const directories = first.payload.directories;
 
       let granted = this.initialCredit;
       let received = 0;
@@ -149,6 +160,7 @@ export class TransferStreamPuller {
               code: 'PROTOCOL_ERROR',
               message: `transferFileEnd for unknown fileIndex ${frame.payload.fileIndex}`,
               files: [],
+              directories: [],
             };
           }
           const chunks = chunksByFile.get(frame.payload.fileIndex) ?? [];
@@ -159,6 +171,7 @@ export class TransferStreamPuller {
               code: 'PROTOCOL_ERROR',
               message: `${entry.relativePath}: received ${data.length} bytes but sentSize was ${frame.payload.sentSize}`,
               files: [],
+              directories: [],
             };
           }
           files.push({ relativePath: entry.relativePath, data });
@@ -167,14 +180,18 @@ export class TransferStreamPuller {
         }
 
         if (frame.kind === 'transferResult') {
-          return { ...frame.payload, files: frame.payload.success ? files : [] };
+          return {
+            ...frame.payload,
+            files: frame.payload.success ? files : [],
+            directories: frame.payload.success ? directories : [],
+          };
         }
 
         // Anything else (e.g. a stray fs/terminal frame kind on a
         // misbehaving peer) is ignored rather than treated as fatal.
       }
     } catch (error) {
-      return { success: false, code: 'PULL_FAILED', message: describeError(error), files: [] };
+      return { success: false, code: 'PULL_FAILED', message: describeError(error), files: [], directories: [] };
     } finally {
       try {
         stream.finishWrite();
