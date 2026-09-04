@@ -6,7 +6,6 @@ import {
   DEFAULT_PRESET_SCRIPTS,
   DEFAULT_TERMINAL_SETTINGS,
   normalizeRemoteRelayUrl,
-  type DeviceAgentConfig,
   type PresetScript,
   type PresetWorkflowAction,
   type TerminalSettings,
@@ -34,6 +33,12 @@ import {
   type DirectoryTreeDragPayload,
   type FsAccess,
 } from './services/terminal/directoryTreeDrop';
+import {
+  isTransferInFlight,
+  transferSourceKey,
+  TransferProgressNotice,
+  withTransferGuard,
+} from './services/terminal/directoryTreeTransferProgress';
 import { pickVaultDestinationFolder } from './ui/terminal/vaultFolderSuggestModal';
 import {
   listConnectedTerminals,
@@ -56,7 +61,6 @@ import {
 import { getLeafForTerminalRoute } from './services/terminal/terminalLeafRouting';
 import {
   AI_LAUNCHER_CATALOG,
-  buildAgentLaunchCommand,
   getAiLauncherEntry,
   getInstallCommandForPlatform,
   getUpgradeCommandForPlatform,
@@ -116,9 +120,6 @@ type ElectronRemoteRuntime = {
   getCurrentWindow?: () => ElectronBrowserWindowLike;
 };
 
-/** Stage of `launchAgentOnDevice`'s flow, for the device card's progress label. */
-type DeviceAgentLaunchStage = 'detecting' | 'installing' | 'installFailed' | 'launching';
-
 /**
  * Main class for the Obsidian Terminal plugin
  */
@@ -135,14 +136,6 @@ export default class TerminalPlugin extends Plugin {
   private _loadIroh: (() => Promise<IrohModule>) | null = null;
   private _irohRuntimeInstallProgress: IrohRuntimeInstallProgress | null = null;
   private readonly _irohRuntimeProgressListeners = new Set<() => void>();
-
-  /**
-   * Per-device (`nodeId`) stage of the "device card → launch agent" flow
-   * (§2.3.4/§2.3.5), mirroring the `_irohRuntimeInstallProgress` pattern
-   * above so `deviceHomeView.ts` can render it the same way.
-   */
-  private readonly _deviceAgentLaunchProgress: Map<string, DeviceAgentLaunchStage> = new Map();
-  private readonly _deviceAgentLaunchProgressListeners = new Set<() => void>();
   private _claudeCodeIdeBridge: ClaudeCodeIdeBridge | null = null;
   private _agentContextBridge: AgentContextBridge | null = null;
   private _changelogContentCache: string | null = null;
@@ -332,36 +325,6 @@ export default class TerminalPlugin extends Plugin {
     return () => this._irohRuntimeProgressListeners.delete(listener);
   }
 
-  getDeviceAgentLaunchProgress(nodeId: string): DeviceAgentLaunchStage | null {
-    return this._deviceAgentLaunchProgress.get(nodeId) ?? null;
-  }
-
-  onDeviceAgentLaunchProgressChange(listener: () => void): () => void {
-    this._deviceAgentLaunchProgressListeners.add(listener);
-    return () => this._deviceAgentLaunchProgressListeners.delete(listener);
-  }
-
-  private setDeviceAgentLaunchProgress(nodeId: string, stage: DeviceAgentLaunchStage | null): void {
-    if (stage === null) this._deviceAgentLaunchProgress.delete(nodeId);
-    else this._deviceAgentLaunchProgress.set(nodeId, stage);
-    for (const listener of this._deviceAgentLaunchProgressListeners) listener();
-  }
-
-  /** The configured agent for `nodeId` (§2.3.1), or null when none is set up yet. */
-  getDeviceAgentConfig(nodeId: string): DeviceAgentConfig | null {
-    return this.settings.deviceAgentConfigs[nodeId] ?? null;
-  }
-
-  async setDeviceAgentConfig(nodeId: string, config: DeviceAgentConfig): Promise<void> {
-    this.settings.deviceAgentConfigs[nodeId] = config;
-    await this.saveSettings();
-  }
-
-  async removeDeviceAgentConfig(nodeId: string): Promise<void> {
-    delete this.settings.deviceAgentConfigs[nodeId];
-    await this.saveSettings();
-  }
-
   getDeviceConnectionManager(): DeviceConnectionManager {
     if (!this._deviceConnections) {
       this._deviceConnections = new DeviceConnectionManager({
@@ -424,10 +387,31 @@ export default class TerminalPlugin extends Plugin {
       if (picked === null) return; // user dismissed the picker without choosing
       targetFolder = picked;
     }
+    // A plain `const` capture (rather than relying on `targetFolder`'s
+    // narrowing, which control-flow analysis can't carry into the closure
+    // passed to `withTransferGuard` below) so the copy call sees a `string`.
+    const resolvedTargetFolder = targetFolder;
 
+    const sourceKey = transferSourceKey(entry.nodeId, entry.path);
+    if (isTransferInFlight(sourceKey)) {
+      new Notice(t('directoryTree.transferAlreadyInProgress'));
+      return;
+    }
+
+    const progress = new TransferProgressNotice(t('directoryTree.transferring'));
     try {
-      const connections = entry.nodeId ? this.getDeviceConnectionManager() : null;
-      await copyDirectoryTreeEntryToVault(this.app, connections, this.buildDirectoryTreeFsAccess(), entry, targetFolder);
+      await withTransferGuard(sourceKey, async () => {
+        const connections = entry.nodeId ? this.getDeviceConnectionManager() : null;
+        await copyDirectoryTreeEntryToVault(
+          this.app,
+          connections,
+          this.buildDirectoryTreeFsAccess(),
+          entry,
+          resolvedTargetFolder,
+          this.settings.overwriteOnDuplicateFilename,
+          (done) => progress.update(done),
+        );
+      });
       // Names the actual destination folder rather than a generic "done" -
       // the drop entry point resolves that folder from wherever the mouse
       // landed in the file explorer, so surfacing it is the only way for
@@ -440,6 +424,8 @@ export default class TerminalPlugin extends Plugin {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(t('directoryTree.copyToVaultFailed', { message }), 5000);
+    } finally {
+      progress.hide();
     }
   }
 
@@ -535,43 +521,69 @@ export default class TerminalPlugin extends Plugin {
       return row instanceof HTMLElement ? row : null;
     };
 
-    this.registerDomEvent(activeDocument, 'dragover', (event) => {
-      if (!isOurDrag(event) || !explorerContainerFor(event)) {
+    // Obsidian lets a file-explorer pane be popped out into its own OS
+    // window, each backed by a separate `Document`. Binding once to the
+    // plugin-load-time `activeDocument` only ever covers whichever window
+    // happened to be active at that moment - drops landing in any other
+    // window's explorer silently never reach a listener at all (the reverse
+    // direction, dragging an Obsidian note into the terminal's own tree,
+    // still works because that listener lives on the tree panel's own DOM
+    // node instead of a snapshotted document). Bind independently to every
+    // window that currently hosts a file-explorer leaf, and re-sync on
+    // every workspace layout change so a newly popped-out (or newly
+    // focused) window's document gets covered too.
+    const boundDocuments = new WeakSet<Document>();
+    const bindListenersFor = (doc: Document): void => {
+      if (boundDocuments.has(doc)) return;
+      boundDocuments.add(doc);
+
+      this.registerDomEvent(doc, 'dragover', (event) => {
+        if (!isOurDrag(event) || !explorerContainerFor(event)) {
+          setHighlighted(null);
+          return;
+        }
+        event.preventDefault();
+        setHighlighted(rowElementFor(event.target));
+      }, { capture: true });
+
+      this.registerDomEvent(doc, 'dragleave', (event) => {
+        if (!isOurDrag(event)) return;
+        // Only clear once the drag actually leaves the explorer container,
+        // not on every dragleave fired while moving between sibling rows
+        // inside it (those get an immediate dragover right after that would
+        // otherwise just re-set the same highlight).
+        if (!explorerContainerFor(event)) setHighlighted(null);
+      }, { capture: true });
+
+      this.registerDomEvent(doc, 'dragend', () => setHighlighted(null), { capture: true });
+
+      this.registerDomEvent(doc, 'drop', (event) => {
         setHighlighted(null);
-        return;
+        if (!isOurDrag(event) || !explorerContainerFor(event)) return;
+        event.preventDefault();
+        event.stopPropagation();
+
+        const raw = event.dataTransfer?.getData(DIRECTORY_TREE_DRAG_MIME);
+        if (!raw) return;
+        let entry: DirectoryTreeDragPayload;
+        try {
+          entry = JSON.parse(raw) as DirectoryTreeDragPayload;
+        } catch {
+          return;
+        }
+
+        void this.copyDirectoryTreeEntryToVaultWithPicker(entry, this.resolveExplorerDropFolder(event.target));
+      }, { capture: true });
+    };
+
+    const syncListeners = (): void => {
+      for (const container of explorerContainers()) {
+        if (container.ownerDocument) bindListenersFor(container.ownerDocument);
       }
-      event.preventDefault();
-      setHighlighted(rowElementFor(event.target));
-    }, { capture: true });
+    };
 
-    this.registerDomEvent(activeDocument, 'dragleave', (event) => {
-      if (!isOurDrag(event)) return;
-      // Only clear once the drag actually leaves the explorer container,
-      // not on every dragleave fired while moving between sibling rows
-      // inside it (those get an immediate dragover right after that would
-      // otherwise just re-set the same highlight).
-      if (!explorerContainerFor(event)) setHighlighted(null);
-    }, { capture: true });
-
-    this.registerDomEvent(activeDocument, 'dragend', () => setHighlighted(null), { capture: true });
-
-    this.registerDomEvent(activeDocument, 'drop', (event) => {
-      setHighlighted(null);
-      if (!isOurDrag(event) || !explorerContainerFor(event)) return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const raw = event.dataTransfer?.getData(DIRECTORY_TREE_DRAG_MIME);
-      if (!raw) return;
-      let entry: DirectoryTreeDragPayload;
-      try {
-        entry = JSON.parse(raw) as DirectoryTreeDragPayload;
-      } catch {
-        return;
-      }
-
-      void this.copyDirectoryTreeEntryToVaultWithPicker(entry, this.resolveExplorerDropFolder(event.target));
-    }, { capture: true });
+    syncListeners();
+    this.registerEvent(this.app.workspace.on('layout-change', syncListeners));
   }
 
   /**
@@ -855,7 +867,6 @@ export default class TerminalPlugin extends Plugin {
       serverConnection: this.normalizeServerConnectionSettings(loaded?.serverConnection),
       remoteConnection: this.normalizeRemoteConnectionSettings(loaded?.remoteConnection),
       pairedDevices: this.normalizePairedDevices(loaded?.pairedDevices),
-      deviceAgentConfigs: this.normalizeDeviceAgentConfigs(loaded?.deviceAgentConfigs),
       controllerIdentitySeed: normalizeControllerIdentitySeed(loaded?.controllerIdentitySeed),
       // Ensure the presetScripts config exists
       presetScripts: normalizedPresetScripts,
@@ -872,7 +883,6 @@ export default class TerminalPlugin extends Plugin {
     this.settings.pairedDevices = this._pairedDeviceStore
       ? this._pairedDeviceStore.toJSON()
       : this.normalizePairedDevices(this.settings.pairedDevices);
-    this.settings.deviceAgentConfigs = this.normalizeDeviceAgentConfigs(this.settings.deviceAgentConfigs);
     this.settings.controllerIdentitySeed = normalizeControllerIdentitySeed(this.settings.controllerIdentitySeed);
     await this.saveData(this.settings);
     
@@ -963,27 +973,6 @@ export default class TerminalPlugin extends Plugin {
    */
   private normalizePairedDevices(value: unknown): TerminalSettings['pairedDevices'] {
     return PairedDeviceStore.fromJSON(value).toJSON();
-  }
-
-  /**
-   * Drops malformed entries (missing/wrong-typed fields - a hand-edited or
-   * downgraded `data.json`) instead of aborting the whole load, same
-   * tolerance `PairedDeviceStore.fromJSON` applies to `pairedDevices`.
-   */
-  private normalizeDeviceAgentConfigs(value: unknown): TerminalSettings['deviceAgentConfigs'] {
-    const result: TerminalSettings['deviceAgentConfigs'] = {};
-    if (!value || typeof value !== 'object') return result;
-
-    for (const [nodeId, entry] of Object.entries(value as Record<string, unknown>)) {
-      if (nodeId.trim() === '' || !entry || typeof entry !== 'object') continue;
-      const { agentId, agentName, provider, model, apiKey } = entry as Record<string, unknown>;
-      if (typeof agentId !== 'string' || agentId.trim() === '') continue;
-      if (typeof agentName !== 'string' || typeof provider !== 'string' || typeof model !== 'string') continue;
-      if (apiKey !== null && typeof apiKey !== 'string') continue;
-
-      result[nodeId] = { agentId, agentName, provider, model, apiKey: apiKey ?? null };
-    }
-    return result;
   }
 
   /**
@@ -1141,10 +1130,9 @@ export default class TerminalPlugin extends Plugin {
   /**
    * Connects to `nodeId` if needed and creates (but does not yet display)
    * a terminal instance backed by that device's transport. Factored out of
-   * {@link openRemoteTerminal} so {@link launchAgentOnDevice} can run its
-   * detect/install/launch sequence against the exact terminal that gets
-   * shown to the user, instead of guessing which terminal a second,
-   * separate `openRemoteTerminal` call would have produced.
+   * {@link openRemoteTerminal} so callers that need the terminal instance
+   * before it's shown to the user don't have to guess which terminal a
+   * second, separate `openRemoteTerminal` call would have produced.
    */
   private async createRemoteTerminalInstance(
     nodeId: string,
@@ -1169,95 +1157,6 @@ export default class TerminalPlugin extends Plugin {
       ));
     }
     return terminal;
-  }
-
-  /**
-   * Device card "启动 <agent>" flow (§2.3.5 G11): open a terminal on
-   * `nodeId`, detect/auto-install the configured agent's CLI there if
-   * needed (§2.3.3/§2.3.4 - same auto-install policy as the local path,
-   * see §5 of the design doc), then type the launch command built from the
-   * device's stored provider/model/apiKey.
-   */
-  async launchAgentOnDevice(nodeId: string): Promise<void> {
-    const config = this.getDeviceAgentConfig(nodeId);
-    if (!config) {
-      new Notice(t('notices.deviceAgent.notConfigured'), 5000);
-      return;
-    }
-
-    const terminalService = await this.getTerminalService();
-    let terminal: TerminalInstance;
-    try {
-      terminal = await this.createRemoteTerminalInstance(nodeId, this.getActiveNoteName(), terminalService);
-      await this.openPreparedTerminal(terminal, terminalService);
-    } catch (error) {
-      new Notice(t('home.operationFailed', {
-        message: error instanceof Error ? error.message : String(error),
-      }), 7000);
-      return;
-    }
-
-    try {
-      // Best-effort remote OS sniff (§1.3.1/§2.3.3): only win32 vs. not can
-      // be told apart from a sample path; darwin/linux remotes both read as
-      // 'linux' here, which is fine since install/detect commands only
-      // branch on win32 vs. POSIX.
-      const platform: NodeJS.Platform = isWindowsStylePath(terminal.getInitialCwd()) ? 'win32' : 'linux';
-      const entry = getAiLauncherEntry(config.agentId);
-
-      if (entry?.detectCommand) {
-        this.setDeviceAgentLaunchProgress(nodeId, 'detecting');
-        const detectCommand = this.buildRemoteDetectCommand(entry.detectCommand, platform);
-        const detectResult = await this.runCommandAndWait(terminal, detectCommand, 15_000);
-        const installed = !detectResult.timedOut && detectResult.exitCode === 0;
-
-        if (!installed) {
-          const installCommand = getInstallCommandForPlatform(entry, platform);
-          if (!installCommand) {
-            new Notice(t('notices.presetScript.installCommandUnavailable', {
-              name: config.agentName || entry.presetId,
-            }), 6000);
-            return;
-          }
-
-          this.setDeviceAgentLaunchProgress(nodeId, 'installing');
-          const installResult = await this.runCommandAndWait(terminal, installCommand);
-          if (installResult.timedOut || installResult.exitCode !== 0) {
-            new Notice(t('notices.presetScript.installFailed', {
-              name: config.agentName || entry.presetId,
-            }), 6000);
-            this.setDeviceAgentLaunchProgress(nodeId, 'installFailed');
-            window.setTimeout(() => this.setDeviceAgentLaunchProgress(nodeId, null), 4000);
-            return;
-          }
-        }
-      }
-
-      this.setDeviceAgentLaunchProgress(nodeId, 'launching');
-      const baseCommand = this.getAgentLaunchBaseCommand(config.agentId);
-      const launchCommand = buildAgentLaunchCommand(config.agentId, baseCommand, config, platform);
-      terminal.write(`${launchCommand}\r`);
-    } finally {
-      this.setDeviceAgentLaunchProgress(nodeId, null);
-    }
-  }
-
-  /** `where <cli>` on win32, `command -v <cli>` everywhere else (§2.3.3). */
-  private buildRemoteDetectCommand(cliName: string, platform: NodeJS.Platform): string {
-    return platform === 'win32' ? `where ${cliName}` : `command -v ${cliName}`;
-  }
-
-  /**
-   * The base launch command for a catalog agent id, reusing whatever the
-   * user's own preset script for it currently says (so a customized
-   * command - e.g. extra flags - carries over to the device-card launch
-   * path too) rather than hardcoding `claude`/`codex`/`opencode` again.
-   * Falls back to the id itself for a non-catalog agent (Q6 extensibility).
-   */
-  private getAgentLaunchBaseCommand(agentId: string): string {
-    const script = this.settings.presetScripts.find((candidate) => candidate.id === agentId);
-    const command = script?.actions.find((action) => action.enabled && action.type === 'terminal-command');
-    return command?.value.trim() || agentId;
   }
 
   isRemoteTerminal(terminal: TerminalInstance): boolean {

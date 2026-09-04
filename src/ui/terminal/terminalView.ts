@@ -61,6 +61,11 @@ import {
   type DirectoryTreeDragPayload,
   type FsAccess,
 } from '../../services/terminal/directoryTreeDrop';
+import {
+  isTransferInFlight,
+  TransferProgressNotice,
+  withTransferGuard,
+} from '../../services/terminal/directoryTreeTransferProgress';
 import type { DeviceConnectionManager } from '../../services/remote/deviceConnections';
 import { getHomeDir, isWindows } from '../../utils/platform';
 type XtermTerminal = import('@xterm/xterm').Terminal;
@@ -773,21 +778,33 @@ export class TerminalView extends ItemView {
     const targetPath = this.getRemoteDropTargetPath();
     const platform = this.guessRemotePathPlatform(targetPath);
 
+    const sourceKey = `vaultToRemoteBody::${nodeId}::${targetPath}::${files.map((f) => f.path).sort().join('|')}`;
+    if (isTransferInFlight(sourceKey)) {
+      new Notice(t('directoryTree.transferAlreadyInProgress'));
+      return;
+    }
+
     this.setRemoteState(transition(this.remoteState, { type: 'dropNote' }));
+    const progress = new TransferProgressNotice(t('directoryTree.transferring'));
     const landedPaths: string[] = [];
     try {
-      for (const file of files) {
-        const source = this.collectRemoteDropSource(file);
-        if (!source.ok) throw new Error(source.error ?? 'Unable to collect dropped file');
-        const quota = checkQuotas(source.files);
-        if (!quota.ok) throw new Error(quota.error ?? 'Transfer quota exceeded');
+      await withTransferGuard(sourceKey, async () => {
+        let filesDone = 0;
+        for (const file of files) {
+          const source = this.collectRemoteDropSource(file);
+          if (!source.ok) throw new Error(source.error ?? 'Unable to collect dropped file');
+          const quota = checkQuotas(source.files);
+          if (!quota.ok) throw new Error(quota.error ?? 'Transfer quota exceeded');
 
-        const outcome = await connections
-          .createTransferSender(nodeId, crypto.randomUUID(), source.files, source.readFile, null, targetPath)
-          .run();
-        if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
-        landedPaths.push(joinTerminalPaths(targetPath, file.name, platform));
-      }
+          const outcome = await connections
+            .createTransferSender(nodeId, crypto.randomUUID(), source.files, source.readFile, null, targetPath)
+            .run();
+          if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
+          landedPaths.push(joinTerminalPaths(targetPath, file.name, platform));
+          filesDone += 1;
+          progress.update(filesDone);
+        }
+      });
 
       if (landedPaths.length > 0) {
         const reference = this.formatAgentReferencePaths(landedPaths, { platform });
@@ -800,6 +817,7 @@ export class TerminalView extends ItemView {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(t('remote.transferFailed', { message }), 5000);
     } finally {
+      progress.hide();
       this.setRemoteState(transition(this.remoteState, { type: 'transferFinished' }));
     }
   }
@@ -1005,6 +1023,7 @@ export class TerminalView extends ItemView {
         this.buildDirectoryTreePathApi(this.getRemoteNodeId() !== null),
         {
           onActivateDirectory: (path) => this.activateDirectoryFromTree(path),
+          onActivateFile: (path) => this.activateFileFromTree(path),
           onDropToPath: (dataTransfer, targetPath) => void this.handleDirectoryTreeDrop(dataTransfer, targetPath),
           onCopyToVault: (path, isDirectory, baseName) => void this.handleCopyToVault(path, isDirectory, baseName),
           onRequestClose: () => this.closeDirectoryTree(),
@@ -1065,6 +1084,25 @@ export class TerminalView extends ItemView {
     terminal.focus();
   }
 
+  /**
+   * Double-click on a file row in this terminal's own directory tree
+   * (requirement 4, v1.8 iteration doc): inserts a reference to that file's
+   * path into the agent-cli input, as a faster alternative to dragging the
+   * row there. The tree always browses whichever device this terminal
+   * itself rides (unlike a dragged-in row, which - per
+   * `handleDirectoryTreeEntryDropToInput` - can originate from a
+   * differently-docked tree on another device), so there's no cross-device
+   * mismatch to guard against here.
+   */
+  private activateFileFromTree(path: string): void {
+    const nodeId = this.getRemoteNodeId();
+    const platform = nodeId ? this.guessRemotePathPlatform(path) : undefined;
+    const reference = this.formatAgentReferencePaths([path], { platform });
+    if (reference) {
+      void this.writeInputToTerminal(reference, false);
+    }
+  }
+
   private async handleDirectoryTreeDrop(dataTransfer: DataTransfer, targetPath: string): Promise<void> {
     const entries = this.resolveDroppedVaultEntries(dataTransfer);
     if (entries.length === 0) {
@@ -1073,27 +1111,57 @@ export class TerminalView extends ItemView {
     }
 
     const nodeId = this.getRemoteNodeId();
+    // Keys on the exact drop (source paths + destination), not just the
+    // source, so the same note can still be dropped onto two different
+    // target folders at once - only a second drop onto the *same* target
+    // while the first is still running gets rejected (requirement 3).
+    const sourceKey = `vaultToTree::${nodeId ?? 'local'}::${targetPath}::${entries.map((e) => e.path).sort().join('|')}`;
+    if (isTransferInFlight(sourceKey)) {
+      new Notice(t('directoryTree.transferAlreadyInProgress'));
+      return;
+    }
+
+    const progress = new TransferProgressNotice(t('directoryTree.transferring'));
+    // Files completed across *prior* entries - each entry's own onProgress
+    // callback reports a count that starts back over at 1 for that entry
+    // (`copyVaultEntryToDirectory`/`copyVaultNoteWithLinksToDirectory` don't
+    // know about sibling entries in this drop), so this offset is what
+    // turns that into a running total across the whole drop.
+    let totalDone = 0;
     try {
       const allSkippedNotes: Array<{ path: string; reason: string }> = [];
-      if (nodeId) {
-        await this.sendVaultEntriesToRemote(nodeId, entries, targetPath);
-      } else {
-        const fsAccess = this.buildDirectoryTreeFsAccess();
-        for (const entry of entries) {
-          // A dropped Markdown note also pulls in every note/attachment it
-          // links to, recursively, preserving each one's vault-relative
-          // path under the target directory - matches the "send to
-          // terminal" toolbar action's recursive behavior for the remote
-          // case (`sendNoteRecursively`), just landing on the local disk
-          // instead of over the wire.
-          if (entry instanceof TFile && entry.extension.toLowerCase() === 'md') {
-            const result = await copyVaultNoteWithLinksToDirectory(this.app, entry, targetPath, fsAccess);
-            allSkippedNotes.push(...result.skippedNotes);
-          } else {
-            await copyVaultEntryToDirectory(this.app, entry, targetPath, fsAccess);
+      await withTransferGuard(sourceKey, async () => {
+        if (nodeId) {
+          // Unlike the local branch, one wire transfer already covers an
+          // entire entry (folder or file) by the time it resolves, so this
+          // callback reports a per-entry delta rather than a within-entry
+          // running count - summing it here still yields the right total.
+          await this.sendVaultEntriesToRemote(nodeId, entries, targetPath, (filesInEntry) => {
+            totalDone += filesInEntry;
+            progress.update(totalDone);
+          });
+        } else {
+          const fsAccess = this.buildDirectoryTreeFsAccess();
+          for (const entry of entries) {
+            const priorDone = totalDone;
+            const onEntryProgress = (done: number): void => progress.update(priorDone + done);
+            // A dropped Markdown note also pulls in every note/attachment it
+            // links to, recursively, preserving each one's vault-relative
+            // path under the target directory - matches the "send to
+            // terminal" toolbar action's recursive behavior for the remote
+            // case (`sendNoteRecursively`), just landing on the local disk
+            // instead of over the wire.
+            if (entry instanceof TFile && entry.extension.toLowerCase() === 'md') {
+              const result = await copyVaultNoteWithLinksToDirectory(this.app, entry, targetPath, fsAccess, onEntryProgress);
+              allSkippedNotes.push(...result.skippedNotes);
+              totalDone += result.fileCount;
+            } else {
+              const result = await copyVaultEntryToDirectory(this.app, entry, targetPath, fsAccess, onEntryProgress);
+              totalDone += result.fileCount;
+            }
           }
         }
-      }
+      });
       new Notice(t('directoryTree.dropCopyDone', { path: targetPath }));
       if (allSkippedNotes.length > 0) {
         const details = allSkippedNotes.map((s) => `${s.path}: ${s.reason}`).join('; ');
@@ -1102,6 +1170,8 @@ export class TerminalView extends ItemView {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       new Notice(t('directoryTree.dropCopyFailed', { message }), 5000);
+    } finally {
+      progress.hide();
     }
   }
 
@@ -1110,6 +1180,7 @@ export class TerminalView extends ItemView {
     nodeId: string,
     entries: Array<TFile | TFolder>,
     targetPath: string,
+    onProgress?: (filesInEntry: number) => void,
   ): Promise<void> {
     const connections = this.getTerminalPlugin()?.getDeviceConnectionManager();
     if (!connections) throw new Error('Remote connection is not available');
@@ -1121,6 +1192,11 @@ export class TerminalView extends ItemView {
         .createTransferSender(nodeId, crypto.randomUUID(), files, readFile, null, targetPath)
         .run();
       if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
+      // The wire transfer already ran the whole entry (folder or file) as
+      // one unit by the time `run()` resolves, so the only progress
+      // granularity available here is per top-level dropped entry, not
+      // per file inside it.
+      onProgress?.(files.length);
     }
   }
 

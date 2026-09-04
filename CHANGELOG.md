@@ -5,6 +5,16 @@ All notable changes to LingXi1949 will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Directory-tree same-name conflict handling is now configurable: a new "Overwrite same-name files" setting (on by default) makes a tree-to-vault drop overwrite an existing same-name file in place instead of appending "(2)"; turning it off keeps the previous append-a-suffix behavior. Applies to files inside a dropped folder too.
+- Double-clicking a file row in the terminal's directory tree now inserts that file's path into the agent-cli input at the cursor, as a faster alternative to dragging the row there.
+- Directory-tree and remote-drop transfers now show an immediate "Transferring…" notice with a running file count, and reject a repeat drag/drop of the same source while a transfer for it is still in flight.
+
+### Removed
+- Removed the per-device "Configure Agent" / "Launch \<agent\>" flow from the device home cards (auto-installing and auto-launching a configured CLI agent on a remote device). The status bar's local AI-launcher menu (install/launch a coding-agent CLI in the current terminal) is unaffected.
+
 ## [1.6.5] - 2026-08-31
 
 ### Changed

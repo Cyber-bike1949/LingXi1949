@@ -112,15 +112,6 @@ export interface TerminalSettings {
   // this list at runtime.
   pairedDevices: PairedDevice[];
 
-  // Per-device agent quick-launch configuration (candidate doc "Agent 启动
-  // 流程简化" §6.2/§6.5 Q8): at most one entry per device nodeId, deliberately
-  // not multiple - a device card shows/launches a single configured agent.
-  // Kept separate from `PairedDevice`/`pairedDevices` rather than merged into
-  // it: connection metadata (pairedDeviceStore.ts) and agent launch config
-  // are different concerns with different lifecycles (removing a device's
-  // agent config shouldn't touch its connection record and vice versa).
-  deviceAgentConfigs: Record<string, DeviceAgentConfig | undefined>;
-
   // Persisted 32-byte seed for the v2.0 controller iroh identity.
   controllerIdentitySeed: number[] | null;
 
@@ -150,6 +141,12 @@ export interface TerminalSettings {
   // means the picker has never been used yet (default to the active note's
   // folder instead).
   directoryTreeLastCopyToVaultFolder: string | null;
+
+  // When true (default), a directory-tree drop that lands on a same-named
+  // file overwrites it instead of appending "(2)" to the new file's name.
+  // Applies to every "tree -> vault" conflict, including files inside a
+  // dropped folder. Off keeps the pre-existing append-a-suffix behavior.
+  overwriteOnDuplicateFilename: boolean;
 
   // Debug settings
   enableDebugLog: boolean;
@@ -207,24 +204,6 @@ export interface RemoteAuthSession {
   accessToken: string;
   expiresAt: number;
   login: string;
-}
-
-/**
- * One device's agent quick-launch configuration (candidate doc §6.2/§6.5).
- * `agentId` matches an `AI_LAUNCHER_CATALOG` `presetId` when the user picked
- * a known agent, or is a free-form id for one that isn't in the catalog -
- * §6.5 Q6 requires "面向主流 agent 且预留扩展性", so this can't be a closed
- * enum. `provider`/`model` are deliberately just two plain strings rather
- * than a per-provider field set (§6.5 Q9: "基本参数即可，无需覆盖全部
- * Provider 特有字段").
- */
-export interface DeviceAgentConfig {
-  agentId: string;
-  agentName: string;
-  provider: string;
-  model: string;
-  /** Plain text for now - §6.5 Q10 defers key storage hardening. */
-  apiKey: string | null;
 }
 
 export const LEGACY_REMOTE_RELAY_URL = 'https://termy.changqiu.xyz';
@@ -445,7 +424,6 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   serverConnection: { ...DEFAULT_SERVER_CONNECTION_SETTINGS },
   remoteConnection: { ...DEFAULT_REMOTE_CONNECTION_SETTINGS },
   pairedDevices: [],
-  deviceAgentConfigs: {},
   controllerIdentitySeed: null,
   presetScripts: [...DEFAULT_PRESET_SCRIPTS],
   hideUnavailableAiLaunchers: false,
@@ -454,4 +432,5 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   enableDebugLog: false,
   directoryTreeDockSide: 'right',
   directoryTreeLastCopyToVaultFolder: null,
+  overwriteOnDuplicateFilename: true,
 };

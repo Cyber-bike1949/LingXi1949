@@ -28,7 +28,7 @@ export const ko: TranslationKeys = {
   },
 
   home: {
-    title: 'Devices', description: 'Open a new terminal on this device or a paired device.', refresh: 'Refresh device status', refreshing: 'Refreshing...', addDevice: 'Add device', addDeviceDescription: 'Paste the device code shown by the agent', localDevice: 'This device', localDeviceDescription: 'Open a terminal on this device', available: 'Available', openTerminal: 'Open terminal', deviceName: 'Device name', deviceNamePlaceholder: 'Optional display name', connectionCode: 'Device code', connectionCodePlaceholder: 'Paste an endpoint device code', addingDevice: 'Adding...', deviceAdded: 'Device added.', moreActions: 'More device actions', disconnect: 'Disconnect', removeDevice: 'Remove device', removeDeviceTitle: 'Remove device?', removeDeviceDescription: 'Remove “{{name}}” and its device code from this device.', deviceRemoved: 'Device removed.', returnHome: 'Return to device home', neverConnected: 'Never connected', lastConnected: 'Last connected: {{time}}', statusDisconnected: 'Disconnected', statusConnecting: 'Connecting', statusConnected: 'Connected', statusError: 'Connection failed', pairEmpty: 'Paste a device code.', pairWrongPrefix: 'This is not a valid endpoint device code.', pairBadCharacters: 'The device code contains invalid characters.', pairTooShort: 'The device code is incomplete.', pairUnparseable: 'The device code could not be parsed. Copy it again from the agent.', operationFailed: 'Device operation failed: {{message}}', agentConfigure: 'Configure agent', agentLaunch: 'Launch {{name}}', agentDetecting: 'Checking {{name}}…', agentInstalling: 'Installing {{name}}…', agentInstallFailed: 'Failed to install {{name}}.', agentLaunching: 'Launching {{name}}…', agentConfigTitle: 'Configure agent', agentConfigAgent: 'Agent', agentConfigAgentCustom: 'Custom…', agentConfigAgentName: 'Display name', agentConfigAgentNamePlaceholder: 'Optional display name', agentConfigProvider: 'Provider', agentConfigProviderPlaceholder: 'Provider name, or a compatible API base URL', agentConfigModel: 'Model', agentConfigModelPlaceholder: 'Model name', agentConfigApiKey: 'API key', agentConfigApiKeyPlaceholder: 'Stored in plain text on this device', agentConfigSave: 'Save', agentConfigRemove: 'Remove configuration', agentConfigSaved: 'Agent configuration saved.', agentConfigRemoved: 'Agent configuration removed.',
+    title: 'Devices', description: 'Open a new terminal on this device or a paired device.', refresh: 'Refresh device status', refreshing: 'Refreshing...', addDevice: 'Add device', addDeviceDescription: 'Paste the device code shown by the agent', localDevice: 'This device', localDeviceDescription: 'Open a terminal on this device', available: 'Available', openTerminal: 'Open terminal', deviceName: 'Device name', deviceNamePlaceholder: 'Optional display name', connectionCode: 'Device code', connectionCodePlaceholder: 'Paste an endpoint device code', addingDevice: 'Adding...', deviceAdded: 'Device added.', moreActions: 'More device actions', disconnect: 'Disconnect', removeDevice: 'Remove device', removeDeviceTitle: 'Remove device?', removeDeviceDescription: 'Remove “{{name}}” and its device code from this device.', deviceRemoved: 'Device removed.', returnHome: 'Return to device home', neverConnected: 'Never connected', lastConnected: 'Last connected: {{time}}', statusDisconnected: 'Disconnected', statusConnecting: 'Connecting', statusConnected: 'Connected', statusError: 'Connection failed', pairEmpty: 'Paste a device code.', pairWrongPrefix: 'This is not a valid endpoint device code.', pairBadCharacters: 'The device code contains invalid characters.', pairTooShort: 'The device code is incomplete.', pairUnparseable: 'The device code could not be parsed. Copy it again from the agent.', operationFailed: 'Device operation failed: {{message}}',
   },
 
   remote: {
@@ -104,6 +104,8 @@ export const ko: TranslationKeys = {
     dropRejectedNotVaultItem: '현재 저장소의 노트, 첨부 파일 또는 폴더를 끌어다 놓으세요.',
     openInFileManager: '파일 관리자에서 열기',
     openInFileManagerFailed: '파일 관리자를 열지 못했습니다: {{message}}',
+    transferring: '전송 중…',
+    transferAlreadyInProgress: '이 파일은 이미 전송 중입니다. 잠시 기다려 주세요.',
   },
 
   commands: {
@@ -211,9 +213,6 @@ export const ko: TranslationKeys = {
       installing: 'Installing {{name}}…',
       installFailed: 'Failed to install {{name}}.',
     },
-    deviceAgent: {
-      notConfigured: 'Configure an agent for this device first.',
-    },
   },
 
   settings: {
@@ -261,6 +260,8 @@ export const ko: TranslationKeys = {
       focusNewInstanceDesc: '새 터미널 인스턴스를 자동으로 포커스',
       lockNewInstance: '새 인스턴스 잠금',
       lockNewInstanceDesc: '새 터미널 인스턴스를 기본으로 잠금',
+      overwriteOnDuplicateFilename: '동일한 이름의 파일 덮어쓰기',
+      overwriteOnDuplicateFilenameDesc: '디렉터리 트리의 파일을 노트에 끌어다 놓을 때, 대상 위치에 동일한 이름의 파일이 있으면 번호를 추가하는 대신 바로 덮어씁니다. 켜면 동일한 이름의 파일이 즉시 덮어써지며 되돌릴 수 없습니다. 끄면 "(2)"와 같이 번호를 추가하는 기존 동작을 유지합니다.',
       displaySettings: '표시 설정',
       displayTabTheme: '테마',
       displayTabAppearance: '모양',

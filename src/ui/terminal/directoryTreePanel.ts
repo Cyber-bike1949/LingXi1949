@@ -39,6 +39,12 @@ export type DockSide = 'left' | 'right';
 export interface DirectoryTreePanelCallbacks {
   /** Double-click on a directory node: caller is expected to `cd` the terminal there. */
   onActivateDirectory(path: string): void;
+  /**
+   * Double-click on a file node (requirement 4, v1.8): caller inserts a
+   * reference to this file's path into the agent-cli input, as a
+   * lower-friction alternative to dragging the row there.
+   */
+  onActivateFile(path: string): void;
   /** A vault drag landed on a directory node; caller resolves and copies the payload. */
   onDropToPath(dataTransfer: DataTransfer, targetPath: string): void;
   /** The dock-side toggle button was used; caller may persist the new side. */
@@ -111,8 +117,37 @@ export class DirectoryTreePanel {
     this.resizerEl = this.element.createDiv('directory-tree-panel__resizer');
     this.bindResizer();
 
+    this.bindPanelDropFallback();
+
     this.applyDockSide();
     this.applyWidth();
+  }
+
+  /**
+   * Catch-all drop handler for anywhere in the panel that isn't a directory
+   * row (a file row, the empty-state text, blank tree space, the header).
+   * Directory rows already handle their own drops (see `renderNode`'s
+   * `dragover`/`drop` wiring below) and always `stopPropagation`, so this
+   * never double-handles those. Without this, a drop that misses every row
+   * bubbles out of the panel to the terminal view's own container-level drop
+   * handler, which is built for drops landing directly on the terminal/input
+   * area and reacts by inserting an `@path` reference into the agent input -
+   * a surprising side effect for what looks like "I dropped this on the
+   * tree", not on the input box. Swallowing it here keeps the two drop
+   * targets independent, matching the row-level convention of treating any
+   * drop that doesn't carry our own drag MIME as a vault entry.
+   */
+  private bindPanelDropFallback(): void {
+    this.element.addEventListener('dragover', (event) => {
+      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
+      event.preventDefault();
+    });
+    this.element.addEventListener('drop', (event) => {
+      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer && this.rootPath) this.callbacks.onDropToPath(event.dataTransfer, this.rootPath);
+    });
   }
 
   /** Enter navigates to the typed path; Escape or blur without Enter reverts the display. */
@@ -322,6 +357,8 @@ export class DirectoryTreePanel {
         void toggle();
       });
       row.addEventListener('dblclick', () => this.callbacks.onActivateDirectory(fullPath));
+    } else {
+      row.addEventListener('dblclick', () => this.callbacks.onActivateFile(fullPath));
     }
 
     row.addEventListener('contextmenu', (event) => {

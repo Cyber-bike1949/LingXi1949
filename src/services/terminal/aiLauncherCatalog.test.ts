@@ -3,7 +3,6 @@ import assert from 'node:assert/strict';
 
 import {
   AI_LAUNCHER_CATALOG,
-  buildAgentLaunchCommand,
   commandAvailabilityToLauncherStatus,
   getAiLauncherEntry,
   getInstallCommandForPlatform,
@@ -160,72 +159,4 @@ test('version registry sources match the documented endpoints', () => {
       : `github-release:${registry.repo}`;
     assert.equal(key, expected.get(entry.presetId));
   }
-});
-
-test('buildAgentLaunchCommand applies the documented API key env var and --model flag on POSIX', () => {
-  const command = buildAgentLaunchCommand(
-    'claude-code',
-    'claude',
-    { provider: '', model: 'opus', apiKey: 'sk-test' },
-    'linux',
-  );
-  assert.equal(command, "ANTHROPIC_API_KEY='sk-test' claude --model 'opus'");
-});
-
-test('buildAgentLaunchCommand uses OPENAI_API_KEY for codex', () => {
-  const command = buildAgentLaunchCommand(
-    'codex',
-    'codex',
-    { provider: '', model: '', apiKey: 'sk-test' },
-    'linux',
-  );
-  assert.equal(command, "OPENAI_API_KEY='sk-test' codex");
-});
-
-test('buildAgentLaunchCommand only sets a base-URL env var when provider looks like a URL', () => {
-  const withUrl = buildAgentLaunchCommand(
-    'claude-code',
-    'claude',
-    { provider: 'https://proxy.example.com', model: '', apiKey: null },
-    'linux',
-  );
-  assert.equal(withUrl, "ANTHROPIC_BASE_URL='https://proxy.example.com' claude");
-
-  const withPlainName = buildAgentLaunchCommand(
-    'claude-code',
-    'claude',
-    { provider: 'anthropic', model: '', apiKey: null },
-    'linux',
-  );
-  assert.equal(withPlainName, 'claude');
-});
-
-test('buildAgentLaunchCommand falls back to an upper-snake-cased env var for a non-catalog agent', () => {
-  const command = buildAgentLaunchCommand(
-    'my-custom-agent',
-    'my-custom-agent',
-    { provider: '', model: '', apiKey: 'secret' },
-    'linux',
-  );
-  assert.equal(command, "MY_CUSTOM_AGENT_API_KEY='secret' my-custom-agent");
-});
-
-test('buildAgentLaunchCommand uses `set` chains on win32 instead of an inline assignment', () => {
-  const command = buildAgentLaunchCommand(
-    'claude-code',
-    'claude',
-    { provider: '', model: 'sonnet', apiKey: 'sk-test' },
-    'win32',
-  );
-  assert.equal(command, 'set "ANTHROPIC_API_KEY=sk-test" && claude --model "sonnet"');
-});
-
-test('buildAgentLaunchCommand returns the base command unchanged with no model or key', () => {
-  const command = buildAgentLaunchCommand(
-    'claude-code',
-    'claude',
-    { provider: '', model: '', apiKey: null },
-    'linux',
-  );
-  assert.equal(command, 'claude');
 });

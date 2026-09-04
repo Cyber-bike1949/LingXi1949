@@ -1,9 +1,9 @@
 /**
  * Manual install-guidance modal for an AI launcher. As of the 2026-09-03
  * auto-install decision (design doc §5) this is no longer the default path
- * when a launcher's CLI is missing — `runAiAwarePresetScript` and
- * `launchAgentOnDevice` in main.ts now install automatically instead of
- * opening this modal. It stays reachable as a manual troubleshooting entry
+ * when a launcher's CLI is missing — `runAiAwarePresetScript` in main.ts
+ * now installs automatically instead of opening this modal. It stays
+ * reachable as a manual troubleshooting entry
  * point (e.g. the settings page's "view install guidance" action) for a
  * user who wants to see or copy the command by hand, or who has an update
  * available and wants to review it before running it.

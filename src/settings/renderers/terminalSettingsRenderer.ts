@@ -1749,9 +1749,20 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
         }
         this.applyScrollbackToOpenTerminals(numValue);
       });
-      
+
       return inputEl;
     });
+
+    // Directory-tree "tree -> vault" duplicate-filename policy (requirement 2)
+    new Setting(behaviorCard)
+      .setName(t('settingsDetails.terminal.overwriteOnDuplicateFilename'))
+      .setDesc(t('settingsDetails.terminal.overwriteOnDuplicateFilenameDesc'))
+      .addToggle(toggle => toggle
+        .setValue(this.context.plugin.settings.overwriteOnDuplicateFilename)
+        .onChange((value) => {
+          this.context.plugin.settings.overwriteOnDuplicateFilename = value;
+          void this.saveSettings();
+        }));
 
   }
 

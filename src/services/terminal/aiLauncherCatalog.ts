@@ -61,10 +61,9 @@ export interface AiLauncherCatalogEntry {
   installDocsUrl?: string;
   /**
    * One-liner install commands, surfaced in the install modal and also
-   * typed into the terminal automatically (both local and remote) when the
-   * CLI is found missing — see `ensureAiLauncherInstalledInTerminal` and
-   * `launchAgentOnDevice` in main.ts. This is a deliberate 2026-09-03
-   * decision (candidate doc "Agent 启动流程简化" §6.2/§6.4, design doc §5)
+   * typed into the terminal automatically when the CLI is found missing —
+   * see `ensureAiLauncherInstalledInTerminal` in main.ts. This is a
+   * deliberate 2026-09-03 decision (design doc §5)
    * to auto-run installs rather than only display guidance, which is a
    * known departure from this project's earlier stated Obsidian-marketplace
    * "no plugin-driven native-dependency installs" stance; see §5 of the
@@ -209,93 +208,6 @@ export function getUpgradeCommandForPlatform(
   const exact = commands[platform];
   if (typeof exact === 'string' && exact.length > 0) return exact;
   return null;
-}
-
-/** The `provider`/`model`/`apiKey` fields a `DeviceAgentConfig` carries (see settings.ts). */
-export interface AgentLaunchConfig {
-  provider: string;
-  model: string;
-  apiKey: string | null;
-}
-
-// claude-code and codex each have one well-documented API-key env var and a
-// `--model` flag; opencode's key wiring is provider-specific (its own config
-// file, not a single env var), so only `--model` is applied there.
-const LAUNCH_MODEL_FLAG: Partial<Record<string, string>> = {
-  'claude-code': '--model',
-  codex: '--model',
-  opencode: '--model',
-};
-const LAUNCH_API_KEY_ENV_VAR: Partial<Record<string, string>> = {
-  'claude-code': 'ANTHROPIC_API_KEY',
-  codex: 'OPENAI_API_KEY',
-};
-// Only applied when `provider` looks like a URL - both CLIs document this
-// env var for pointing at an Anthropic/OpenAI-API-compatible endpoint other
-// than the default one, which is the one unambiguous way to use a free-form
-// "provider" string without guessing a name → URL mapping for every
-// possible third-party provider.
-const LAUNCH_BASE_URL_ENV_VAR: Partial<Record<string, string>> = {
-  'claude-code': 'ANTHROPIC_BASE_URL',
-  codex: 'OPENAI_BASE_URL',
-};
-
-function toEnvVarName(agentId: string): string {
-  return agentId.replace(/[^a-zA-Z0-9]+/g, '_').toUpperCase();
-}
-
-function quoteShellArg(value: string, platform: NodeJS.Platform): string {
-  if (platform === 'win32') return `"${value.replace(/"/g, '""')}"`;
-  return `'${value.replace(/'/g, `'\\''`)}'`;
-}
-
-/**
- * Turns a device's stored `DeviceAgentConfig` (candidate doc "Agent 启动
- * 流程简化" §6.2/§6.5 Q9: generic provider/model/apiKey fields, not full
- * per-Provider coverage) into the actual command line Termy types into the
- * terminal for one launch (§2.3.5 G11). Anything outside
- * {@link LAUNCH_API_KEY_ENV_VAR} (Q6's "reserve extensibility for other
- * agents") falls back to an upper-snake-cased `<AGENT_ID>_API_KEY` env var -
- * a guess, but a harmless one, since an unrecognized env var is simply
- * ignored by whatever CLI the user pointed this at.
- */
-export function buildAgentLaunchCommand(
-  agentId: string,
-  baseCommand: string,
-  config: AgentLaunchConfig,
-  platform: NodeJS.Platform = process.platform,
-): string {
-  let command = baseCommand;
-
-  const modelFlag = LAUNCH_MODEL_FLAG[agentId] ?? '--model';
-  if (config.model.trim()) {
-    command = `${command} ${modelFlag} ${quoteShellArg(config.model.trim(), platform)}`;
-  }
-
-  const envAssignments: Array<[string, string]> = [];
-  if (config.apiKey) {
-    envAssignments.push([LAUNCH_API_KEY_ENV_VAR[agentId] ?? `${toEnvVarName(agentId)}_API_KEY`, config.apiKey]);
-  }
-  const provider = config.provider.trim();
-  const baseUrlEnvVar = LAUNCH_BASE_URL_ENV_VAR[agentId];
-  if (provider && baseUrlEnvVar && /^https?:\/\//i.test(provider)) {
-    envAssignments.push([baseUrlEnvVar, provider]);
-  }
-
-  if (envAssignments.length === 0) return command;
-
-  // cmd.exe has no clean one-shot inline env syntax, so `set` is used
-  // instead - this persists for the rest of the session rather than
-  // scoping to just this command, unlike the POSIX `VAR=value cmd` form.
-  if (platform === 'win32') {
-    const setPrefix = envAssignments
-      .map(([name, value]) => `set "${name}=${value.replace(/"/g, '""')}"`)
-      .join(' && ');
-    return `${setPrefix} && ${command}`;
-  }
-
-  const inlineEnv = envAssignments.map(([name, value]) => `${name}=${quoteShellArg(value, platform)}`).join(' ');
-  return `${inlineEnv} ${command}`;
 }
 
 /**

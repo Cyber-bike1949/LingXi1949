@@ -6,9 +6,7 @@ import { t } from '../../i18n';
 import { buildDeviceHomeCards, getRefreshNodeIds, type DeviceHomeCard } from '../../services/remote/deviceHomeModel';
 import { pairDevice, type PairDeviceResult } from '../../services/remote/devicePairing';
 import type { Disposable } from '../../services/remote/transport';
-import type { DeviceAgentConfig } from '../../settings/settings';
 import { AddDeviceModal } from './addDeviceModal';
-import { DeviceAgentConfigModal } from './deviceAgentConfigModal';
 import { RemoveDeviceModal } from './removeDeviceModal';
 
 export const DEVICE_HOME_VIEW_TYPE = 'termesh-device-home';
@@ -17,7 +15,6 @@ export class DeviceHomeView extends ItemView {
   private readonly plugin: TerminalPlugin;
   private connectionSubscription: Disposable | null = null;
   private runtimeProgressCleanup: (() => void) | null = null;
-  private agentLaunchProgressCleanup: (() => void) | null = null;
   private renderTimer: number | null = null;
   private refreshing = false;
 
@@ -42,7 +39,6 @@ export class DeviceHomeView extends ItemView {
     const connections = this.plugin.getDeviceConnectionManager();
     this.connectionSubscription = connections.onDidChange(() => this.scheduleRender());
     this.runtimeProgressCleanup = this.plugin.onIrohRuntimeInstallProgressChange(() => this.scheduleRender());
-    this.agentLaunchProgressCleanup = this.plugin.onDeviceAgentLaunchProgressChange(() => this.scheduleRender());
     this.render();
     return Promise.resolve();
   }
@@ -52,8 +48,6 @@ export class DeviceHomeView extends ItemView {
     this.connectionSubscription = null;
     this.runtimeProgressCleanup?.();
     this.runtimeProgressCleanup = null;
-    this.agentLaunchProgressCleanup?.();
-    this.agentLaunchProgressCleanup = null;
     if (this.renderTimer !== null) {
       window.clearTimeout(this.renderTimer);
       this.renderTimer = null;
@@ -150,81 +144,6 @@ export class DeviceHomeView extends ItemView {
     if (status.state === 'error') {
       cardEl.createDiv({ cls: 'termesh-device-error', text: status.message });
     }
-    this.renderAgentSection(cardEl, device.nodeId, device.name);
-  }
-
-  /**
-   * "Agent 选择" region on a remote device card (design doc §2.3.2):
-   * an unconfigured device gets a "配置 Agent" entry point; a configured
-   * one gets its agent name plus a "启动 <agent>" button that runs
-   * {@link TerminalPlugin.launchAgentOnDevice}. While that flow is running,
-   * `getDeviceAgentLaunchProgress` (mirroring the existing iroh-runtime
-   * install-progress pattern) drives the button's label instead.
-   */
-  private renderAgentSection(cardEl: HTMLElement, nodeId: string, deviceName: string): void {
-    const section = cardEl.createDiv({ cls: 'termesh-device-agent' });
-    const config = this.plugin.getDeviceAgentConfig(nodeId);
-    const progress = this.plugin.getDeviceAgentLaunchProgress(nodeId);
-
-    if (!config) {
-      const configureButton = section.createEl('button', { cls: 'termesh-device-agent-configure', text: t('home.agentConfigure') });
-      configureButton.addEventListener('click', (event) => {
-        event.stopPropagation();
-        this.openDeviceAgentConfigModal(nodeId, deviceName, null);
-      });
-      return;
-    }
-
-    const row = section.createDiv({ cls: 'termesh-device-agent-row' });
-    row.createSpan({ cls: 'termesh-device-agent-name', text: config.agentName });
-
-    const editButton = this.createIconButton(row, 'settings', t('home.agentConfigure'), () => {
-      this.openDeviceAgentConfigModal(nodeId, deviceName, config);
-    });
-    editButton.addClass('termesh-device-agent-edit');
-
-    const launchButton = row.createEl('button', {
-      cls: 'mod-cta termesh-device-agent-launch',
-      text: this.getAgentLaunchButtonLabel(config, progress),
-    });
-    launchButton.disabled = progress !== null;
-    launchButton.addEventListener('click', (event) => {
-      event.stopPropagation();
-      void this.plugin.launchAgentOnDevice(nodeId).catch((error) => {
-        new Notice(t('home.operationFailed', {
-          message: error instanceof Error ? error.message : String(error),
-        }), 7000);
-      });
-    });
-  }
-
-  private getAgentLaunchButtonLabel(
-    config: DeviceAgentConfig,
-    progress: ReturnType<TerminalPlugin['getDeviceAgentLaunchProgress']>,
-  ): string {
-    const name = config.agentName;
-    switch (progress) {
-      case 'detecting': return t('home.agentDetecting', { name });
-      case 'installing': return t('home.agentInstalling', { name });
-      case 'installFailed': return t('home.agentInstallFailed', { name });
-      case 'launching': return t('home.agentLaunching', { name });
-      default: return t('home.agentLaunch', { name });
-    }
-  }
-
-  private openDeviceAgentConfigModal(nodeId: string, deviceName: string, existing: DeviceAgentConfig | null): void {
-    new DeviceAgentConfigModal(this.app, {
-      deviceName,
-      existing,
-      onSave: async (config) => {
-        await this.plugin.setDeviceAgentConfig(nodeId, config);
-        this.render();
-      },
-      onRemove: async () => {
-        await this.plugin.removeDeviceAgentConfig(nodeId);
-        this.render();
-      },
-    }).open();
   }
 
   private createInteractiveCard(

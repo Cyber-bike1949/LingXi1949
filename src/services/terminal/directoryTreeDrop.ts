@@ -7,9 +7,10 @@
  *    same as the existing vault -> terminal-cwd drop. The target is a
  *    working directory, not the vault.
  *  - fs -> vault ("copy to vault" on a tree node, see the panel's context
- *    menu): same-name conflicts never overwrite; `resolveUniqueVaultPath`
- *    picks a free name instead, because the target is the user's
- *    knowledge base.
+ *    menu): same-name conflicts follow the `overwriteOnDuplicateFilename`
+ *    setting (requirement 2 of the v1.8 iteration doc) - overwrite in
+ *    place by default, or fall back to `resolveUniqueVaultPath`'s "(2)"
+ *    suffix when the user turns that off.
  *
  * Kept apart from the panel UI so the walking/copying logic isn't tangled
  * up with DOM/drag event handling. Not unit tested directly (needs a real
@@ -27,6 +28,10 @@ import { createVaultLinkSource, createVaultLinkSourceForPath, readVaultFile } fr
 import type { PulledFile } from '../remote/transferStreamPuller.ts';
 import type { DeviceConnectionManager } from '../remote/deviceConnections.ts';
 import { resolveUniqueVaultPath } from './directoryTreeVaultNaming.ts';
+import { debugLog } from '../../utils/logger.ts';
+
+/** Called after each file lands, with the running count so far - lets a caller drive a progress notice. */
+export type CopyProgressCallback = (filesDone: number) => void;
 
 /**
  * Custom drag MIME for a directory-tree row (candidate doc "目录树与双向文件
@@ -74,12 +79,14 @@ export async function copyVaultEntryToDirectory(
   entry: TFile | TFolder,
   targetDir: string,
   fsAccess: FsAccess,
+  onProgress?: CopyProgressCallback,
 ): Promise<CopyResult> {
   await fsAccess.promises.mkdir(targetDir, { recursive: true });
 
   if (entry instanceof TFileClass) {
     const bytes = await readVaultFileBytes(app, entry);
     await fsAccess.promises.writeFile(fsAccess.join(targetDir, entry.name), bytes);
+    onProgress?.(1);
     return { fileCount: 1 };
   }
 
@@ -93,6 +100,7 @@ export async function copyVaultEntryToDirectory(
         const bytes = await readVaultFileBytes(app, child);
         await fsAccess.promises.writeFile(fsAccess.join(destDir, child.name), bytes);
         fileCount += 1;
+        onProgress?.(fileCount);
       }
     }
   };
@@ -123,6 +131,7 @@ export async function copyVaultNoteWithLinksToDirectory(
   file: TFile,
   targetDir: string,
   fsAccess: FsAccess,
+  onProgress?: CopyProgressCallback,
 ): Promise<CopyNoteWithLinksResult> {
   const collected = collectRecursive(createVaultLinkSource(app, file), (path) =>
     createVaultLinkSourceForPath(app, path)
@@ -132,12 +141,15 @@ export async function copyVaultNoteWithLinksToDirectory(
   const quota = checkQuotas(collected.files);
   if (!quota.ok) throw new Error(quota.error ?? 'Transfer quota exceeded');
 
+  let fileCount = 0;
   for (const collectedFile of collected.files) {
     const segments = collectedFile.relativePath.split('/');
     const destDir = fsAccess.join(targetDir, ...segments.slice(0, -1));
     await fsAccess.promises.mkdir(destDir, { recursive: true });
     const bytes = await readVaultFile(app, collectedFile.relativePath);
     await fsAccess.promises.writeFile(fsAccess.join(destDir, segments[segments.length - 1]), bytes);
+    fileCount += 1;
+    onProgress?.(fileCount);
   }
 
   return { fileCount: collected.files.length, skippedNotes: collected.skippedNotes };
@@ -148,8 +160,9 @@ export async function copyVaultNoteWithLinksToDirectory(
  * `targetVaultFolder`. Every path is checked with `checkRelativePath`
  * before writing (candidate doc §6.5: the tree itself isn't sandboxed to a
  * root, so the one thing worth re-validating on the way *into* the vault is
- * that the resulting vault path is well-formed) and de-conflicted with
- * `resolveUniqueVaultPath`.
+ * that the resulting vault path is well-formed) and de-conflicted per
+ * `overwriteOnDuplicate` (requirement 2: default overwrite, or the
+ * pre-existing `resolveUniqueVaultPath` "(2)" suffix behavior when off).
  */
 export async function copyFsEntryToVault(
   app: App,
@@ -158,16 +171,16 @@ export async function copyFsEntryToVault(
   targetVaultFolder: string,
   fsAccess: FsAccess,
   baseName: string,
+  overwriteOnDuplicate: boolean,
+  onProgress?: CopyProgressCallback,
 ): Promise<CopyResult> {
-  const exists = (vaultPath: string): boolean => app.vault.getAbstractFileByPath(vaultPath) !== null;
-
   if (!isDirectory) {
     const desired = normalizeVaultPath(joinVaultPath(targetVaultFolder, baseName));
     const check = checkRelativePath(desired);
     if (!check.ok) throw new Error(`Cannot copy to "${desired}": not a valid vault path`);
-    const finalPath = resolveUniqueVaultPath(desired, exists);
     const bytes = await fsAccess.promises.readFile(absolutePath);
-    await app.vault.createBinary(finalPath, toArrayBuffer(bytes));
+    await writeVaultBinaryResolvingConflict(app, desired, bytes, overwriteOnDuplicate);
+    onProgress?.(1);
     return { fileCount: 1 };
   }
 
@@ -183,10 +196,10 @@ export async function copyFsEntryToVault(
       }
       const check = checkRelativePath(destPath);
       if (!check.ok) continue; // skip individually-invalid entries rather than abort the whole copy
-      const finalPath = resolveUniqueVaultPath(destPath, exists);
       const bytes = await fsAccess.promises.readFile(srcPath);
-      await app.vault.createBinary(finalPath, toArrayBuffer(bytes));
+      await writeVaultBinaryResolvingConflict(app, destPath, bytes, overwriteOnDuplicate);
       fileCount += 1;
+      onProgress?.(fileCount);
     }
   };
   await walk(absolutePath, joinVaultPath(targetVaultFolder, baseName));
@@ -207,19 +220,50 @@ export async function writePulledFilesToVault(
   app: App,
   files: PulledFile[],
   targetVaultFolder: string,
+  overwriteOnDuplicate: boolean,
+  onProgress?: CopyProgressCallback,
 ): Promise<CopyResult> {
-  const exists = (vaultPath: string): boolean => app.vault.getAbstractFileByPath(vaultPath) !== null;
-
   let fileCount = 0;
   for (const file of files) {
     const desired = normalizeVaultPath(joinVaultPath(targetVaultFolder, file.relativePath));
     const check = checkRelativePath(desired);
     if (!check.ok) continue; // skip individually-invalid entries rather than abort the whole copy
-    const finalPath = resolveUniqueVaultPath(desired, exists);
-    await app.vault.createBinary(finalPath, toArrayBuffer(file.data));
+    await writeVaultBinaryResolvingConflict(app, desired, file.data, overwriteOnDuplicate);
     fileCount += 1;
+    onProgress?.(fileCount);
   }
   return { fileCount };
+}
+
+/**
+ * Writes `bytes` to `desiredPath`, resolving a same-name conflict per the
+ * `overwriteOnDuplicateFilename` setting (requirement 2): overwrite the
+ * existing file in place via `modifyBinary`, or fall back to
+ * `resolveUniqueVaultPath`'s "(2)" suffix when the setting is off (the
+ * pre-existing behavior). A logged trace is the only trail an overwrite
+ * leaves - no confirmation dialog, per the confirmed requirement.
+ */
+async function writeVaultBinaryResolvingConflict(
+  app: App,
+  desiredPath: string,
+  bytes: Uint8Array,
+  overwriteOnDuplicate: boolean,
+): Promise<void> {
+  const exists = (vaultPath: string): boolean => app.vault.getAbstractFileByPath(vaultPath) !== null;
+
+  if (overwriteOnDuplicate) {
+    const existing = app.vault.getAbstractFileByPath(desiredPath);
+    if (existing instanceof TFileClass) {
+      debugLog('[directoryTreeDrop] Overwriting existing vault file on duplicate-name drop:', desiredPath);
+      await app.vault.modifyBinary(existing, toArrayBuffer(bytes));
+      return;
+    }
+    // A folder already occupies this path - fall through to a free name
+    // instead, since a folder can't be overwritten by a file write.
+  }
+
+  const finalPath = resolveUniqueVaultPath(desiredPath, exists);
+  await app.vault.createBinary(finalPath, toArrayBuffer(bytes));
 }
 
 /**
@@ -234,14 +278,25 @@ export async function copyDirectoryTreeEntryToVault(
   fsAccess: FsAccess,
   entry: DirectoryTreeDragPayload,
   targetVaultFolder: string,
+  overwriteOnDuplicate: boolean,
+  onProgress?: CopyProgressCallback,
 ): Promise<CopyResult> {
   if (entry.nodeId) {
     if (!connections) throw new Error('Remote connection is not available');
     const outcome = await connections.createTransferPuller(entry.nodeId, entry.path).run();
     if (!outcome.success) throw new Error(outcome.message || 'Pull failed');
-    return writePulledFilesToVault(app, outcome.files, targetVaultFolder);
+    return writePulledFilesToVault(app, outcome.files, targetVaultFolder, overwriteOnDuplicate, onProgress);
   }
-  return copyFsEntryToVault(app, entry.path, entry.isDirectory, targetVaultFolder, fsAccess, entry.baseName);
+  return copyFsEntryToVault(
+    app,
+    entry.path,
+    entry.isDirectory,
+    targetVaultFolder,
+    fsAccess,
+    entry.baseName,
+    overwriteOnDuplicate,
+    onProgress,
+  );
 }
 
 export interface VaultTransferSource {

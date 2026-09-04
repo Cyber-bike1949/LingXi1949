@@ -73,27 +73,6 @@ export interface TranslationKeys {
     pairTooShort: string;
     pairUnparseable: string;
     operationFailed: string;
-    agentConfigure: string;
-    agentLaunch: string;
-    agentDetecting: string;
-    agentInstalling: string;
-    agentInstallFailed: string;
-    agentLaunching: string;
-    agentConfigTitle: string;
-    agentConfigAgent: string;
-    agentConfigAgentCustom: string;
-    agentConfigAgentName: string;
-    agentConfigAgentNamePlaceholder: string;
-    agentConfigProvider: string;
-    agentConfigProviderPlaceholder: string;
-    agentConfigModel: string;
-    agentConfigModelPlaceholder: string;
-    agentConfigApiKey: string;
-    agentConfigApiKeyPlaceholder: string;
-    agentConfigSave: string;
-    agentConfigRemove: string;
-    agentConfigSaved: string;
-    agentConfigRemoved: string;
   };
 
   remote: {
@@ -176,6 +155,8 @@ export interface TranslationKeys {
     dropRejectedNotVaultItem: string;
     openInFileManager: string;
     openInFileManagerFailed: string;
+    transferring: string;
+    transferAlreadyInProgress: string;
   };
 
   // Commands
@@ -287,9 +268,6 @@ export interface TranslationKeys {
       installing: string;
       installFailed: string;
     };
-    deviceAgent: {
-      notConfigured: string;
-    };
   };
 
   // Settings
@@ -339,6 +317,8 @@ export interface TranslationKeys {
       focusNewInstanceDesc: string;
       lockNewInstance: string;
       lockNewInstanceDesc: string;
+      overwriteOnDuplicateFilename: string;
+      overwriteOnDuplicateFilenameDesc: string;
       displaySettings: string;
       displayTabTheme: string;
       displayTabAppearance: string;
