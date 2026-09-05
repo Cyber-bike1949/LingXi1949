@@ -389,6 +389,12 @@ export const en: TranslationKeys = {
       customServerPortDesc: 'Custom port for terminal server (leave empty for auto)',
       customServerPortPlaceholder: '8765',
     },
+    supportAuthor: {
+      title: 'Support the author',
+      intro: 'If this plugin has been useful to you, you can buy the author a coffee:',
+      wechat: 'WeChat',
+      alipay: 'Alipay',
+    },
   },
 
   modals: {

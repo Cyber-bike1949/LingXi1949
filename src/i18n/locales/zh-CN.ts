@@ -389,6 +389,12 @@ export const zhCN: TranslationKeys = {
       customServerPortDesc: '终端服务器的自定义端口（留空则自动分配）',
       customServerPortPlaceholder: '例如：8765',
     },
+    supportAuthor: {
+      title: '支持作者',
+      intro: '如果这个插件对你有帮助，可以请作者喝杯咖啡：',
+      wechat: '微信',
+      alipay: '支付宝',
+    },
   },
 
   modals: {

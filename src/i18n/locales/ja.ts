@@ -389,6 +389,12 @@ export const ja: TranslationKeys = {
       customServerPortDesc: 'ターミナルサーバーのカスタムポート（空欄で自動）',
       customServerPortPlaceholder: '例: 8765',
     },
+    supportAuthor: {
+      title: '作者を応援する',
+      intro: 'このプラグインが役に立ったら、作者にコーヒーを一杯おごってみませんか：',
+      wechat: 'WeChat',
+      alipay: 'Alipay',
+    },
   },
 
   modals: {

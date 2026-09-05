@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" role="img" aria-label="Alipay donation QR code placeholder">
+  <rect x="1" y="1" width="198" height="198" rx="12" fill="#f6f6f6" stroke="#c8c8c8" stroke-width="2" stroke-dasharray="6 6"/>
+  <text x="100" y="90" text-anchor="middle" font-family="sans-serif" font-size="16" fill="#1677ff">支付宝赞赏码</text>
+  <text x="100" y="116" text-anchor="middle" font-family="sans-serif" font-size="12" fill="#888">占位图，请替换为真实二维码</text>
+</svg>

@@ -389,6 +389,12 @@ export const ko: TranslationKeys = {
       customServerPortDesc: '터미널 서버의 사용자 지정 포트(비워두면 자동)',
       customServerPortPlaceholder: '예: 8765',
     },
+    supportAuthor: {
+      title: '작성자 후원하기',
+      intro: '이 플러그인이 도움이 되었다면 작성자에게 커피 한 잔을 사줄 수 있습니다:',
+      wechat: '위챗',
+      alipay: '알리페이',
+    },
   },
 
   modals: {

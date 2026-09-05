@@ -389,6 +389,12 @@ export const ru: TranslationKeys = {
       customServerPortDesc: 'Пользовательский порт сервера терминала (оставьте пустым для авто)',
       customServerPortPlaceholder: 'например, 8765',
     },
+    supportAuthor: {
+      title: 'Поддержать автора',
+      intro: 'Если этот плагин оказался полезен, вы можете угостить автора кофе:',
+      wechat: 'WeChat',
+      alipay: 'Alipay',
+    },
   },
 
   modals: {

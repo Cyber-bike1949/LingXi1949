@@ -447,6 +447,12 @@ export interface TranslationKeys {
       customServerPortDesc: string;
       customServerPortPlaceholder: string;
     };
+    supportAuthor: {
+      title: string;
+      intro: string;
+      wechat: string;
+      alipay: string;
+    };
   };
 
   // Modals
