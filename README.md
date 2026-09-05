@@ -6,6 +6,8 @@
 
 An Obsidian terminal workspace for connecting local and remote devices and handing note context to AI CLI agents.
 
+**Notes are the best friend you and your agent have.**
+
 English / [简体中文](./README_ZH.md)
 
 ## Work without the friction

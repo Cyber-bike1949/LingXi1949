@@ -6,6 +6,8 @@
 
 连接本地与远程设备，并将笔记上下文交给 AI CLI Agent 的 Obsidian 终端工作台。
 
+**笔记，才是你和 Agent 之间最好的朋友。**
+
 简体中文 / [English](./README.md)
 
 ## 告别繁琐操作
