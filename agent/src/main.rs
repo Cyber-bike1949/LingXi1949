@@ -1,4 +1,4 @@
-//! termesh-agent: the target-side daemon of Termesh's remote terminal (v2.0).
+//! lingxi1949: the target-side daemon of LingXi1949's remote terminal (v2.0).
 //!
 //! No account, no pairing service: the agent's identity is a local Ed25519
 //! keypair (doc 5.1) and pairing is "copy the connection code it prints"
@@ -8,20 +8,20 @@ use std::process::ExitCode;
 
 use clap::{Parser, Subcommand};
 
-use termesh_agent::config::{self, Config};
-use termesh_agent::identity::DeviceIdentity;
-use termesh_agent::p2p::{self, EndpointProfile};
-use termesh_agent::serve::{self, ServeOptions};
-use termesh_agent::{lock, state};
+use lingxi1949::config::{self, Config};
+use lingxi1949::identity::DeviceIdentity;
+use lingxi1949::p2p::{self, EndpointProfile};
+use lingxi1949::serve::{self, ServeOptions};
+use lingxi1949::{lock, state};
 
 #[derive(Parser)]
 #[command(
-    name = "termesh-agent",
+    name = "lingxi1949",
     version,
-    about = "Termesh remote terminal agent"
+    about = "LingXi1949 remote terminal agent"
 )]
 struct Cli {
-    /// Defaults to `run` when omitted, so double-clicking termesh-agent.exe on
+    /// Defaults to `run` when omitted, so double-clicking lingxi1949.exe on
     /// Windows (which launches it with no arguments) opens a console and
     /// prints the connection code instead of erroring on a missing
     /// subcommand and closing before anyone can read it.
@@ -67,7 +67,7 @@ async fn main() -> ExitCode {
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "termesh_agent=info".into()),
+                .unwrap_or_else(|_| "lingxi1949=info".into()),
         )
         .init();
 
@@ -101,6 +101,12 @@ fn wait_for_keypress() {
 }
 
 async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+    // v1.9 R-01-3: must happen before anything below reads config or loads
+    // the identity key, and before every subcommand (not just `run`) -
+    // `status`/`rotate-identity` also touch the identity file and must not
+    // see an empty new directory and generate a fresh one.
+    config::migrate_legacy_config_dir()?;
+
     let path = config::config_path();
     let command = cli.command.unwrap_or(Command::Run { loopback: false });
 
@@ -252,7 +258,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                             );
                         }
                         (false, _) => {
-                            println!("code       none (start the agent with `termesh-agent run`)");
+                            println!("code       none (start the agent with `lingxi1949 run`)");
                         }
                     }
                 }
@@ -283,7 +289,7 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 previous.fingerprint(),
                 rotated.fingerprint()
             );
-            println!("start the agent to print the new connection code: `termesh-agent run`");
+            println!("start the agent to print the new connection code: `lingxi1949 run`");
             Ok(())
         }
     }

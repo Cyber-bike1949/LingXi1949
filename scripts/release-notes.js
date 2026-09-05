@@ -62,7 +62,7 @@ export function readChangelogSection(version, changelogPath = DEFAULT_CHANGELOG_
 
 export function renderReleaseBody({ version, changelogSection, repository = DEFAULT_REPOSITORY }) {
   const repoUrl = `https://github.com/${repository}`;
-  const fullPackageName = `termesh-${version}-<platform>.zip`;
+  const fullPackageName = `lingxi1949-${version}-<platform>.zip`;
 
   return [
     `## Changelog`,
@@ -88,7 +88,7 @@ export function renderReleaseBody({ version, changelogSection, repository = DEFA
     '',
     '**Option 1: Complete Package (Offline Installation)**',
     `1. Download the \`${fullPackageName}\` asset matching your platform`,
-    '2. Extract its contents to `.obsidian/plugins/termesh/`',
+    '2. Extract its contents to `.obsidian/plugins/lingxi-bridge/`',
     '3. Restart Obsidian and enable the plugin',
     '',
     '**Option 2: Core Files (Automatic Native Downloads)**',
@@ -99,14 +99,14 @@ export function renderReleaseBody({ version, changelogSection, repository = DEFA
     '   - **macOS (Intel)**: `termy-server-darwin-x64`',
     '   - **Linux (x64)**: `termy-server-linux-x64`',
     '   - **Linux (ARM64)**: `termy-server-linux-arm64`',
-    '3. Create directory: `.obsidian/plugins/termesh/binaries/`',
-    '4. Place core files in `termesh/` and binary in `binaries/`',
+    '3. Create directory: `.obsidian/plugins/lingxi-bridge/binaries/`',
+    '4. Place core files in `lingxi-bridge/` and binary in `binaries/`',
     '5. Restart Obsidian and enable the plugin',
     '',
     '## Remote Components',
     '',
-    '- `termesh-agent-win32-x64.exe`: Windows x64 remote agent',
-    '- `termesh-agent-linux-x64`: Linux x64 remote agent',
+    '- `lingxi1949-win32-x64.exe`: Windows x64 remote agent',
+    '- `lingxi1949-linux-x64`: Linux x64 remote agent',
     '- `termy-relay-linux-x64`: Linux x64 relay server',
     '- Each native binary has a matching `.sha256` checksum asset',
     '',

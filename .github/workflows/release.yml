@@ -219,8 +219,8 @@ jobs:
         shell: bash
         run: |
           mkdir -p release-assets
-          ASSET_NAME="termesh-agent-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
-          cp "agent/target/${{ matrix.target }}/release/termesh-agent${{ matrix.ext }}" "release-assets/${ASSET_NAME}"
+          ASSET_NAME="lingxi1949-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+          cp "agent/target/${{ matrix.target }}/release/lingxi1949${{ matrix.ext }}" "release-assets/${ASSET_NAME}"
 
           cd release-assets
           if command -v sha256sum &> /dev/null; then
@@ -233,7 +233,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: agent-${{ matrix.platform }}-${{ matrix.arch }}
-          path: release-assets/termesh-agent-*
+          path: release-assets/lingxi1949-*
 
   build-relay:
     name: Build Relay linux-x64
@@ -331,7 +331,7 @@ jobs:
         run: |
           chmod +x binaries/termy-server-darwin-* || true
           chmod +x binaries/termy-server-linux-* || true
-          chmod +x release-assets/termesh-agent-linux-* || true
+          chmod +x release-assets/lingxi1949-linux-* || true
           chmod +x release-assets/termy-relay-linux-* || true
 
       - name: Install and build
@@ -371,7 +371,7 @@ jobs:
             test -f "${package_dir}/styles.css"
             test -f "${package_dir}/node_modules/@number0/iroh/package.json"
             find "${package_dir}/node_modules/@number0" -mindepth 2 -maxdepth 2 -type f -name '*.node' -print -quit | grep -q .
-            (cd "${package_dir}" && zip -r "../../termesh-${{ github.ref_name }}-${platform}.zip" .)
+            (cd "${package_dir}" && zip -r "../../lingxi1949-${{ github.ref_name }}-${platform}.zip" .)
           done
 
       - name: Attest build provenance
@@ -381,15 +381,15 @@ jobs:
             main.js
             manifest.json
             styles.css
-            termesh-${{ github.ref_name }}-*.zip
+            lingxi1949-${{ github.ref_name }}-*.zip
             release-assets/iroh-runtime-*.node
             binaries/termy-server-win32-x64.exe
             binaries/termy-server-darwin-arm64
             binaries/termy-server-darwin-x64
             binaries/termy-server-linux-x64
             binaries/termy-server-linux-arm64
-            release-assets/termesh-agent-win32-x64.exe
-            release-assets/termesh-agent-linux-x64
+            release-assets/lingxi1949-win32-x64.exe
+            release-assets/lingxi1949-linux-x64
             release-assets/termy-relay-linux-x64
 
       - name: Release
@@ -399,7 +399,7 @@ jobs:
             main.js
             manifest.json
             styles.css
-            termesh-${{ github.ref_name }}-*.zip
+            lingxi1949-${{ github.ref_name }}-*.zip
             release-assets/iroh-runtime-*.node
             release-assets/iroh-runtime-*.node.sha256
             binaries/termy-server-win32-x64.exe
@@ -412,10 +412,10 @@ jobs:
             binaries/termy-server-linux-x64.sha256
             binaries/termy-server-linux-arm64
             binaries/termy-server-linux-arm64.sha256
-            release-assets/termesh-agent-win32-x64.exe
-            release-assets/termesh-agent-win32-x64.exe.sha256
-            release-assets/termesh-agent-linux-x64
-            release-assets/termesh-agent-linux-x64.sha256
+            release-assets/lingxi1949-win32-x64.exe
+            release-assets/lingxi1949-win32-x64.exe.sha256
+            release-assets/lingxi1949-linux-x64
+            release-assets/lingxi1949-linux-x64.sha256
             release-assets/termy-relay-linux-x64
             release-assets/termy-relay-linux-x64.sha256
           body_path: release-body.md

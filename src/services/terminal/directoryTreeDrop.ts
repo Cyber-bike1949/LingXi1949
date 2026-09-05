@@ -329,7 +329,7 @@ async function writeVaultBinaryResolvingConflict(
 
 /**
  * D-01-2/Q7: a folder pull that fails with exactly the pre-D-01 "nothing to
- * send" wording is diagnostic of a peer `termesh-agent` built before D-01 -
+ * send" wording is diagnostic of a peer agent build from before D-01 -
  * a post-fix agent never produces that error for a *folder* request (an
  * empty folder now succeeds via `directories`; only a missing/unreadable
  * path still fails, with a different message). Thrown instead of a generic

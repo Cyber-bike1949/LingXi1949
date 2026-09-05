@@ -257,7 +257,10 @@ mod tests {
         assert_eq!(result.entries[0].absolute_path, file_path);
         assert_eq!(result.entries[0].size, 11);
         assert_eq!(result.entries[0].index, 0);
-        assert!(result.directories.is_empty(), "a lone file has no directories");
+        assert!(
+            result.directories.is_empty(),
+            "a lone file has no directories"
+        );
     }
 
     #[test]
@@ -270,7 +273,9 @@ mod tests {
         fs::write(root.join("assets/img.png"), b"\x89PNG").unwrap();
 
         let mut result = walk_for_pull(&root).unwrap();
-        result.entries.sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
+        result
+            .entries
+            .sort_by(|a, b| a.relative_path.cmp(&b.relative_path));
 
         assert_eq!(result.entries.len(), 2);
         assert_eq!(result.entries[0].relative_path, "project/assets/img.png");

@@ -26,7 +26,7 @@ test('resolves npm CDN and GitHub fallback runtime URLs', () => {
 });
 
 test('downloads verified runtime files and reuses the installed version', async (context) => {
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'termesh-iroh-'));
+  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lingxi1949-iroh-'));
   context.after(() => fs.rmSync(pluginDir, { recursive: true, force: true }));
 
   const native = Buffer.from('native fixture');
@@ -64,7 +64,7 @@ test('downloads verified runtime files and reuses the installed version', async 
 });
 
 test('rejects a runtime with a mismatched checksum', async (context) => {
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'termesh-iroh-'));
+  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lingxi1949-iroh-'));
   context.after(() => fs.rmSync(pluginDir, { recursive: true, force: true }));
 
   const fetchAsset = (): Promise<Buffer> => Promise.resolve(Buffer.from('content'));
@@ -75,7 +75,7 @@ test('rejects a runtime with a mismatched checksum', async (context) => {
 });
 
 test('falls back after the primary network path fails', async (context) => {
-  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'termesh-iroh-'));
+  const pluginDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lingxi1949-iroh-'));
   context.after(() => fs.rmSync(pluginDir, { recursive: true, force: true }));
 
   const native = Buffer.from('native fixture');

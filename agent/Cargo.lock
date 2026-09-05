@@ -1855,6 +1855,28 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
 
 [[package]]
+name = "lingxi1949"
+version = "0.1.0"
+dependencies = [
+ "base64",
+ "clap",
+ "ed25519-dalek 2.1.1",
+ "iroh",
+ "iroh-tickets",
+ "portable-pty",
+ "rand 0.8.5",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+ "uuid",
+ "windows-sys 0.59.0",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3389,28 +3411,6 @@ dependencies = [
  "fastrand",
  "once_cell",
  "rustix",
- "windows-sys 0.59.0",
-]
-
-[[package]]
-name = "termesh-agent"
-version = "0.1.0"
-dependencies = [
- "base64",
- "clap",
- "ed25519-dalek 2.1.1",
- "iroh",
- "iroh-tickets",
- "portable-pty",
- "rand 0.8.5",
- "serde",
- "serde_json",
- "tempfile",
- "thiserror 2.0.18",
- "tokio",
- "tracing",
- "tracing-subscriber",
- "uuid",
  "windows-sys 0.59.0",
 ]
 

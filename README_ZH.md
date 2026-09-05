@@ -53,18 +53,18 @@ curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agen
 
 ## Windows Agent
 
-下载 [Windows x64 Agent 安装包](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/termesh-agent-win32-x64.exe)及其 [SHA-256 校验文件](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/termesh-agent-win32-x64.exe.sha256)。
+下载 [Windows x64 Agent 安装包](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe)及其 [SHA-256 校验文件](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe.sha256)。
 
 也可以通过 PowerShell 下载、校验并启动 Agent：
 
 ```powershell
 $baseUrl = 'https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download'
-Invoke-WebRequest "$baseUrl/termesh-agent-win32-x64.exe" -OutFile 'termesh-agent.exe'
-Invoke-WebRequest "$baseUrl/termesh-agent-win32-x64.exe.sha256" -OutFile 'termesh-agent.exe.sha256'
-$expectedHash = (Get-Content 'termesh-agent.exe.sha256').Split()[0]
-$actualHash = (Get-FileHash '.\termesh-agent.exe' -Algorithm SHA256).Hash
+Invoke-WebRequest "$baseUrl/lingxi1949-win32-x64.exe" -OutFile 'lingxi1949.exe'
+Invoke-WebRequest "$baseUrl/lingxi1949-win32-x64.exe.sha256" -OutFile 'lingxi1949.exe.sha256'
+$expectedHash = (Get-Content 'lingxi1949.exe.sha256').Split()[0]
+$actualHash = (Get-FileHash '.\lingxi1949.exe' -Algorithm SHA256).Hash
 if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
-.\termesh-agent.exe run
+.\lingxi1949.exe run
 ```
 
 保持 Agent 运行，然后使用输出的连接码在 LingXi1949 中添加设备。

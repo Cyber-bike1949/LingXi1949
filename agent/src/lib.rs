@@ -1,4 +1,4 @@
-//! termesh-agent library surface.
+//! lingxi1949 library surface.
 //!
 //! The binary is a thin CLI over these modules so the interesting behaviour -
 //! path safety, PTY teardown, transfer bookkeeping - is reachable from tests
@@ -22,7 +22,7 @@ pub mod transfer;
 pub enum AgentError {
     #[error("configuration error: {0}")]
     Config(String),
-    #[error("another termesh-agent instance already holds {0}")]
+    #[error("another lingxi1949 instance already holds {0}")]
     AlreadyRunning(String),
     #[error("io error: {0}")]
     Io(#[from] std::io::Error),

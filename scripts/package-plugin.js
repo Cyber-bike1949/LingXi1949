@@ -219,7 +219,7 @@ if (createZip) {
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const version = manifest.version || '0.0.0';
   
-  const zipName = `termesh-${version}.zip`;
+  const zipName = `lingxi1949-${version}.zip`;
   const zipPath = path.join(ROOT_DIR, zipName);
   
   // Remove existing ZIP

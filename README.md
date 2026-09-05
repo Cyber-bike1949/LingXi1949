@@ -54,18 +54,18 @@ When installation finishes, use the connection code to add the device in LingXi1
 
 ## Windows Agent
 
-Download the [Windows x64 Agent](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/termesh-agent-win32-x64.exe) and its [SHA-256 checksum](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/termesh-agent-win32-x64.exe.sha256).
+Download the [Windows x64 Agent](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe) and its [SHA-256 checksum](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe.sha256).
 
 Alternatively, run the following commands in PowerShell to download, verify, and start the Agent:
 
 ```powershell
 $baseUrl = 'https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download'
-Invoke-WebRequest "$baseUrl/termesh-agent-win32-x64.exe" -OutFile 'termesh-agent.exe'
-Invoke-WebRequest "$baseUrl/termesh-agent-win32-x64.exe.sha256" -OutFile 'termesh-agent.exe.sha256'
-$expectedHash = (Get-Content 'termesh-agent.exe.sha256').Split()[0]
-$actualHash = (Get-FileHash '.\termesh-agent.exe' -Algorithm SHA256).Hash
+Invoke-WebRequest "$baseUrl/lingxi1949-win32-x64.exe" -OutFile 'lingxi1949.exe'
+Invoke-WebRequest "$baseUrl/lingxi1949-win32-x64.exe.sha256" -OutFile 'lingxi1949.exe.sha256'
+$expectedHash = (Get-Content 'lingxi1949.exe.sha256').Split()[0]
+$actualHash = (Get-FileHash '.\lingxi1949.exe' -Algorithm SHA256).Hash
 if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
-.\termesh-agent.exe run
+.\lingxi1949.exe run
 ```
 
 Keep the Agent running, then use its connection code to add the device in LingXi1949.

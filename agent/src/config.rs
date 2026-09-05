@@ -61,7 +61,7 @@ pub fn default_device_name() -> String {
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty())
         .or_else(|| std::env::var("COMPUTERNAME").ok())
-        .unwrap_or_else(|| "termesh-agent".into())
+        .unwrap_or_else(|| "lingxi1949".into())
 }
 
 impl Default for Config {
@@ -74,7 +74,7 @@ impl Default for Config {
 }
 
 impl Config {
-    /// Matches Termesh's local terminal server, which starts a login shell
+    /// Matches LingXi1949's local terminal server, which starts a login shell
     /// (`rust-servers/src/pty/shell.rs`, `get_shell_login_args`). Without `-l`
     /// bash reads only `~/.bashrc`, and on Ubuntu it is `~/.profile` that puts
     /// `~/.local/bin` on PATH - so everything installed there (pipx, cargo, npm
@@ -186,9 +186,32 @@ impl Config {
     }
 }
 
-/// Doc 7.3: `%APPDATA%\TermeshAgent` on Windows, `$XDG_CONFIG_HOME/termesh-agent`
-/// (defaulting to `~/.config/termesh-agent`) elsewhere.
+/// Doc 7.3, renamed under v1.9 R-01: `%APPDATA%\LingXi1949` on Windows,
+/// `$XDG_CONFIG_HOME/lingxi1949` (defaulting to `~/.config/lingxi1949`)
+/// elsewhere. `migrate_legacy_config_dir` moves anything found at the
+/// pre-rename location (see `legacy_config_dir`) here before this is ever
+/// read.
 pub fn config_dir() -> PathBuf {
+    if cfg!(windows) {
+        match std::env::var_os("APPDATA") {
+            Some(appdata) => PathBuf::from(appdata).join("LingXi1949"),
+            None => home_dir()
+                .join("AppData")
+                .join("Roaming")
+                .join("LingXi1949"),
+        }
+    } else {
+        match std::env::var_os("XDG_CONFIG_HOME").filter(|v| !v.is_empty()) {
+            Some(base) => PathBuf::from(base).join("lingxi1949"),
+            None => home_dir().join(".config").join("lingxi1949"),
+        }
+    }
+}
+
+/// The pre-v1.9 config directory (`termesh-agent`/`TermeshAgent`), kept only
+/// as the source for the one-time migration in `migrate_legacy_config_dir` -
+/// there is no long-term `termesh` compat alias (Q8).
+fn legacy_config_dir() -> PathBuf {
     if cfg!(windows) {
         match std::env::var_os("APPDATA") {
             Some(appdata) => PathBuf::from(appdata).join("TermeshAgent"),
@@ -207,6 +230,102 @@ pub fn config_dir() -> PathBuf {
 
 pub fn config_path() -> PathBuf {
     config_dir().join("config.json")
+}
+
+/// v1.9 R-01-3: one-time, idempotent migration of the whole pre-rename config
+/// directory - including the Ed25519 identity key `identity.json` - to the
+/// new location, so an upgrading device keeps its identity and never needs
+/// to re-pair. Must run before anything reads config or identity (design doc
+/// §5.3): if the new directory already exists, this is a no-op (already
+/// migrated, or a fresh v1.9 install); if neither directory exists, this is
+/// also a no-op (fresh install, nothing to migrate).
+///
+/// The copy lands in a staging directory next to the destination and is
+/// moved into place with one atomic rename, so a failure partway through
+/// (permissions, disk full) can never leave a half-populated new directory
+/// that a later run would mistake for "already migrated". On failure this
+/// returns an error instead of falling back to silently generating a new
+/// identity or silently continuing to use the old directory - doc §5.3's
+/// explicit "no silent fallback" rule, because either fallback would look
+/// like a successful upgrade while quietly discarding the device's identity.
+pub fn migrate_legacy_config_dir() -> Result<(), AgentError> {
+    migrate_config_dir(&legacy_config_dir(), &config_dir())
+}
+
+/// The testable core of `migrate_legacy_config_dir`, taking explicit paths so
+/// it doesn't depend on the process environment (same convention as
+/// `load_or_default` taking a path instead of calling `config_path()`).
+fn migrate_config_dir(old_dir: &Path, new_dir: &Path) -> Result<(), AgentError> {
+    if new_dir.exists() {
+        return Ok(());
+    }
+
+    if !old_dir.exists() {
+        return Ok(());
+    }
+
+    let staging_dir = new_dir.with_file_name(format!(
+        "{}.migrating",
+        new_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("lingxi1949")
+    ));
+    if staging_dir.exists() {
+        std::fs::remove_dir_all(&staging_dir).map_err(|e| {
+            AgentError::Config(format!(
+                "cannot clear leftover migration staging directory {}: {e}",
+                staging_dir.display()
+            ))
+        })?;
+    }
+
+    copy_dir_recursive(old_dir, &staging_dir).map_err(|e| {
+        AgentError::Config(format!(
+            "failed to migrate {} to {}: {e}",
+            old_dir.display(),
+            staging_dir.display()
+        ))
+    })?;
+
+    if let Some(parent) = new_dir.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::rename(&staging_dir, new_dir).map_err(|e| {
+        AgentError::Config(format!(
+            "failed to finish migrating config to {}: {e}",
+            new_dir.display()
+        ))
+    })?;
+
+    // Renamed rather than deleted, so a botched migration still leaves a
+    // manual rollback path (design doc §5.3): move the old dir back and
+    // downgrade.
+    let migrated_marker = old_dir.with_file_name(format!(
+        "{}.migrated",
+        old_dir
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("termesh-agent")
+    ));
+    let _ = std::fs::rename(old_dir, &migrated_marker);
+
+    Ok(())
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> std::io::Result<()> {
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let file_type = entry.file_type()?;
+        let dst_path = dst.join(entry.file_name());
+        if file_type.is_dir() {
+            copy_dir_recursive(&entry.path(), &dst_path)?;
+        } else if file_type.is_file() {
+            std::fs::copy(entry.path(), &dst_path)?;
+        }
+    }
+    Ok(())
 }
 
 pub fn home_dir() -> PathBuf {
@@ -406,6 +525,111 @@ mod tests {
                 .unwrap()
                 .max_concurrent_sessions,
             8
+        );
+    }
+
+    // v1.9 R-01-3: one-time config directory migration.
+
+    #[test]
+    fn a_fresh_install_with_neither_directory_migrates_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let old_dir = dir.path().join("termesh-agent");
+        let new_dir = dir.path().join("lingxi1949");
+
+        migrate_config_dir(&old_dir, &new_dir).unwrap();
+
+        assert!(!old_dir.exists());
+        assert!(!new_dir.exists());
+    }
+
+    #[test]
+    fn migration_copies_the_whole_old_directory_including_the_identity_key() {
+        let dir = tempfile::tempdir().unwrap();
+        let old_dir = dir.path().join("termesh-agent");
+        let new_dir = dir.path().join("lingxi1949");
+
+        std::fs::create_dir_all(&old_dir).unwrap();
+        std::fs::write(old_dir.join("config.json"), b"{\"deviceName\":\"box\"}").unwrap();
+        std::fs::write(old_dir.join("identity.json"), b"top-secret-key-material").unwrap();
+
+        migrate_config_dir(&old_dir, &new_dir).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(new_dir.join("identity.json")).unwrap(),
+            "top-secret-key-material"
+        );
+        assert_eq!(
+            std::fs::read_to_string(new_dir.join("config.json")).unwrap(),
+            "{\"deviceName\":\"box\"}"
+        );
+
+        // The old directory is renamed aside, not left in place and not deleted.
+        assert!(!old_dir.exists());
+        assert!(dir.path().join("termesh-agent.migrated").exists());
+    }
+
+    #[test]
+    fn migration_is_a_one_time_idempotent_step() {
+        let dir = tempfile::tempdir().unwrap();
+        let old_dir = dir.path().join("termesh-agent");
+        let new_dir = dir.path().join("lingxi1949");
+
+        std::fs::create_dir_all(&old_dir).unwrap();
+        std::fs::write(old_dir.join("identity.json"), b"original-identity").unwrap();
+        migrate_config_dir(&old_dir, &new_dir).unwrap();
+
+        // Simulate the old directory somehow reappearing (e.g. a stale
+        // backup restored) - since the new directory already exists, a
+        // second run must leave it alone rather than overwriting it.
+        std::fs::create_dir_all(&old_dir).unwrap();
+        std::fs::write(old_dir.join("identity.json"), b"a-different-identity").unwrap();
+        migrate_config_dir(&old_dir, &new_dir).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(new_dir.join("identity.json")).unwrap(),
+            "original-identity"
+        );
+    }
+
+    #[test]
+    fn migration_preserves_nested_subdirectories() {
+        let dir = tempfile::tempdir().unwrap();
+        let old_dir = dir.path().join("termesh-agent");
+        let new_dir = dir.path().join("lingxi1949");
+
+        std::fs::create_dir_all(old_dir.join("nested")).unwrap();
+        std::fs::write(old_dir.join("nested").join("file.txt"), b"hi").unwrap();
+
+        migrate_config_dir(&old_dir, &new_dir).unwrap();
+
+        assert_eq!(
+            std::fs::read_to_string(new_dir.join("nested").join("file.txt")).unwrap(),
+            "hi"
+        );
+    }
+
+    #[test]
+    fn a_new_directory_that_already_exists_is_never_touched_by_migration() {
+        let dir = tempfile::tempdir().unwrap();
+        let old_dir = dir.path().join("termesh-agent");
+        let new_dir = dir.path().join("lingxi1949");
+
+        std::fs::create_dir_all(&old_dir).unwrap();
+        std::fs::write(old_dir.join("identity.json"), b"old").unwrap();
+        std::fs::create_dir_all(&new_dir).unwrap();
+        std::fs::write(new_dir.join("identity.json"), b"already-here").unwrap();
+
+        migrate_config_dir(&old_dir, &new_dir).unwrap();
+
+        // A v1.9 install with its own fresh identity must never be clobbered
+        // by a leftover old directory.
+        assert_eq!(
+            std::fs::read_to_string(new_dir.join("identity.json")).unwrap(),
+            "already-here"
+        );
+        assert!(
+            old_dir.exists(),
+            "the old directory is left alone, not renamed away"
         );
     }
 }

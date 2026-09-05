@@ -33,7 +33,7 @@ test('installs and loads the runtime when the packaged module is missing', async
   const loadedPaths: string[] = [];
   const progressStages: string[] = [];
   let installCount = 0;
-  const loadIroh = createIrohLoader('/vault/.obsidian/plugins/termesh', (modulePath) => {
+  const loadIroh = createIrohLoader('/vault/.obsidian/plugins/lingxi1949', (modulePath) => {
     loadedPaths.push(modulePath);
     if (modulePath.endsWith(path.join('@number0', 'iroh'))) {
       throw new Error('module not found');
@@ -59,7 +59,7 @@ test('installs and loads the runtime when the packaged module is missing', async
   assert.equal(await loadIroh(), expected);
   assert.equal(installCount, 1);
   assert.deepEqual(loadedPaths, [
-    path.join('/vault/.obsidian/plugins/termesh', 'node_modules', '@number0', 'iroh'),
+    path.join('/vault/.obsidian/plugins/lingxi1949', 'node_modules', '@number0', 'iroh'),
     '/runtime/iroh.node',
   ]);
   assert.deepEqual(progressStages, ['downloading:42', 'verifying:', 'complete:']);
@@ -67,7 +67,7 @@ test('installs and loads the runtime when the packaged module is missing', async
 
 test('does not install the runtime in offline mode', async () => {
   let installCalled = false;
-  const loadIroh = createIrohLoader('/vault/.obsidian/plugins/termesh', () => {
+  const loadIroh = createIrohLoader('/vault/.obsidian/plugins/lingxi1949', () => {
     throw new Error('module not found');
   }, {
     version: '1.5.0',

@@ -335,8 +335,14 @@ mod tests {
 
     fn session(root: &std::path::Path, entries: Vec<Entry>) -> TransferSession {
         let root_note = entries[0].relative_path.clone();
-        TransferSession::new(root.to_path_buf(), entries, Vec::new(), &root_note, 4 * 1024 * 1024)
-            .unwrap()
+        TransferSession::new(
+            root.to_path_buf(),
+            entries,
+            Vec::new(),
+            &root_note,
+            4 * 1024 * 1024,
+        )
+        .unwrap()
     }
 
     #[test]
@@ -522,7 +528,10 @@ mod tests {
         let mut s = TransferSession::new(
             dir.path().to_path_buf(),
             Vec::new(),
-            vec!["empty-folder".to_string(), "empty-folder/nested".to_string()],
+            vec![
+                "empty-folder".to_string(),
+                "empty-folder/nested".to_string(),
+            ],
             "empty-folder",
             4 * 1024 * 1024,
         )

@@ -31,8 +31,8 @@ test('renderReleaseBody describes the package without requiring CHANGELOG.md as 
     repository: 'Cyber-bike1949/LingXi1949',
   });
 
-  assert.match(body, /Download the `termesh-1\.3\.0-<platform>\.zip` asset matching your platform/);
-  assert.doesNotMatch(body, /Download `termesh\.zip`/);
+  assert.match(body, /Download the `lingxi1949-1\.3\.0-<platform>\.zip` asset matching your platform/);
+  assert.doesNotMatch(body, /Download `lingxi1949\.zip`/);
   assert.doesNotMatch(body, /includes all platform binaries and `CHANGELOG\.md`/);
   assert.match(body, /automatically downloads and verifies the platform-native runtime/);
   assert.match(body, /Complete Package \(Offline Installation\)/);
@@ -50,7 +50,7 @@ test('renderReleaseBody describes the package without requiring CHANGELOG.md as 
   assert.ok(communityIndex < bratIndex, 'Community Plugins should come before BRAT');
   assert.ok(bratIndex < manualIndex, 'BRAT should come before Manual Installation');
   assert.match(body, /Click \*\*Browse\*\*, search for `LingXi`/);
-  assert.match(body, /`termesh-agent-win32-x64\.exe`: Windows x64 remote agent/);
-  assert.match(body, /`termesh-agent-linux-x64`: Linux x64 remote agent/);
+  assert.match(body, /`lingxi1949-win32-x64\.exe`: Windows x64 remote agent/);
+  assert.match(body, /`lingxi1949-linux-x64`: Linux x64 remote agent/);
   assert.match(body, /`termy-relay-linux-x64`: Linux x64 relay server/);
 });

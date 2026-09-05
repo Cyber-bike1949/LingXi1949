@@ -21,12 +21,15 @@ impl InstanceLock {
     }
 }
 
-/// `$XDG_RUNTIME_DIR/termesh-agent.lock` when the runtime dir exists, otherwise
+/// `$XDG_RUNTIME_DIR/lingxi1949.lock` when the runtime dir exists, otherwise
 /// next to the config. The runtime dir is preferred because it is cleared on
-/// reboot, so a stale file can never outlive the machine it described.
+/// reboot, so a stale file can never outlive the machine it described. No
+/// migration needed here (v1.9 R-01): the runtime dir is already wiped every
+/// reboot, and the config-dir fallback's filename (`agent.lock`) never
+/// carried the old brand name to begin with.
 pub fn lock_path() -> PathBuf {
     if let Some(runtime) = std::env::var_os("XDG_RUNTIME_DIR").filter(|v| !v.is_empty()) {
-        return PathBuf::from(runtime).join("termesh-agent.lock");
+        return PathBuf::from(runtime).join("lingxi1949.lock");
     }
     crate::config::config_dir().join("agent.lock")
 }
