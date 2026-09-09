@@ -142,7 +142,12 @@ export class DeviceHomeView extends ItemView {
     cardEl.createEl('p', { text: lastConnected });
     this.renderStatus(cardEl, status.state, statusText);
     if (status.state === 'error') {
-      cardEl.createDiv({ cls: 'termesh-device-error', text: status.message });
+      cardEl.createDiv({
+        cls: 'termesh-device-error',
+        text: status.code === 'CONTROLLER_ALREADY_CONNECTED'
+          ? t('home.controllerAlreadyConnected')
+          : status.message,
+      });
     }
   }
 

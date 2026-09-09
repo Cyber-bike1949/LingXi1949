@@ -588,7 +588,10 @@ export class TerminalInstance {
       debugLog('[Terminal] 终端已初始化');
     } catch (error) {
       try { await transport.close(); } catch { /* ignore cleanup failures */ }
-      const errorMessage = error instanceof Error ? error.message : String(error);
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      const errorMessage = rawMessage.includes('CONTROLLER_ALREADY_CONNECTED')
+        ? t('home.controllerAlreadyConnected')
+        : rawMessage;
       errorLog('[Terminal] Transport init failed:', error);
       if (this.xterm) {
         this.xterm.write(`\r\n\x1b[1;31m[Error] ${errorMessage}\x1b[0m\r\n`);

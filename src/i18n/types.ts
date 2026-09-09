@@ -38,6 +38,7 @@ export interface TranslationKeys {
   };
 
   home: {
+    controllerAlreadyConnected: string;
     title: string;
     description: string;
     refresh: string;
