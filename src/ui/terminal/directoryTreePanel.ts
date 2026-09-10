@@ -402,19 +402,23 @@ export class DirectoryTreePanel {
       this.showNodeContextMenu(event, fullPath, entry.isDirectory, entry.name);
     });
 
+    const ownerWindow = row.ownerDocument.defaultView ?? window;
     let hoverTimer: number | null = null;
     let tooltip: HTMLElement | null = null;
     const clearTooltip = (): void => {
-      if (hoverTimer !== null) window.clearTimeout(hoverTimer);
+      if (hoverTimer !== null) ownerWindow.clearTimeout(hoverTimer);
       hoverTimer = null;
       tooltip?.remove();
       tooltip = null;
     };
     row.addEventListener('mouseenter', () => {
       clearTooltip();
-      hoverTimer = window.setTimeout(() => {
+      hoverTimer = ownerWindow.setTimeout(() => {
         if (!this.source.stat) return;
-        tooltip = row.createDiv({ cls: 'directory-tree-panel__mtime', text: '正在读取修改时间' });
+        const rect = row.getBoundingClientRect();
+        tooltip = row.ownerDocument.body.createDiv({ cls: 'directory-tree-panel__mtime', text: '正在读取修改时间' });
+        tooltip.style.top = `${Math.min(rect.bottom + 2, ownerWindow.innerHeight - 32)}px`;
+        tooltip.style.left = `${Math.max(8, Math.min(rect.left, ownerWindow.innerWidth - 240))}px`;
         void this.source.stat(fullPath).then((metadata) => {
           if (!tooltip) return;
           tooltip.setText(metadata.modifiedAtMs === null ? '修改时间不可用' : new Date(metadata.modifiedAtMs).toLocaleString());

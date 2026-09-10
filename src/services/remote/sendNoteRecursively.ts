@@ -20,6 +20,8 @@ import {
   readVaultFile,
 } from './vaultLinkSource.ts';
 import type { DeviceConnectionManager } from './deviceConnections.ts';
+import { confirmedTransferReceipts } from './transferReceipts.ts';
+import type { TransferFileResult } from './terminalStreamFrame.ts';
 
 export interface SendNoteRecursivelyResult {
   success: boolean;
@@ -30,6 +32,8 @@ export interface SendNoteRecursivelyResult {
   cancelled?: boolean;
   /** Total files actually sent, for the R-04-2 success notice. */
   fileCount?: number;
+  /** Successful target-side commits used to update the selected terminal tree. */
+  committedFiles?: TransferFileResult[];
   skippedNotes: SkippedNote[];
 }
 
@@ -83,8 +87,18 @@ export async function sendNoteRecursively(
     .run();
 
   if (!outcome.success) {
-    return { success: false, message: outcome.message || 'Transfer failed', skippedNotes: collected.skippedNotes };
+    return {
+      success: false,
+      message: outcome.message || 'Transfer failed',
+      committedFiles: confirmedTransferReceipts(outcome, collected.files),
+      skippedNotes: collected.skippedNotes,
+    };
   }
 
-  return { success: true, fileCount: collected.files.length, skippedNotes: collected.skippedNotes };
+  return {
+    success: true,
+    fileCount: collected.files.length,
+    committedFiles: confirmedTransferReceipts(outcome, collected.files),
+    skippedNotes: collected.skippedNotes,
+  };
 }

@@ -15,6 +15,7 @@ export class DeviceHomeView extends ItemView {
   private readonly plugin: TerminalPlugin;
   private connectionSubscription: Disposable | null = null;
   private runtimeProgressCleanup: (() => void) | null = null;
+  private shortcutGroupsCleanup: (() => void) | null = null;
   private renderTimer: number | null = null;
   private refreshing = false;
 
@@ -39,6 +40,7 @@ export class DeviceHomeView extends ItemView {
     const connections = this.plugin.getDeviceConnectionManager();
     this.connectionSubscription = connections.onDidChange(() => this.scheduleRender());
     this.runtimeProgressCleanup = this.plugin.onIrohRuntimeInstallProgressChange(() => this.scheduleRender());
+    this.shortcutGroupsCleanup = this.plugin.onShortcutGroupsChange(() => this.scheduleRender());
     this.render();
     return Promise.resolve();
   }
@@ -48,6 +50,8 @@ export class DeviceHomeView extends ItemView {
     this.connectionSubscription = null;
     this.runtimeProgressCleanup?.();
     this.runtimeProgressCleanup = null;
+    this.shortcutGroupsCleanup?.();
+    this.shortcutGroupsCleanup = null;
     if (this.renderTimer !== null) {
       window.clearTimeout(this.renderTimer);
       this.renderTimer = null;
