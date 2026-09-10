@@ -172,31 +172,7 @@ export class TerminalView extends ItemView {
     const plugin = this.getTerminalPlugin();
     if (plugin) {
       menu.addItem((item) => {
-        item.setTitle('历史操作').setIcon('history').onClick(() => {
-          const sessionId = this.terminalInstance?.getSessionId() ?? '';
-          const store = new ShortcutGroupStore(
-            () => Promise.resolve({ deviceShortcutGroups: plugin.settings.deviceShortcutGroups }),
-            async (data) => {
-              const previous = plugin.settings.deviceShortcutGroups;
-              plugin.settings.deviceShortcutGroups = data.deviceShortcutGroups ?? [];
-              try {
-                await plugin.saveSettings();
-              } catch (error) {
-                plugin.settings.deviceShortcutGroups = previous;
-                throw error;
-              }
-            },
-          );
-          void store.load().then(() => new OperationHistoryModal(
-            this.app,
-            this.operationHistory.list(sessionId),
-            this.getRemoteNodeId() ?? 'local',
-            store,
-            this.operationHistory.isEnabled(sessionId),
-            (enabled) => this.operationHistory.setEnabled(sessionId, enabled),
-            () => this.operationHistory.clear(sessionId),
-          ).open());
-        });
+        item.setTitle('历史操作').setIcon('history').onClick(() => this.openOperationHistory());
       });
       const currentDeviceKey = this.getRemoteNodeId() ?? 'local';
       const deviceGroups = plugin.settings.deviceShortcutGroups.filter((group) => group.deviceKey === currentDeviceKey).sort((a, b) => b.creationOrder - a.creationOrder);
@@ -1364,10 +1340,42 @@ export class TerminalView extends ItemView {
     treeToggleBtn.toggleClass('is-active', this.directoryTreeVisible);
     treeToggleBtn.addEventListener('click', () => this.toggleDirectoryTree());
 
+    const historyButton = toolbar.createEl('button', { text: '历史操作' });
+    historyButton.disabled = !this.terminalInstance;
+    historyButton.addEventListener('click', () => this.openOperationHistory());
+
     toolbar.createSpan({
       cls: `terminal-connection-status is-${this.connectionStatus}`,
       text: t(`terminal.connectionStatus.${this.connectionStatus}`),
     });
+  }
+
+  private openOperationHistory(): void {
+    const plugin = this.getTerminalPlugin();
+    if (!plugin) return;
+    const sessionId = this.terminalInstance?.getSessionId() ?? '';
+    const store = new ShortcutGroupStore(
+      () => Promise.resolve({ deviceShortcutGroups: plugin.settings.deviceShortcutGroups }),
+      async (data) => {
+        const previous = plugin.settings.deviceShortcutGroups;
+        plugin.settings.deviceShortcutGroups = data.deviceShortcutGroups ?? [];
+        try {
+          await plugin.saveSettings();
+        } catch (error) {
+          plugin.settings.deviceShortcutGroups = previous;
+          throw error;
+        }
+      },
+    );
+    void store.load().then(() => new OperationHistoryModal(
+      this.app,
+      this.operationHistory.list(sessionId),
+      this.getRemoteNodeId() ?? 'local',
+      store,
+      this.operationHistory.isEnabled(sessionId),
+      (enabled) => this.operationHistory.setEnabled(sessionId, enabled),
+      () => this.operationHistory.clear(sessionId),
+    ).open());
   }
 
   private async reconnectTerminal(): Promise<void> {
