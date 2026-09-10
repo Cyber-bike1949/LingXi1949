@@ -27,10 +27,11 @@
  */
 
 import type { Menu as ObsidianMenu } from 'obsidian';
-import { Menu, setIcon } from 'obsidian';
+import { Menu, Notice, setIcon } from 'obsidian';
 
 import type { Disposable } from '../../services/remote/transport.ts';
 import type { DirectoryEntry, DirectoryTreeSource } from '../../services/terminal/directoryTreeSource.ts';
+import type { DirectoryModificationStore } from '../../services/terminal/directoryModificationStore.ts';
 import { DIRECTORY_TREE_DRAG_MIME, type DirectoryTreeDragPayload } from '../../services/terminal/directoryTreeDrop.ts';
 import { t } from '../../i18n';
 
@@ -53,6 +54,9 @@ export interface DirectoryTreePanelCallbacks {
   onCopyToVault(path: string, isDirectory: boolean, baseName: string): void;
   /** The panel was closed via its own header button. */
   onRequestClose(): void;
+  /** Optional transfer modification state; omitted for legacy callers. */
+  modificationStore?: DirectoryModificationStore;
+  deviceKey?: string;
 }
 
 interface PathApi {
@@ -81,12 +85,15 @@ export class DirectoryTreePanel {
   private readonly watches = new Map<string, Disposable>();
   private readonly expandedPaths = new Set<string>();
   private destroyed = false;
+  private modificationCleanup?: () => void;
 
   private readonly source: DirectoryTreeSource;
   private readonly pathApi: PathApi;
   private readonly callbacks: DirectoryTreePanelCallbacks;
   /** The device this tree browses, or `null` for the local filesystem - stamped onto each row's drag payload. */
   private readonly remoteNodeId: string | null;
+  private readonly modificationStore?: DirectoryModificationStore;
+  private readonly deviceKey: string;
 
   constructor(
     source: DirectoryTreeSource,
@@ -99,6 +106,8 @@ export class DirectoryTreePanel {
     this.pathApi = pathApi;
     this.callbacks = callbacks;
     this.remoteNodeId = remoteNodeId;
+    this.modificationStore = callbacks.modificationStore;
+    this.deviceKey = callbacks.deviceKey ?? remoteNodeId ?? 'local';
     this.dockSide = initialDockSide;
     this.element = createDiv('directory-tree-panel');
 
@@ -113,6 +122,17 @@ export class DirectoryTreePanel {
     this.bindPathInput();
 
     this.treeRootEl = this.element.createDiv('directory-tree-panel__tree');
+    this.modificationCleanup = this.modificationStore?.subscribe(() => {
+      if (this.destroyed) return;
+      this.treeRootEl.querySelectorAll<HTMLElement>('.directory-tree-panel__row').forEach((row) => {
+        const path = row.dataset.path;
+        if (!path) return;
+        const marked = row.dataset.directory === 'true'
+          ? this.modificationStore?.isFolderMarked(this.deviceKey, path, path.includes('\\') ? '\\' : '/')
+          : this.modificationStore?.isMarked(this.deviceKey, path);
+        row.toggleClass('is-modified', marked === true);
+      });
+    });
 
     this.resizerEl = this.element.createDiv('directory-tree-panel__resizer');
     this.bindResizer();
@@ -190,7 +210,8 @@ export class DirectoryTreePanel {
     });
     setIcon(refreshBtn, 'refresh-cw');
     refreshBtn.addEventListener('click', () => {
-      if (this.rootPath) void this.setRootPath(this.rootPath, { keepExpanded: true });
+      this.modificationStore?.clearAll();
+      if (this.rootPath) void this.refreshWithBarrier(this.rootPath);
     });
 
     const dockBtn = this.headerEl.createEl('button', {
@@ -208,6 +229,16 @@ export class DirectoryTreePanel {
     });
     setIcon(closeBtn, 'x');
     closeBtn.addEventListener('click', () => this.callbacks.onRequestClose());
+  }
+
+  private async refreshWithBarrier(path: string): Promise<void> {
+    try {
+      const snapshot = await this.source.snapshot?.(path);
+      if (snapshot) this.modificationStore?.applyRefreshBarrier(this.deviceKey, snapshot.epoch, snapshot.sequence);
+    } catch {
+      new Notice('目录已刷新，但修改标记同步未完成');
+    }
+    await this.setRootPath(path, { keepExpanded: true });
   }
 
   private bindResizer(): void {
@@ -320,6 +351,11 @@ export class DirectoryTreePanel {
     const row = container.createDiv({ cls: 'directory-tree-panel__row' });
     row.style.setProperty('--directory-tree-depth', String(depth));
     row.dataset.path = fullPath;
+    row.dataset.directory = String(entry.isDirectory);
+    const marked = entry.isDirectory
+      ? this.modificationStore?.isFolderMarked(this.deviceKey, fullPath, fullPath.includes('\\') ? '\\' : '/')
+      : this.modificationStore?.isMarked(this.deviceKey, fullPath);
+    row.toggleClass('is-modified', marked === true);
 
     const caret = row.createSpan({ cls: 'directory-tree-panel__caret' });
     if (entry.isDirectory) setIcon(caret, 'chevron-right');
@@ -366,6 +402,27 @@ export class DirectoryTreePanel {
       this.showNodeContextMenu(event, fullPath, entry.isDirectory, entry.name);
     });
 
+    let hoverTimer: number | null = null;
+    let tooltip: HTMLElement | null = null;
+    const clearTooltip = (): void => {
+      if (hoverTimer !== null) window.clearTimeout(hoverTimer);
+      hoverTimer = null;
+      tooltip?.remove();
+      tooltip = null;
+    };
+    row.addEventListener('mouseenter', () => {
+      clearTooltip();
+      hoverTimer = window.setTimeout(() => {
+        if (!this.source.stat) return;
+        tooltip = row.createDiv({ cls: 'directory-tree-panel__mtime', text: '正在读取修改时间' });
+        void this.source.stat(fullPath).then((metadata) => {
+          if (!tooltip) return;
+          tooltip.setText(metadata.modifiedAtMs === null ? '修改时间不可用' : new Date(metadata.modifiedAtMs).toLocaleString());
+        }).catch(() => tooltip?.setText('修改时间不可用'));
+      }, 3000);
+    });
+    row.addEventListener('mouseleave', clearTooltip);
+
     // Draggable out to Obsidian's file explorer (see this file's top doc
     // comment) - not a real OS file drag, just a same-window HTML5 drag
     // carrying a plugin-private payload that only main.ts's explorer-drop
@@ -381,6 +438,16 @@ export class DirectoryTreePanel {
       };
       event.dataTransfer.setData(DIRECTORY_TREE_DRAG_MIME, JSON.stringify(payload));
       event.dataTransfer.effectAllowed = 'copy';
+      if (!entry.isDirectory && this.modificationStore) {
+        const version = this.modificationStore.version(this.deviceKey, fullPath);
+        if (version !== null) this.modificationStore.acknowledge(this.deviceKey, fullPath, version);
+      }
+    });
+
+    row.addEventListener('click', () => {
+      if (entry.isDirectory || !this.modificationStore) return;
+      const version = this.modificationStore.version(this.deviceKey, fullPath);
+      if (version !== null) this.modificationStore.acknowledge(this.deviceKey, fullPath, version);
     });
 
     if (entry.isDirectory) {
@@ -434,6 +501,8 @@ export class DirectoryTreePanel {
 
   destroy(): void {
     this.destroyed = true;
+    this.modificationCleanup?.();
+    this.modificationCleanup = undefined;
     this.disposeAllWatches();
     this.element.remove();
   }

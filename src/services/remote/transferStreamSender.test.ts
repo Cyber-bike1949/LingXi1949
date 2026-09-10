@@ -109,7 +109,7 @@ test('a full transfer sends the manifest, chunks, fileEnd and complete, then res
 
   assert.deepEqual(await agent.nextFrame(), {
     kind: 'transferManifest',
-    payload: { transferId: 'transfer-1', rootNote: 'notes/demo.md', entries: [{ index: 0, relativePath: 'notes/demo.md', size: 11 }], directories: [], sessionId: null, targetPath: null },
+    payload: { transferId: 'transfer-1', receiptVersion: 1, rootNote: 'notes/demo.md', entries: [{ index: 0, relativePath: 'notes/demo.md', size: 11 }], directories: [], sessionId: null, targetPath: null },
   });
   await agent.send({ kind: 'transferAccepted', payload: { grantedBytes: 4 * 1024 * 1024 } });
 
@@ -143,6 +143,7 @@ test('a directories-only send (an empty folder) uses the first directory as root
     kind: 'transferManifest',
     payload: {
       transferId: 'transfer-1',
+      receiptVersion: 1,
       rootNote: 'empty-folder',
       entries: [],
       directories: [{ relativePath: 'empty-folder' }],
@@ -171,6 +172,7 @@ test('an explicit targetPath is sent on the manifest, taking priority over sessi
     kind: 'transferManifest',
     payload: {
       transferId: 'transfer-1',
+      receiptVersion: 1,
       rootNote: 'a.md',
       entries: [{ index: 0, relativePath: 'a.md', size: 1 }],
       directories: [],
@@ -273,4 +275,30 @@ test('sending waits for credit before a chunk that would exceed the window', asy
   await agent.send({ kind: 'transferResult', payload: { success: true, code: null, message: '' } });
 
   assert.deepEqual(await run, { success: true, code: null, message: '' });
+});
+
+test('failure while waiting for credit preserves received file receipts', async () => {
+  const { sender, agent } = setup([file(0, 'a.md', 1)], async () => new Uint8Array([1]));
+  const run = sender.run();
+  await agent.nextFrame();
+  await agent.send({ kind: 'transferAccepted', payload: { grantedBytes: 0, receiptVersion: 1, epoch: 'epoch-1' } });
+  const payload = { success: false, code: 'WRITE_FAILED', message: 'disk full', files: [
+    { fileIndex: 0, relativePath: 'a.md', status: 'failed' as const },
+  ] };
+  await agent.send({ kind: 'transferResult', payload });
+  assert.deepEqual(await run, payload);
+});
+
+test('an older peer cannot activate unnegotiated receipt fields', async () => {
+  const { sender, agent } = setup([file(0, 'a.md', 1)], async () => new Uint8Array([1]));
+  const run = sender.run();
+  await agent.nextFrame();
+  await agent.send({ kind: 'transferAccepted', payload: { grantedBytes: 0 } });
+  await agent.send({ kind: 'transferResult', payload: {
+    success: false,
+    code: 'WRITE_FAILED',
+    message: 'legacy failure',
+    files: [{ fileIndex: 0, relativePath: 'a.md', status: 'success', epoch: 'unnegotiated', commitSequence: 1 }],
+  } });
+  assert.deepEqual(await run, { success: false, code: 'WRITE_FAILED', message: 'legacy failure' });
 });

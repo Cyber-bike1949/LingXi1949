@@ -24,6 +24,7 @@ import {
   encodeTerminalStreamFrame,
   TerminalStreamFrameDecoder,
   type DirectoryEntry,
+  type TransferFileResult,
   type TerminalStreamFrame,
 } from './terminalStreamFrame.ts';
 import type { ByteStream } from './terminalStreamTransport.ts';
@@ -32,6 +33,7 @@ export interface TransferOutcome {
   success: boolean;
   code: string | null;
   message: string;
+  files?: TransferFileResult[];
 }
 
 export interface TransferSenderCallbacks {
@@ -90,6 +92,7 @@ export class TransferStreamSender {
   }
 
   async run(): Promise<TransferOutcome> {
+    let receivedResult: TransferOutcome | undefined;
     let stream: ByteStream;
     try {
       stream = await this.openStream();
@@ -110,6 +113,7 @@ export class TransferStreamSender {
           kind: 'transferManifest',
           payload: {
             transferId: this.transferId,
+            receiptVersion: 1,
             rootNote,
             entries: this.files.map((file) => ({
               index: file.index,
@@ -134,9 +138,12 @@ export class TransferStreamSender {
           message: `expected transferAccepted, got ${first.kind}`,
         };
       }
+      const receiptsNegotiated = first.payload.receiptVersion === 1 && typeof first.payload.epoch === 'string';
 
       const window = new CreditWindow(first.payload.grantedBytes);
-      const resultPromise = this.pumpUntilResult(stream, decoder, window);
+      const resultPromise = this.pumpUntilResult(stream, decoder, window, (result) => {
+        receivedResult = receiptsNegotiated ? result : { success: result.success, code: result.code, message: result.message };
+      });
 
       const total = this.files.reduce((sum, file) => sum + file.size, 0);
       let sent = 0;
@@ -164,14 +171,15 @@ export class TransferStreamSender {
       await stream.write(encodeTerminalStreamFrame({ kind: 'transferComplete', payload: {} }));
       stream.finishWrite();
 
-      return await resultPromise;
+      const result = await resultPromise;
+      return receiptsNegotiated ? result : { success: result.success, code: result.code, message: result.message };
     } catch (error) {
       try {
         stream.finishWrite();
       } catch {
         // The stream is already gone; closing it was the goal anyway.
       }
-      return { success: false, code: 'TRANSFER_FAILED', message: describeError(error) };
+      return receivedResult ?? { success: false, code: 'TRANSFER_FAILED', message: describeError(error) };
     }
   }
 
@@ -180,6 +188,7 @@ export class TransferStreamSender {
     stream: ByteStream,
     decoder: TerminalStreamFrameDecoder,
     window: CreditWindow,
+    onResult: (result: TransferOutcome) => void,
   ): Promise<TransferOutcome> {
     for (;;) {
       let frame: TerminalStreamFrame;
@@ -196,6 +205,7 @@ export class TransferStreamSender {
         continue;
       }
       if (frame.kind === 'transferResult') {
+        onResult(frame.payload);
         if (!frame.payload.success) window.fail(new Error(frame.payload.message || 'transfer failed'));
         return frame.payload;
       }

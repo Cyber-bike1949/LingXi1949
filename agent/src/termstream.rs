@@ -108,16 +108,42 @@ pub struct FsEntry {
     pub name: String,
     #[serde(rename = "isDirectory")]
     pub is_directory: bool,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "modifiedAtMs"
+    )]
+    pub modified_at_ms: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FsListPayload {
     pub path: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "metadataVersion"
+    )]
+    pub metadata_version: Option<u32>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FsListResultPayload {
     pub entries: Vec<FsEntry>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "metadataVersion"
+    )]
+    pub metadata_version: Option<u32>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "snapshotSequence"
+    )]
+    pub snapshot_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<String>,
 }
 
 /// "created" | "deleted" | "renamed" | "unknown" - candidate doc §4.7: a
@@ -166,6 +192,12 @@ pub struct DirectoryEntry {
 pub struct TransferManifestPayload {
     #[serde(rename = "transferId")]
     pub transfer_id: String,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "receiptVersion"
+    )]
+    pub receipt_version: Option<u32>,
     #[serde(rename = "rootNote")]
     pub root_note: String,
     pub entries: Vec<TransferEntry>,
@@ -197,6 +229,14 @@ pub struct TransferManifestPayload {
 pub struct TransferAcceptedPayload {
     #[serde(rename = "grantedBytes")]
     pub granted_bytes: u64,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "receiptVersion"
+    )]
+    pub receipt_version: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<String>,
 }
 
 /// Not JSON - see the module doc. `file_index` and `offset` are encoded as
@@ -227,11 +267,36 @@ pub struct TransferCreditPayload {
 pub struct TransferCompletePayload {}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct TransferFileResult {
+    #[serde(rename = "fileIndex")]
+    pub file_index: usize,
+    #[serde(rename = "relativePath")]
+    pub relative_path: String,
+    pub status: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub epoch: Option<String>,
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        rename = "commitSequence"
+    )]
+    pub commit_sequence: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "eventId")]
+    pub event_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct TransferResultPayload {
     pub success: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub code: Option<String>,
     pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub files: Option<Vec<TransferFileResult>>,
 }
 
 /// Handshake for the reverse direction (candidate doc phase 2B: copying a
@@ -545,6 +610,35 @@ mod tests {
     }
 
     #[test]
+    fn metadata_fields_are_optional_and_absent_on_legacy_responses() {
+        let old: FsListPayload = serde_json::from_str(r#"{"path":"/example"}"#).unwrap();
+        assert_eq!(old.metadata_version, None);
+        assert_eq!(
+            serde_json::to_value(old).unwrap(),
+            serde_json::json!({"path":"/example"})
+        );
+        let legacy: FsListResultPayload =
+            serde_json::from_str(r#"{"entries":[{"name":"demo.txt","isDirectory":false}]}"#)
+                .unwrap();
+        assert_eq!(legacy.metadata_version, None);
+        assert_eq!(legacy.entries[0].modified_at_ms, None);
+        assert_eq!(
+            serde_json::to_value(legacy).unwrap(),
+            serde_json::json!({"entries":[{"name":"demo.txt","isDirectory":false}]})
+        );
+        roundtrip(Frame::FsListResult(FsListResultPayload {
+            metadata_version: Some(1),
+            snapshot_sequence: Some(7),
+            epoch: Some("epoch-1".into()),
+            entries: vec![FsEntry {
+                name: "demo.txt".into(),
+                is_directory: false,
+                modified_at_ms: Some(-1000),
+            }],
+        }));
+    }
+
+    #[test]
     fn every_frame_kind_round_trips() {
         roundtrip(Frame::Open(OpenPayload { cols: 80, rows: 24 }));
         roundtrip(Frame::Opened(OpenedPayload {
@@ -586,25 +680,37 @@ mod tests {
         }));
         roundtrip(Frame::FsList(FsListPayload {
             path: "/home/user/project".into(),
+            metadata_version: None,
         }));
         roundtrip(Frame::FsListResult(FsListResultPayload {
+            metadata_version: None,
+            snapshot_sequence: None,
+            epoch: None,
             entries: vec![
                 FsEntry {
                     name: "src".into(),
                     is_directory: true,
+                    modified_at_ms: None,
                 },
                 FsEntry {
                     name: "readme.md".into(),
                     is_directory: false,
+                    modified_at_ms: None,
                 },
             ],
         }));
-        roundtrip(Frame::FsListResult(FsListResultPayload { entries: vec![] }));
+        roundtrip(Frame::FsListResult(FsListResultPayload {
+            entries: vec![],
+            metadata_version: None,
+            snapshot_sequence: None,
+            epoch: None,
+        }));
         roundtrip(Frame::FsChanged(FsChangedPayload {
             kind: "unknown".into(),
         }));
         roundtrip(Frame::TransferManifest(TransferManifestPayload {
             transfer_id: "transfer-1".into(),
+            receipt_version: Some(1),
             root_note: "notes/demo.md".into(),
             entries: vec![
                 TransferEntry {
@@ -626,6 +732,7 @@ mod tests {
         }));
         roundtrip(Frame::TransferManifest(TransferManifestPayload {
             transfer_id: "transfer-2".into(),
+            receipt_version: None,
             root_note: "a.md".into(),
             entries: vec![TransferEntry {
                 index: 0,
@@ -638,6 +745,7 @@ mod tests {
         }));
         roundtrip(Frame::TransferManifest(TransferManifestPayload {
             transfer_id: "transfer-3".into(),
+            receipt_version: None,
             root_note: "a.md".into(),
             entries: vec![TransferEntry {
                 index: 0,
@@ -650,6 +758,8 @@ mod tests {
         }));
         roundtrip(Frame::TransferAccepted(TransferAcceptedPayload {
             granted_bytes: 4 * 1024 * 1024,
+            receipt_version: Some(1),
+            epoch: Some("epoch-1".into()),
         }));
         roundtrip(Frame::TransferChunk(TransferChunkPayload {
             file_index: 0,
@@ -673,11 +783,13 @@ mod tests {
             success: true,
             code: None,
             message: String::new(),
+            files: None,
         }));
         roundtrip(Frame::TransferResult(TransferResultPayload {
             success: false,
             code: Some("WRITE_FAILED".into()),
             message: "disk full".into(),
+            files: None,
         }));
         roundtrip(Frame::TransferPullRequest(TransferPullRequestPayload {
             path: "/home/user/project/notes".into(),

@@ -1368,6 +1368,32 @@
 .terminal-directory-tree-toggle.is-active {
   color: var(--interactive-accent);
 }
+.terminal-shortcut-replay {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-secondary);
+}
+.terminal-shortcut-replay-status {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.terminal-shortcut-replay-controls {
+  display: flex;
+  gap: 6px;
+}
+.terminal-shortcut-replay-controls button {
+  padding: 2px 8px;
+  font-size: var(--font-ui-smaller);
+}
 /* Terminal view main container - with background image */
 .terminal-view-container.has-background-image {
   background-color: transparent;
@@ -2748,4 +2774,25 @@
   height: 16px;
   color: var(--support-author-link-color, currentColor);
   fill: currentColor;
+}
+.directory-tree-panel__row.is-modified > .directory-tree-panel__node-name::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: var(--interactive-accent);
+  vertical-align: middle;
+}
+
+.directory-tree-panel__mtime {
+  position: absolute;
+  z-index: 2;
+  margin-top: 2px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
 }

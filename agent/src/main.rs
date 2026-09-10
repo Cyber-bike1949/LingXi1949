@@ -199,11 +199,11 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             agent_state.connection_code = Some(code);
             let _ = state::write(&state::state_path(), &agent_state);
 
-            let options = ServeOptions {
-                shell: config.shell.clone(),
-                max_concurrent_sessions: config.max_concurrent_sessions,
-                receive_root: config.receive_root.clone(),
-            };
+            let options = ServeOptions::new(
+                config.shell.clone(),
+                config.max_concurrent_sessions,
+                config.receive_root.clone(),
+            );
 
             tokio::select! {
                 _ = serve::serve(endpoint.clone(), options) => {}

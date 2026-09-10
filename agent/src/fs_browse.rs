@@ -51,6 +51,11 @@ pub(crate) fn expand_user_path(path: &Path) -> PathBuf {
 /// applies on the local side, so the two data sources behave identically
 /// from the panel's point of view.
 pub fn list_directory(path: &Path) -> io::Result<Vec<FsEntry>> {
+    list_directory_with_metadata(path, false)
+}
+
+/// Metadata is opt-in so ordinary watchers retain structural-change semantics.
+pub fn list_directory_with_metadata(path: &Path, metadata: bool) -> io::Result<Vec<FsEntry>> {
     let path = expand_user_path(path);
 
     let mut entries: Vec<FsEntry> = fs::read_dir(path)?
@@ -60,6 +65,14 @@ pub fn list_directory(path: &Path) -> io::Result<Vec<FsEntry>> {
             FsEntry {
                 name: entry.file_name().to_string_lossy().into_owned(),
                 is_directory,
+                modified_at_ms: if metadata {
+                    fs::metadata(entry.path())
+                        .ok()
+                        .and_then(|value| value.modified().ok())
+                        .and_then(modified_at_millis)
+                } else {
+                    None
+                },
             }
         })
         .collect();
@@ -71,6 +84,14 @@ pub fn list_directory(path: &Path) -> io::Result<Vec<FsEntry>> {
     });
 
     Ok(entries)
+}
+
+fn modified_at_millis(time: std::time::SystemTime) -> Option<i64> {
+    let millis = match time.duration_since(std::time::UNIX_EPOCH) {
+        Ok(duration) => i64::try_from(duration.as_millis()).ok()?,
+        Err(error) => -i64::try_from(error.duration().as_millis()).ok()?,
+    };
+    (millis.abs() <= 8_640_000_000_000_000).then_some(millis)
 }
 
 /// One file `walk_for_pull` found, ready to be read and sent (candidate doc
@@ -201,6 +222,34 @@ mod tests {
     use super::*;
 
     #[test]
+    fn metadata_is_opt_in_and_matches_the_filesystem() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("demo.txt");
+        fs::write(&path, b"example").unwrap();
+        assert_eq!(list_directory(dir.path()).unwrap()[0].modified_at_ms, None);
+        let expected = modified_at_millis(fs::metadata(&path).unwrap().modified().unwrap());
+        assert!(expected.is_some());
+        assert_eq!(
+            list_directory_with_metadata(dir.path(), true).unwrap()[0].modified_at_ms,
+            expected
+        );
+        assert_eq!(
+            modified_at_millis(std::time::UNIX_EPOCH - std::time::Duration::from_secs(1)),
+            Some(-1000)
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn unreadable_entry_metadata_does_not_fail_the_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        std::os::unix::fs::symlink(dir.path().join("missing"), dir.path().join("link")).unwrap();
+        let entries = list_directory_with_metadata(dir.path(), true).unwrap();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].modified_at_ms, None);
+    }
+
+    #[test]
     fn lists_directories_before_files_alphabetically_within_each_group() {
         let dir = tempfile::tempdir().unwrap();
         fs::write(dir.path().join("b.txt"), "").unwrap();
@@ -214,19 +263,23 @@ mod tests {
             vec![
                 FsEntry {
                     name: "alpha".into(),
-                    is_directory: true
+                    is_directory: true,
+                    modified_at_ms: None,
                 },
                 FsEntry {
                     name: "zeta".into(),
-                    is_directory: true
+                    is_directory: true,
+                    modified_at_ms: None,
                 },
                 FsEntry {
                     name: "a.txt".into(),
-                    is_directory: false
+                    is_directory: false,
+                    modified_at_ms: None,
                 },
                 FsEntry {
                     name: "b.txt".into(),
-                    is_directory: false
+                    is_directory: false,
+                    modified_at_ms: None,
                 },
             ]
         );

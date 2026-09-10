@@ -24,11 +24,14 @@
  * list+watch call.
  */
 
+import { posix, win32 } from 'node:path';
+import { setTimeout, clearTimeout } from 'node:timers';
+import { isWindowsStylePath } from '../terminal/terminalPathUtils.ts';
 import type { Disposable } from './transport.ts';
 import { toDisposable } from './transport.ts';
 import type { ByteStream } from './terminalStreamTransport.ts';
-import { encodeTerminalStreamFrame, TerminalStreamFrameDecoder, type TerminalStreamFrame } from './terminalStreamFrame.ts';
-import type { DirectoryChangeKind, DirectoryEntry, DirectoryTreeSource } from '../terminal/directoryTreeSource.ts';
+import { encodeTerminalStreamFrame, TerminalStreamFrameDecoder, type FsListPayload, type FsListResultPayload, type TerminalStreamFrame } from './terminalStreamFrame.ts';
+import type { DirectoryChangeKind, DirectoryEntry, DirectoryMetadata, DirectorySnapshot, DirectoryTreeSource } from '../terminal/directoryTreeSource.ts';
 
 export class RemoteDirectoryTreeError extends Error {
   constructor(message: string) {
@@ -58,29 +61,73 @@ async function readOneFrame(stream: ByteStream, decoder: TerminalStreamFrameDeco
 
 export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
   private readonly openStream: () => Promise<ByteStream>;
+  private readonly requestTimeoutMs: number;
 
-  constructor(openStream: () => Promise<ByteStream>) {
+  constructor(openStream: () => Promise<ByteStream>, requestTimeoutMs = 10_000) {
     this.openStream = openStream;
+    if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
+      throw new RangeError('requestTimeoutMs must be positive');
+    }
+    this.requestTimeoutMs = requestTimeoutMs;
   }
 
   async list(path: string): Promise<DirectoryEntry[]> {
-    const stream = await this.openStream();
-    try {
-      await stream.write(encodeTerminalStreamFrame({ kind: 'fsList', payload: { path } }));
+    const result = await this.requestList({ path });
+    return result.entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }));
+  }
+
+  async stat(path: string): Promise<DirectoryMetadata> {
+    const paths = isWindowsStylePath(path) ? win32 : posix;
+    const result = await this.requestList({ path: paths.dirname(path), metadataVersion: 1 });
+    if (result.metadataVersion !== 1) {
+      throw new RemoteDirectoryTreeError('UNSUPPORTED: directory metadata is unavailable');
+    }
+    const entry = result.entries.find((item) => item.name === paths.basename(path));
+    if (!entry) throw new RemoteDirectoryTreeError('NOT_FOUND: directory entry no longer exists');
+    return { modifiedAtMs: entry.modifiedAtMs ?? null };
+  }
+
+  async snapshot(path: string): Promise<DirectorySnapshot> {
+    const result = await this.requestList({ path, metadataVersion: 1 });
+    if (result.metadataVersion !== 1 || !result.epoch || result.snapshotSequence === undefined) {
+      throw new RemoteDirectoryTreeError('UNSUPPORTED: directory snapshot barrier is unavailable');
+    }
+    return { epoch: result.epoch, sequence: result.snapshotSequence };
+  }
+
+  private async requestList(payload: FsListPayload): Promise<FsListResultPayload> {
+    let expired = false;
+    let activeStream: ByteStream | undefined;
+    const timeoutError = new RemoteDirectoryTreeError('TIMEOUT: directory request timed out');
+    // Transport requests also run without a DOM. Node timers belong to the
+    // connection runtime rather than a terminal popout's active window.
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<never>((_resolve, reject) => {
+      timer = setTimeout(() => {
+        expired = true;
+        reject(timeoutError);
+      }, this.requestTimeoutMs);
+    });
+    const request = async (): Promise<FsListResultPayload> => {
+      const stream = await this.openStream();
+      if (expired) {
+        stream.finishWrite();
+        throw timeoutError;
+      }
+      activeStream = stream;
+      await stream.write(encodeTerminalStreamFrame({ kind: 'fsList', payload }));
+      if (expired) throw timeoutError;
       const frame = await readOneFrame(stream, new TerminalStreamFrameDecoder());
-      if (frame.kind === 'fsListResult') {
-        return frame.payload.entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }));
-      }
-      if (frame.kind === 'error') {
-        throw new RemoteDirectoryTreeError(frame.payload.message);
-      }
+      if (frame.kind === 'fsListResult') return frame.payload;
+      if (frame.kind === 'error') throw new RemoteDirectoryTreeError(frame.payload.message);
       throw new RemoteDirectoryTreeError(`PROTOCOL_ERROR: expected fsListResult, got ${frame.kind}`);
+    };
+    try {
+      return await Promise.race([request(), timeout]);
     } finally {
-      // Closes the stream rather than leaving it open unwatched: the agent
-      // treats "client finished writing" as "stop watching" (see
-      // `agent/src/serve.rs`'s `serve_fs_stream`), so a `list()`-only caller
-      // must not linger.
-      stream.finishWrite();
+      clearTimeout(timer);
+      // Half-close only this directory stream, including timeout/error paths.
+      activeStream?.finishWrite();
     }
   }
 

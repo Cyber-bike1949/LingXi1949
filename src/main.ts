@@ -56,6 +56,8 @@ import { createLingXiLogoSvg, createLingXiLogoSvgMarkup, LINGXI_RIBBON_ICON_ID }
 import { FeatureVisibilityManager } from './services/visibility';
 import { shell } from 'electron';
 import type { TerminalInstance } from './services/terminal/terminalInstance';
+import { ShortcutReplayController, type ReplaySnapshot } from './services/terminal/shortcutReplayController';
+import type { ShortcutGroup, ShortcutStep } from './services/terminal/shortcutGroupStore';
 import {
   getAlwaysOnTopTerminalLabelKey,
   getAlwaysOnTopTerminalMenuState,
@@ -71,7 +73,6 @@ import {
   type AiLauncherCatalogEntry,
   type AiLauncherStatus,
 } from './services/terminal/aiLauncherCatalog';
-import { isWindowsStylePath } from './services/terminal/terminalPathUtils';
 import {
   detectCommandAvailability,
   type CommandAvailability,
@@ -134,6 +135,10 @@ export default class TerminalPlugin extends Plugin {
   private _terminalService: TerminalService | null = null;
   private _remoteService: RemoteService | null = null;
   private _pairedDeviceStore: PairedDeviceStore | null = null;
+  private readonly shortcutReplayController = new ShortcutReplayController();
+  private readonly localCommitEpoch = crypto.randomUUID();
+  private localCommitSequence = 0;
+  private settingsSaveQueue: Promise<void> = Promise.resolve();
   private _deviceConnections: DeviceConnectionManager | null = null;
   private _loadIroh: (() => Promise<IrohModule>) | null = null;
   private _irohRuntimeInstallProgress: IrohRuntimeInstallProgress | null = null;
@@ -413,6 +418,10 @@ export default class TerminalPlugin extends Plugin {
           resolvedTargetFolder,
           this.settings.overwriteOnDuplicateFilename,
           (done) => progress.update(done),
+          (vaultPath) => {
+            const absolutePath = this.resolveVaultFolderAbsolutePath(vaultPath);
+            if (absolutePath) this.notifyLocalFileCommitted(absolutePath);
+          },
         );
         skippedCount = result.skippedCount ?? 0;
       });
@@ -890,13 +899,22 @@ export default class TerminalPlugin extends Plugin {
       controllerIdentitySeed: normalizeControllerIdentitySeed(loaded?.controllerIdentitySeed),
       // Ensure the presetScripts config exists
       presetScripts: normalizedPresetScripts,
+      deviceShortcutGroups: Array.isArray(loaded?.deviceShortcutGroups)
+        ? loaded.deviceShortcutGroups.filter((group) => group && group.schemaVersion === 1)
+        : [],
     };
   }
 
   /**
    * Save settings
    */
-  async saveSettings() {
+  saveSettings(): Promise<void> {
+    const request = this.settingsSaveQueue.then(() => this.persistSettings());
+    this.settingsSaveQueue = request.catch(() => {});
+    return request;
+  }
+
+  private async persistSettings(): Promise<void> {
     this.settings.presetScripts = this.normalizePresetScripts(this.settings.presetScripts);
     this.settings.serverConnection = this.normalizeServerConnectionSettings(this.settings.serverConnection);
     this.settings.remoteConnection = this.normalizeRemoteConnectionSettings(this.settings.remoteConnection);
@@ -1147,6 +1165,101 @@ export default class TerminalPlugin extends Plugin {
     await this.openPreparedTerminal(terminal, terminalService);
   }
 
+  /** Opens a new device terminal and starts the selected group. Steps pause
+   * after dispatch because generic shell completion is not trustworthy yet. */
+  async runShortcutGroupOnDevice(nodeId: string, group: ShortcutGroup): Promise<void> {
+    if (group.deviceKey !== nodeId) throw new Error('DEVICE_MISMATCH');
+    const terminalService = await this.getTerminalService();
+    const terminal = await this.createRemoteTerminalInstance(nodeId, null, terminalService);
+    const view = await this.openPreparedTerminal(terminal, terminalService);
+    const runId = await this.shortcutReplayController.start(
+      group,
+      { sessionId: terminal.id, deviceKey: nodeId, write: (step) => this.writeShortcutStep(terminal, step) },
+      { inspect: () => Promise.resolve(true), observeCompletion: () => Promise.resolve<'unknown'>('unknown') },
+    );
+    view.showShortcutReplay(runId);
+  }
+
+  async runShortcutGroupOnLocalDevice(group: ShortcutGroup): Promise<void> {
+    if (group.deviceKey !== 'local') throw new Error('DEVICE_MISMATCH');
+    const terminalService = await this.getTerminalService();
+    const terminal = await terminalService.createTerminal();
+    terminal.setTitle(buildDeviceTerminalTitle(t('home.localDevice'), null, t('terminal.defaultTitle')));
+    const view = await this.openPreparedTerminal(terminal, terminalService);
+    const runId = await this.runShortcutGroupOnTerminal(terminal, group);
+    view.showShortcutReplay(runId);
+  }
+
+  async runShortcutGroupOnTerminal(terminal: TerminalInstance, group: ShortcutGroup): Promise<string> {
+    const deviceKey = this.remoteTerminalNodeIds.get(terminal) ?? 'local';
+    if (group.deviceKey !== deviceKey) throw new Error('DEVICE_MISMATCH');
+    const sessionId = terminal.getSessionId();
+    if (!sessionId) throw new Error('CONNECTION_FAILED');
+    return this.shortcutReplayController.start(
+      group,
+      { sessionId, deviceKey, write: (step) => this.writeShortcutStep(terminal, step) },
+      {
+        inspect: () => Promise.resolve(true),
+        observeCompletion: (step) => {
+          if (step.kind !== 'shell' || terminal.isClaudeCodeSession()) return Promise.resolve<'unknown'>('unknown');
+          return new Promise((resolve) => {
+          const cleanup = terminal.addShellEventListener((event) => {
+            if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
+          });
+          });
+        },
+      },
+    );
+  }
+
+  subscribeShortcutReplay(runId: string, listener: (snapshot: ReplaySnapshot) => void): () => void {
+    return this.shortcutReplayController.subscribe(runId, listener);
+  }
+
+  continueShortcutReplay(runId: string, action: 'wait' | 'confirmed'): Promise<void> {
+    return this.shortcutReplayController.continue(runId, action);
+  }
+
+  stopShortcutReplay(runId: string): void {
+    this.shortcutReplayController.stop(runId);
+  }
+
+  async removeShortcutGroup(id: string): Promise<void> {
+    const previous = this.settings.deviceShortcutGroups;
+    const next = previous.filter((group) => group.id !== id);
+    if (next.length === previous.length) return;
+    this.settings.deviceShortcutGroups = next;
+    try {
+      await this.saveSettings();
+    } catch (error) {
+      this.settings.deviceShortcutGroups = previous;
+      throw error;
+    }
+  }
+
+  notifyLocalFileCommitted(path: string): void {
+    this.localCommitSequence += 1;
+    const eventId = `${this.localCommitEpoch}:${this.localCommitSequence}`;
+    for (const leaf of this.app.workspace.getLeavesOfType(TERMINAL_VIEW_TYPE)) {
+      if (this.isTerminalView(leaf.view)) {
+        leaf.view.receiveFileCommit('local', path, this.localCommitEpoch, this.localCommitSequence, eventId);
+      }
+    }
+  }
+
+  handleDeviceRemoved(nodeId: string): void {
+    this.shortcutReplayController.stopDevice(nodeId);
+    for (const leaf of this.app.workspace.getLeavesOfType(TERMINAL_VIEW_TYPE)) {
+      if (this.isTerminalView(leaf.view)) leaf.view.removeDeviceState(nodeId);
+    }
+  }
+
+  private writeShortcutStep(terminal: TerminalInstance, step: ShortcutStep): Promise<void> {
+    const payload = step.kind === 'shell' ? `${step.payload}\r` : step.payload;
+    terminal.sendText(payload);
+    return Promise.resolve();
+  }
+
   /**
    * Connects to `nodeId` if needed and creates (but does not yet display)
    * a terminal instance backed by that device's transport. Factored out of
@@ -1216,11 +1329,13 @@ export default class TerminalPlugin extends Plugin {
   private async openPreparedTerminal(
     terminal: TerminalInstance,
     terminalService: TerminalService,
-  ): Promise<void> {
+  ): Promise<TerminalView> {
     const leaf = this.getLeafForNewTerminal();
     this.pendingRestoredTerminals.set(leaf, terminal);
     try {
       await this.activateTerminalView(leaf);
+      if (!this.isTerminalView(leaf.view)) throw new Error('TERMINAL_VIEW_UNAVAILABLE');
+      return leaf.view;
     } catch (error) {
       this.pendingRestoredTerminals.delete(leaf);
       await terminalService.destroyTerminal(terminal.id);
@@ -2045,11 +2160,8 @@ export default class TerminalPlugin extends Plugin {
    * remote/local shell has no shell-integration hooks active - so a caller
    * always gets an answer instead of hanging forever.
    *
-   * `TerminalInstance.onShellEvent` is a single-callback slot, not a
-   * subscriber list (nothing else currently claims it - see the type's own
-   * doc comment), so this always clears it back to a no-op before
-   * resolving rather than leaving a stale listener attached to a terminal
-   * the caller is about to hand back to the user.
+   * Uses the subscriber API so existing shell integrations and history
+   * listeners remain attached while this one command is pending.
    */
   private runCommandAndWait(
     terminal: TerminalInstance,
@@ -2062,12 +2174,12 @@ export default class TerminalPlugin extends Plugin {
         if (settled) return;
         settled = true;
         window.clearTimeout(timer);
-        terminal.onShellEvent(() => {});
+        cleanup();
         resolve(result);
       };
 
       const timer = window.setTimeout(() => finish({ exitCode: null, timedOut: true }), timeoutMs);
-      terminal.onShellEvent((event) => {
+      const cleanup = terminal.addShellEventListener((event) => {
         if (event.type === 'command_end') {
           finish({ exitCode: event.exitCode, timedOut: false });
         }

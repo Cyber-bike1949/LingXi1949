@@ -152,6 +152,10 @@ impl TransferSession {
         &self.destination_path
     }
 
+    pub fn is_finished(&self, file_index: usize) -> bool {
+        self.finished.contains(&file_index)
+    }
+
     /// Writes one chunk. Returns the new cumulative credit when the window
     /// should be topped up, so the caller can emit `transfer.credit`.
     pub fn write_chunk(
@@ -242,7 +246,7 @@ impl TransferSession {
             .ok_or_else(|| AgentError::Transfer(format!("unknown fileIndex {file_index}")))?
             .clone();
 
-        if !self.finished.insert(file_index) {
+        if self.finished.contains(&file_index) {
             return Err(AgentError::Transfer(format!(
                 "fileIndex {file_index} ended twice"
             )));
@@ -285,10 +289,11 @@ impl TransferSession {
                 if let Some(parent) = path.parent() {
                     std::fs::create_dir_all(parent)?;
                 }
-                File::create(&path)?;
+                File::create(&path)?.sync_all()?;
             }
         }
 
+        self.finished.insert(file_index);
         Ok(())
     }
 
@@ -343,6 +348,41 @@ mod tests {
             4 * 1024 * 1024,
         )
         .unwrap()
+    }
+
+    #[test]
+    fn failed_file_end_never_counts_as_committed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = session(dir.path(), vec![entry(0, "demo.txt", 10)]);
+        s.write_chunk(0, 0, b"abc").unwrap();
+        assert!(s.finish_file(0, 5).is_err());
+        assert!(!s.finished.contains(&0));
+        assert!(s.complete().is_err());
+    }
+
+    #[test]
+    fn failed_empty_file_creation_never_counts_as_committed() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = session(dir.path(), vec![entry(0, "demo.txt", 0)]);
+        std::fs::create_dir(dir.path().join("demo.txt")).unwrap();
+        assert!(s.finish_file(0, 0).is_err());
+        assert!(!s.finished.contains(&0));
+        assert!(s.complete().is_err());
+    }
+
+    #[test]
+    fn partial_failure_preserves_only_successful_file_indices() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut s = session(
+            dir.path(),
+            vec![entry(0, "good.txt", 1), entry(1, "bad.txt", 2)],
+        );
+        s.write_chunk(0, 0, b"a").unwrap();
+        s.finish_file(0, 1).unwrap();
+        s.write_chunk(1, 0, b"b").unwrap();
+        assert!(s.finish_file(1, 2).is_err());
+        assert_eq!(s.finished, HashSet::from([0]));
+        assert!(s.complete().is_err());
     }
 
     #[test]

@@ -165,3 +165,99 @@ test('an unrecognized change kind normalizes to "unknown"', async () => {
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.deepEqual(changes, ['unknown']);
 });
+
+
+for (const [file, parent] of [
+  ['/example/notes/demo.txt', '/example/notes'],
+  ['C:\\example\\notes\\demo.txt', 'C:\\example\\notes'],
+  ['\\\\server\\share\\notes\\demo.txt', '\\\\server\\share\\notes'],
+]) {
+  test(`stat() queries the target parent using target path semantics: ${file}`, async () => {
+    const { source, agents } = setup();
+    const pending = source.stat(file);
+    await Promise.resolve();
+    assert.deepEqual(await agents[0].nextFrame(), {
+      kind: 'fsList', payload: { path: parent, metadataVersion: 1 },
+    });
+    await agents[0].send({ kind: 'fsListResult', payload: {
+      metadataVersion: 1, entries: [{ name: 'demo.txt', isDirectory: false, modifiedAtMs: 123456 }],
+    } });
+    assert.deepEqual(await pending, { modifiedAtMs: 123456 });
+    await agents[0].waitForClientFinish();
+  });
+}
+
+for (const version of [undefined, 2]) {
+  test(`stat() reports unsupported metadata version ${version} without inventing a time`, async () => {
+    const { source, agents } = setup();
+    const pending = source.stat('/example/demo.txt');
+    const rejected = assert.rejects(pending, /UNSUPPORTED/);
+    await Promise.resolve();
+    await agents[0].nextFrame();
+    await agents[0].send({ kind: 'fsListResult', payload: {
+      ...(version === undefined ? {} : { metadataVersion: version }), entries: [],
+    } });
+    await rejected;
+    await agents[0].waitForClientFinish();
+  });
+}
+
+test('snapshot() returns the target process commit barrier', async () => {
+  const { source, agents } = setup();
+  const pending = source.snapshot('/example');
+  await Promise.resolve();
+  assert.deepEqual(await agents[0].nextFrame(), {
+    kind: 'fsList', payload: { path: '/example', metadataVersion: 1 },
+  });
+  await agents[0].send({ kind: 'fsListResult', payload: {
+    metadataVersion: 1, epoch: 'epoch-1', snapshotSequence: 8, entries: [],
+  } });
+  assert.deepEqual(await pending, { epoch: 'epoch-1', sequence: 8 });
+  await agents[0].waitForClientFinish();
+});
+
+test('stat() distinguishes unreadable metadata from a missing entry', async () => {
+  const { source, agents } = setup();
+  const pending = source.stat('/example/demo.txt');
+  await Promise.resolve();
+  await agents[0].nextFrame();
+  await agents[0].send({ kind: 'fsListResult', payload: {
+    metadataVersion: 1, entries: [{ name: 'demo.txt', isDirectory: false, modifiedAtMs: null }],
+  } });
+  assert.deepEqual(await pending, { modifiedAtMs: null });
+  const missing = source.stat('/example/demo.txt');
+  const rejected = assert.rejects(missing, /NOT_FOUND/);
+  await Promise.resolve();
+  await agents[1].nextFrame();
+  await agents[1].send({ kind: 'fsListResult', payload: { metadataVersion: 1, entries: [] } });
+  await rejected;
+});
+
+test('a directory timeout closes its stream and a later request can succeed', async () => {
+  const [client, peer] = streamPair();
+  const agent = new FakeAgent(peer);
+  const [nextClient, nextPeer] = streamPair();
+  const nextAgent = new FakeAgent(nextPeer);
+  const streams = [client, nextClient];
+  const source = new RemoteDirectoryTreeSource(async () => streams.shift()!, 100);
+  const rejected = assert.rejects(source.stat('/example/demo.txt'), /TIMEOUT/);
+  await agent.nextFrame();
+  await rejected;
+  await agent.waitForClientFinish();
+  await agent.send({ kind: 'fsListResult', payload: { metadataVersion: 1, entries: [] } });
+  // A separate stream remains usable; timeouts must not poison the connection.
+  const pending = source.list('/example');
+  await nextAgent.nextFrame();
+  await nextAgent.send({ kind: 'fsListResult', payload: { entries: [] } });
+  assert.deepEqual(await pending, []);
+});
+
+test('a stream that opens after timeout is closed without sending a request', async () => {
+  let resolveOpen!: (stream: ByteStream) => void;
+  const opened = new Promise<ByteStream>((resolve) => { resolveOpen = resolve; });
+  const source = new RemoteDirectoryTreeSource(() => opened, 10);
+  await assert.rejects(source.list('/example'), /TIMEOUT/);
+  const [client, peer] = streamPair();
+  resolveOpen(client);
+  assert.equal(await peer.read(), null);
+});

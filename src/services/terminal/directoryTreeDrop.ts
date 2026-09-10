@@ -33,6 +33,20 @@ import { debugLog } from '../../utils/logger.ts';
 
 /** Called after each file lands, with the running count so far - lets a caller drive a progress notice. */
 export type CopyProgressCallback = (filesDone: number) => void;
+/** Called only after a complete target file write, with its actual final path. */
+export type FileCommittedCallback = (path: string) => void;
+
+const activeTargetWrites = new Set<string>();
+
+async function withTargetWriteLock<T>(path: string, write: () => Promise<T>): Promise<T> {
+  if (activeTargetWrites.has(path)) throw new Error(`FILE_WRITE_BUSY: another transfer is writing "${path}"`);
+  activeTargetWrites.add(path);
+  try {
+    return await write();
+  } finally {
+    activeTargetWrites.delete(path);
+  }
+}
 
 /**
  * Custom drag MIME for a directory-tree row (candidate doc "目录树与双向文件
@@ -108,12 +122,15 @@ export async function copyVaultEntryToDirectory(
   targetDir: string,
   fsAccess: FsAccess,
   onProgress?: CopyProgressCallback,
+  onFileCommitted?: FileCommittedCallback,
 ): Promise<CopyResult> {
   await fsAccess.promises.mkdir(targetDir, { recursive: true });
 
   if (entry instanceof TFileClass) {
     const bytes = await readVaultFileBytes(app, entry);
-    await fsAccess.promises.writeFile(fsAccess.join(targetDir, entry.name), bytes);
+    const finalPath = fsAccess.join(targetDir, entry.name);
+    await withTargetWriteLock(finalPath, () => fsAccess.promises.writeFile(finalPath, bytes));
+    onFileCommitted?.(finalPath);
     onProgress?.(1);
     return { fileCount: 1 };
   }
@@ -126,7 +143,9 @@ export async function copyVaultEntryToDirectory(
         await walk(child, fsAccess.join(destDir, child.name));
       } else if (child instanceof TFileClass) {
         const bytes = await readVaultFileBytes(app, child);
-        await fsAccess.promises.writeFile(fsAccess.join(destDir, child.name), bytes);
+        const finalPath = fsAccess.join(destDir, child.name);
+        await withTargetWriteLock(finalPath, () => fsAccess.promises.writeFile(finalPath, bytes));
+        onFileCommitted?.(finalPath);
         fileCount += 1;
         onProgress?.(fileCount);
       }
@@ -160,6 +179,7 @@ export async function copyVaultNoteWithLinksToDirectory(
   targetDir: string,
   fsAccess: FsAccess,
   onProgress?: CopyProgressCallback,
+  onFileCommitted?: FileCommittedCallback,
 ): Promise<CopyNoteWithLinksResult> {
   const collected = collectRecursive(createVaultLinkSource(app, file), (path) =>
     createVaultLinkSourceForPath(app, path)
@@ -175,7 +195,9 @@ export async function copyVaultNoteWithLinksToDirectory(
     const destDir = fsAccess.join(targetDir, ...segments.slice(0, -1));
     await fsAccess.promises.mkdir(destDir, { recursive: true });
     const bytes = await readVaultFile(app, collectedFile.relativePath);
-    await fsAccess.promises.writeFile(fsAccess.join(destDir, segments[segments.length - 1]), bytes);
+    const finalPath = fsAccess.join(destDir, segments[segments.length - 1]);
+    await withTargetWriteLock(finalPath, () => fsAccess.promises.writeFile(finalPath, bytes));
+    onFileCommitted?.(finalPath);
     fileCount += 1;
     onProgress?.(fileCount);
   }
@@ -201,13 +223,15 @@ export async function copyFsEntryToVault(
   baseName: string,
   overwriteOnDuplicate: boolean,
   onProgress?: CopyProgressCallback,
+  onFileCommitted?: FileCommittedCallback,
 ): Promise<CopyResult> {
   if (!isDirectory) {
     const desired = normalizeVaultPath(joinVaultPath(targetVaultFolder, baseName));
     const check = checkRelativePath(desired);
     if (!check.ok) throw new Error(`Cannot copy to "${desired}": not a valid vault path`);
     const bytes = await fsAccess.promises.readFile(absolutePath);
-    await writeVaultBinaryResolvingConflict(app, desired, bytes, overwriteOnDuplicate);
+    const finalPath = await writeVaultBinaryResolvingConflict(app, desired, bytes, overwriteOnDuplicate);
+    onFileCommitted?.(finalPath);
     onProgress?.(1);
     return { fileCount: 1 };
   }
@@ -240,7 +264,8 @@ export async function copyFsEntryToVault(
         continue;
       }
       const bytes = await fsAccess.promises.readFile(srcPath);
-      await writeVaultBinaryResolvingConflict(app, destPath, bytes, overwriteOnDuplicate);
+      const finalPath = await writeVaultBinaryResolvingConflict(app, destPath, bytes, overwriteOnDuplicate);
+      onFileCommitted?.(finalPath);
       fileCount += 1;
       onProgress?.(fileCount);
     }
@@ -266,6 +291,7 @@ export async function writePulledFilesToVault(
   targetVaultFolder: string,
   overwriteOnDuplicate: boolean,
   onProgress?: CopyProgressCallback,
+  onFileCommitted?: FileCommittedCallback,
 ): Promise<CopyResult> {
   let skippedCount = 0;
   // D-01-3/D-01-1: every directory the agent reported - including one with
@@ -289,7 +315,8 @@ export async function writePulledFilesToVault(
       skippedCount += 1; // skip individually-invalid entries rather than abort the whole copy
       continue;
     }
-    await writeVaultBinaryResolvingConflict(app, desired, file.data, overwriteOnDuplicate);
+    const finalPath = await writeVaultBinaryResolvingConflict(app, desired, file.data, overwriteOnDuplicate);
+    onFileCommitted?.(finalPath);
     fileCount += 1;
     onProgress?.(fileCount);
   }
@@ -309,22 +336,25 @@ async function writeVaultBinaryResolvingConflict(
   desiredPath: string,
   bytes: Uint8Array,
   overwriteOnDuplicate: boolean,
-): Promise<void> {
-  const exists = (vaultPath: string): boolean => app.vault.getAbstractFileByPath(vaultPath) !== null;
+): Promise<string> {
+  return withTargetWriteLock(`vault:${desiredPath}`, async () => {
+    const exists = (vaultPath: string): boolean => app.vault.getAbstractFileByPath(vaultPath) !== null;
 
-  if (overwriteOnDuplicate) {
-    const existing = app.vault.getAbstractFileByPath(desiredPath);
-    if (existing instanceof TFileClass) {
-      debugLog('[directoryTreeDrop] Overwriting existing vault file on duplicate-name drop:', desiredPath);
-      await app.vault.modifyBinary(existing, toArrayBuffer(bytes));
-      return;
+    if (overwriteOnDuplicate) {
+      const existing = app.vault.getAbstractFileByPath(desiredPath);
+      if (existing instanceof TFileClass) {
+        debugLog('[directoryTreeDrop] Overwriting existing vault file on duplicate-name drop:', desiredPath);
+        await app.vault.modifyBinary(existing, toArrayBuffer(bytes));
+        return desiredPath;
+      }
+      // A folder already occupies this path - fall through to a free name
+      // instead, since a folder can't be overwritten by a file write.
     }
-    // A folder already occupies this path - fall through to a free name
-    // instead, since a folder can't be overwritten by a file write.
-  }
 
-  const finalPath = resolveUniqueVaultPath(desiredPath, exists);
-  await app.vault.createBinary(finalPath, toArrayBuffer(bytes));
+    const finalPath = resolveUniqueVaultPath(desiredPath, exists);
+    await app.vault.createBinary(finalPath, toArrayBuffer(bytes));
+    return finalPath;
+  });
 }
 
 /**
@@ -358,6 +388,7 @@ export async function copyDirectoryTreeEntryToVault(
   targetVaultFolder: string,
   overwriteOnDuplicate: boolean,
   onProgress?: CopyProgressCallback,
+  onFileCommitted?: FileCommittedCallback,
 ): Promise<CopyResult> {
   if (entry.nodeId) {
     if (!connections) throw new Error('Remote connection is not available');
@@ -375,6 +406,7 @@ export async function copyDirectoryTreeEntryToVault(
       targetVaultFolder,
       overwriteOnDuplicate,
       onProgress,
+      onFileCommitted,
     );
   }
   return copyFsEntryToVault(
@@ -386,6 +418,7 @@ export async function copyDirectoryTreeEntryToVault(
     entry.baseName,
     overwriteOnDuplicate,
     onProgress,
+    onFileCommitted,
   );
 }
 

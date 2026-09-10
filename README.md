@@ -80,4 +80,19 @@ Add a device with its connection code, open a terminal, and start working from O
 <img src="assets/drag_and_drop.png" width="980" alt="LingXi1949 main interface demonstration" />
 - Send the current note and its related references to the terminal with one click. LingXi1949 automatically finds the referenced notes and includes them in the transfer.
 <img src="assets/one_click.png" width="980" alt="LingXi1949 main interface demonstration" />
+
+## Current terminal features
+
+- **Directory tree transfers:** browse local or remote directories, transfer files or folders, and drop onto an explicit target path.
+- **Modification markers:** only files confirmed by a successful transfer receipt are marked. Clicking or dragging acknowledges the current version; folder markers aggregate marked descendants.
+- **Operation history:** open a terminal pane menu and choose **History** to review user-entered shell operations for that session.
+- **Shortcut groups:** save selected history entries as a device-specific group, then run the latest group from a terminal pane or a new terminal on its device. Device ownership is checked and uncertain completion pauses the run.
+- **Transfer receipts:** supported Agents report per-file success, failure, or unknown status; older Agents remain compatible.
+
+Shortcut replay never treats an uncertain completion as success or silently resends a step.
+
+## Compatibility and verification
+
+New directory metadata and per-file receipt fields are optional, so older peers remain usable. Verify the Agent connection, shell identity (`hostname` and `pwd`), and a sample note transfer before using real content. Full AI TUI readiness and shell-history edge cases still require verification on the target host.
+
 </div>

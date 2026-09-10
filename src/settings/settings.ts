@@ -118,6 +118,9 @@ export interface TerminalSettings {
   // Preset scripts
   presetScripts: PresetScript[];
 
+  /** Device-owned shortcut groups; runtime history remains in memory. */
+  deviceShortcutGroups: import('../services/terminal/shortcutGroupStore.ts').ShortcutGroup[];
+
   // When true, hide AI launchers whose underlying CLI was not found on PATH.
   // Default false so a fresh install still shows install guidance for every
   // built-in launcher; experienced users can flip this to declutter their menu.
@@ -439,6 +442,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   pairedDevices: [],
   controllerIdentitySeed: null,
   presetScripts: [...DEFAULT_PRESET_SCRIPTS],
+  deviceShortcutGroups: [],
   hideUnavailableAiLaunchers: false,
   checkAiLauncherUpdates: true,
   lastSeenChangelogVersion: '',

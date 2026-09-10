@@ -22,6 +22,8 @@
 //! `client::spawn_output_pump`, kept rather than redesigned so the two
 //! stacks behave identically while they coexist.
 
+use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
 use iroh::endpoint::{Connection, RecvStream, SendStream, VarInt};
@@ -39,8 +41,8 @@ use crate::termstream::{
     ClosePayload, DirectoryEntry, ErrorPayload, Frame, FrameDecoder, FsChangedPayload,
     FsListPayload, FsListResultPayload, OpenPayload, OpenedPayload, ShellEventPayload,
     TransferAcceptedPayload, TransferChunkPayload, TransferCreditPayload, TransferEntry,
-    TransferFileEndPayload, TransferManifestPayload, TransferPullManifestPayload,
-    TransferPullRequestPayload, TransferResultPayload,
+    TransferFileEndPayload, TransferFileResult, TransferManifestPayload,
+    TransferPullManifestPayload, TransferPullRequestPayload, TransferResultPayload,
 };
 use crate::transfer;
 use crate::AgentError;
@@ -62,6 +64,82 @@ pub struct ServeOptions {
     /// Fallback transfer destination (doc §7.6) when a `TransferManifest`
     /// names a `sessionId` with no known cwd, or none at all.
     pub receive_root: std::path::PathBuf,
+    transfer_state: Arc<TransferCommitState>,
+}
+
+impl ServeOptions {
+    pub fn new(
+        shell: ShellConfig,
+        max_concurrent_sessions: usize,
+        receive_root: std::path::PathBuf,
+    ) -> Self {
+        Self {
+            shell,
+            max_concurrent_sessions,
+            receive_root,
+            transfer_state: Arc::new(TransferCommitState::new()),
+        }
+    }
+}
+
+struct TransferCommitState {
+    epoch: String,
+    next_sequence: AtomicU64,
+    active_paths: Mutex<HashSet<std::path::PathBuf>>,
+}
+
+impl TransferCommitState {
+    fn new() -> Self {
+        Self {
+            epoch: Uuid::new_v4().to_string(),
+            next_sequence: AtomicU64::new(1),
+            active_paths: Mutex::new(HashSet::new()),
+        }
+    }
+
+    fn commit(&self) -> u64 {
+        self.next_sequence.fetch_add(1, Ordering::SeqCst)
+    }
+
+    fn snapshot_sequence(&self) -> u64 {
+        self.next_sequence.load(Ordering::SeqCst).saturating_sub(1)
+    }
+
+    fn try_lock_paths(
+        self: &Arc<Self>,
+        paths: Vec<std::path::PathBuf>,
+    ) -> Option<TransferPathGuard> {
+        let mut active = self
+            .active_paths
+            .lock()
+            .expect("transfer path locks poisoned");
+        if paths.iter().any(|path| active.contains(path)) {
+            return None;
+        }
+        active.extend(paths.iter().cloned());
+        Some(TransferPathGuard {
+            state: Arc::clone(self),
+            paths,
+        })
+    }
+}
+
+struct TransferPathGuard {
+    state: Arc<TransferCommitState>,
+    paths: Vec<std::path::PathBuf>,
+}
+
+impl Drop for TransferPathGuard {
+    fn drop(&mut self) {
+        let mut active = self
+            .state
+            .active_paths
+            .lock()
+            .expect("transfer path locks poisoned");
+        for path in &self.paths {
+            active.remove(path);
+        }
+    }
 }
 
 /// Serves control ends until the endpoint is closed.
@@ -203,7 +281,7 @@ async fn serve_bi_stream(
             serve_terminal_session(payload, send, recv, decoder, table, options).await;
         }
         Ok(Ok(Some(Frame::FsList(payload)))) => {
-            serve_fs_stream(payload, send, recv, decoder).await;
+            serve_fs_stream(payload, send, recv, decoder, options).await;
         }
         Ok(Ok(Some(Frame::TransferManifest(payload)))) => {
             serve_transfer_stream(payload, send, recv, decoder, table, options).await;
@@ -380,25 +458,39 @@ async fn serve_fs_stream(
     mut send: SendStream,
     mut recv: RecvStream,
     mut decoder: FrameDecoder,
+    options: Arc<ServeOptions>,
 ) {
     let path = std::path::PathBuf::from(&first.path);
 
-    let mut last_listing = match fs_browse::list_directory(&path) {
-        Ok(entries) => {
-            let frame = Frame::FsListResult(FsListResultPayload {
-                entries: entries.clone(),
-            });
-            if write_frame(&mut send, &frame).await.is_err() {
+    let metadata_version = (first.metadata_version == Some(1)).then_some(1);
+    let mut last_listing =
+        match fs_browse::list_directory_with_metadata(&path, metadata_version.is_some()) {
+            Ok(entries) => {
+                let frame = Frame::FsListResult(FsListResultPayload {
+                    entries: entries.clone(),
+                    metadata_version,
+                    snapshot_sequence: metadata_version
+                        .map(|_| options.transfer_state.snapshot_sequence()),
+                    epoch: metadata_version.map(|_| options.transfer_state.epoch.clone()),
+                });
+                if write_frame(&mut send, &frame).await.is_err() {
+                    return;
+                }
+                // Watch comparisons must not turn content changes into structural events.
+                entries
+                    .into_iter()
+                    .map(|mut entry| {
+                        entry.modified_at_ms = None;
+                        entry
+                    })
+                    .collect()
+            }
+            Err(e) => {
+                let message = format!("FS_LIST_FAILED: {}", redact(&e.to_string()));
+                send_error(&mut send, &message).await;
                 return;
             }
-            entries
-        }
-        Err(e) => {
-            let message = format!("FS_LIST_FAILED: {}", redact(&e.to_string()));
-            send_error(&mut send, &message).await;
-            return;
-        }
-    };
+        };
 
     let mut buf = [0u8; 256];
     loop {
@@ -472,6 +564,30 @@ async fn serve_transfer_stream(
         .map(|d| d.relative_path.clone())
         .collect();
 
+    let target_paths = match entries
+        .iter()
+        .map(|entry| crate::paths::resolve_under_root(&receive_root, &entry.relative_path))
+        .collect::<Result<Vec<_>, _>>()
+    {
+        Ok(paths) => paths,
+        Err(e) => {
+            send_error(
+                &mut send,
+                &format!("TRANSFER_REJECTED: {}", redact(&e.to_string())),
+            )
+            .await;
+            return;
+        }
+    };
+    let Some(_path_guard) = options.transfer_state.try_lock_paths(target_paths) else {
+        send_error(
+            &mut send,
+            "TRANSFER_BUSY: another transfer is writing the same path",
+        )
+        .await;
+        return;
+    };
+
     let mut session = match transfer::TransferSession::new(
         receive_root,
         entries,
@@ -489,11 +605,16 @@ async fn serve_transfer_stream(
 
     let accepted = Frame::TransferAccepted(TransferAcceptedPayload {
         granted_bytes: INITIAL_TRANSFER_CREDIT,
+        receipt_version: (manifest.receipt_version == Some(1)).then_some(1),
+        epoch: (manifest.receipt_version == Some(1)).then(|| options.transfer_state.epoch.clone()),
     });
     if write_frame(&mut send, &accepted).await.is_err() {
         session.abort();
         return;
     }
+
+    let transfer_epoch = options.transfer_state.epoch.clone();
+    let mut committed = HashMap::<usize, u64>::new();
 
     let mut buf = vec![0u8; 32 * 1024];
     let result: Option<TransferResultPayload> = loop {
@@ -513,7 +634,15 @@ async fn serve_transfer_stream(
             },
             Err(e) => {
                 session.abort();
-                break Some(transfer_failed_result("PROTOCOL_ERROR", &e.to_string()));
+                break Some(transfer_failed_result_with_files(
+                    &manifest,
+                    &session,
+                    &committed,
+                    None,
+                    &transfer_epoch,
+                    "PROTOCOL_ERROR",
+                    &e.to_string(),
+                ));
             }
         };
 
@@ -530,15 +659,34 @@ async fn serve_transfer_stream(
                     Ok(None) => {}
                     Err(e) => {
                         session.abort();
-                        break Some(transfer_failed_result("TRANSFER_FAILED", &e.to_string()));
+                        break Some(transfer_failed_result_with_files(
+                            &manifest,
+                            &session,
+                            &committed,
+                            Some(chunk.file_index),
+                            &transfer_epoch,
+                            "TRANSFER_FAILED",
+                            &e.to_string(),
+                        ));
                     }
                 }
             }
             Frame::TransferFileEnd(end) => {
                 if let Err(e) = session.finish_file(end.file_index, end.sent_size) {
                     session.abort();
-                    break Some(transfer_failed_result("TRANSFER_FAILED", &e.to_string()));
+                    break Some(transfer_failed_result_with_files(
+                        &manifest,
+                        &session,
+                        &committed,
+                        Some(end.file_index),
+                        &transfer_epoch,
+                        "TRANSFER_FAILED",
+                        &e.to_string(),
+                    ));
                 }
+                committed
+                    .entry(end.file_index)
+                    .or_insert_with(|| options.transfer_state.commit());
             }
             Frame::TransferComplete(_) => match session.complete() {
                 Ok(()) => {
@@ -546,11 +694,38 @@ async fn serve_transfer_stream(
                         success: true,
                         code: None,
                         message: String::new(),
+                        files: (manifest.receipt_version == Some(1)).then(|| {
+                            manifest
+                                .entries
+                                .iter()
+                                .map(|entry| TransferFileResult {
+                                    file_index: entry.index,
+                                    relative_path: entry.relative_path.clone(),
+                                    status: "success".into(),
+                                    code: None,
+                                    message: None,
+                                    epoch: Some(transfer_epoch.clone()),
+                                    commit_sequence: committed.get(&entry.index).copied(),
+                                    event_id: Some(format!(
+                                        "{}:{}",
+                                        manifest.transfer_id, entry.index
+                                    )),
+                                })
+                                .collect()
+                        }),
                     })
                 }
                 Err(e) => {
                     session.abort();
-                    break Some(transfer_failed_result("TRANSFER_FAILED", &e.to_string()));
+                    break Some(transfer_failed_result_with_files(
+                        &manifest,
+                        &session,
+                        &committed,
+                        None,
+                        &transfer_epoch,
+                        "TRANSFER_FAILED",
+                        &e.to_string(),
+                    ));
                 }
             },
             other => {
@@ -568,11 +743,45 @@ async fn serve_transfer_stream(
     let _ = send.finish();
 }
 
-fn transfer_failed_result(code: &str, message: &str) -> TransferResultPayload {
+fn transfer_failed_result_with_files(
+    manifest: &TransferManifestPayload,
+    session: &transfer::TransferSession,
+    committed: &HashMap<usize, u64>,
+    failed_index: Option<usize>,
+    epoch: &str,
+    code: &str,
+    message: &str,
+) -> TransferResultPayload {
+    let redacted = redact(message);
     TransferResultPayload {
         success: false,
         code: Some(code.to_string()),
-        message: redact(message),
+        message: redacted.clone(),
+        files: (manifest.receipt_version == Some(1)).then(|| {
+            manifest
+                .entries
+                .iter()
+                .map(|entry| {
+                    let status = if session.is_finished(entry.index) {
+                        "success"
+                    } else if failed_index == Some(entry.index) {
+                        "failed"
+                    } else {
+                        "unknown"
+                    };
+                    TransferFileResult {
+                        file_index: entry.index,
+                        relative_path: entry.relative_path.clone(),
+                        status: status.into(),
+                        code: (status == "failed").then(|| code.to_string()),
+                        message: (status == "failed").then(|| redacted.clone()),
+                        epoch: Some(epoch.to_string()),
+                        commit_sequence: committed.get(&entry.index).copied(),
+                        event_id: Some(format!("{}:{}", manifest.transfer_id, entry.index)),
+                    }
+                })
+                .collect()
+        }),
     }
 }
 
@@ -645,7 +854,7 @@ async fn serve_transfer_pull_stream(
         .map(|relative_path| DirectoryEntry { relative_path })
         .collect();
     let manifest = Frame::TransferPullManifest(TransferPullManifestPayload {
-        entries: manifest_entries,
+        entries: manifest_entries.clone(),
         directories: manifest_directories,
     });
     if write_frame(&mut send, &manifest).await.is_err() {
@@ -663,6 +872,7 @@ async fn serve_transfer_pull_stream(
             success: true,
             code: None,
             message: String::new(),
+            files: None,
         });
         let _ = write_frame(&mut send, &result).await;
         let _ = send.finish();
@@ -683,6 +893,7 @@ async fn serve_transfer_pull_stream(
                     success: false,
                     code: Some("PULL_FAILED".into()),
                     message: format!("PULL_FAILED: {}", redact(&e.to_string())),
+                    files: None,
                 };
                 let _ = write_frame(&mut send, &Frame::TransferResult(payload)).await;
                 let _ = send.finish();
@@ -725,6 +936,21 @@ async fn serve_transfer_pull_stream(
         success: true,
         code: None,
         message: String::new(),
+        files: Some(
+            manifest_entries
+                .iter()
+                .map(|entry| TransferFileResult {
+                    file_index: entry.index,
+                    relative_path: entry.relative_path.clone(),
+                    status: "success".into(),
+                    code: None,
+                    message: None,
+                    epoch: None,
+                    commit_sequence: None,
+                    event_id: None,
+                })
+                .collect(),
+        ),
     });
     let _ = write_frame(&mut send, &result).await;
     let _ = send.finish();
@@ -890,6 +1116,86 @@ mod tests {
     }
 
     #[test]
+    fn transfer_commit_state_is_process_scoped_and_locks_only_overlapping_paths() {
+        let state = Arc::new(TransferCommitState::new());
+        assert_eq!(state.snapshot_sequence(), 0);
+        assert_eq!(state.commit(), 1);
+        assert_eq!(state.commit(), 2);
+        assert_eq!(state.snapshot_sequence(), 2);
+
+        let first = state.try_lock_paths(vec!["/tmp/a".into()]).unwrap();
+        assert!(state.try_lock_paths(vec!["/tmp/a".into()]).is_none());
+        assert!(state.try_lock_paths(vec!["/tmp/b".into()]).is_some());
+        drop(first);
+        assert!(state.try_lock_paths(vec!["/tmp/a".into()]).is_some());
+    }
+
+    #[test]
+    fn fs_metadata_negotiates_over_real_loopback_quic() {
+        let runtime = tokio::runtime::Runtime::new().unwrap();
+        runtime.block_on(async {
+            let (agent, code, serve_task, _receive_root) = start_agent(4).await;
+            let (controller, connection) = connect_controller(&code).await;
+            let dir = tempfile::tempdir().unwrap();
+            let file = dir.path().join("demo.txt");
+            std::fs::write(&file, b"example").unwrap();
+            let expected = std::fs::metadata(&file)
+                .unwrap()
+                .modified()
+                .unwrap()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_millis() as i64;
+            for version in [None, Some(1), Some(2)] {
+                let (send, recv) = within(connection.open_bi()).await.unwrap();
+                let mut stream = TestStream::new(send, recv);
+                stream
+                    .send_frame(Frame::FsList(FsListPayload {
+                        path: dir.path().to_string_lossy().into_owned(),
+                        metadata_version: version,
+                    }))
+                    .await;
+                match stream.next_frame().await {
+                    Frame::FsListResult(payload) => {
+                        let enabled = version == Some(1);
+                        assert_eq!(payload.metadata_version, enabled.then_some(1));
+                        assert_eq!(payload.snapshot_sequence, enabled.then_some(0));
+                        assert_eq!(payload.epoch.is_some(), enabled);
+                        assert_eq!(
+                            payload.entries[0].modified_at_ms,
+                            enabled.then_some(expected)
+                        );
+                    }
+                    other => panic!("expected directory metadata, got {other:?}"),
+                }
+                stream.send.finish().unwrap();
+            }
+            let empty = tempfile::tempdir().unwrap();
+            let (send, recv) = within(connection.open_bi()).await.unwrap();
+            let mut stream = TestStream::new(send, recv);
+            stream
+                .send_frame(Frame::FsList(FsListPayload {
+                    path: empty.path().to_string_lossy().into_owned(),
+                    metadata_version: Some(1),
+                }))
+                .await;
+            match stream.next_frame().await {
+                Frame::FsListResult(payload) => {
+                    assert_eq!(payload.metadata_version, Some(1));
+                    assert_eq!(payload.snapshot_sequence, Some(0));
+                    assert!(payload.epoch.is_some());
+                    assert!(payload.entries.is_empty());
+                }
+                other => panic!("expected empty directory metadata, got {other:?}"),
+            }
+            stream.send.finish().unwrap();
+            controller.close().await;
+            agent.close().await;
+            serve_task.abort();
+        });
+    }
+
+    #[test]
     fn redaction_strips_paths() {
         // Whole whitespace-separated words are replaced, punctuation and all.
         assert_eq!(
@@ -1033,11 +1339,11 @@ mod tests {
         let receive_root_dir = tempfile::tempdir().unwrap();
         let serve_task = tokio::spawn(serve(
             endpoint.clone(),
-            ServeOptions {
-                shell: test_shell(),
-                max_concurrent_sessions: max_sessions,
-                receive_root: receive_root_dir.path().to_path_buf(),
-            },
+            ServeOptions::new(
+                test_shell(),
+                max_sessions,
+                receive_root_dir.path().to_path_buf(),
+            ),
         ));
         (endpoint, code, serve_task, receive_root_dir)
     }
@@ -1073,6 +1379,7 @@ mod tests {
         stream
             .send_frame(Frame::FsList(FsListPayload {
                 path: path.to_string(),
+                metadata_version: None,
             }))
             .await;
         stream
@@ -1096,6 +1403,7 @@ mod tests {
                         vec![FsEntry {
                             name: "a.txt".into(),
                             is_directory: false,
+                            modified_at_ms: None,
                         }]
                     );
                 }
@@ -1180,6 +1488,7 @@ mod tests {
     ) -> TransferManifestPayload {
         TransferManifestPayload {
             transfer_id: transfer_id.into(),
+            receipt_version: Some(1),
             root_note: entries[0].relative_path.clone(),
             entries,
             directories: Vec::new(),
@@ -1471,11 +1780,7 @@ mod tests {
             let table = Arc::new(Mutex::new(raw_table));
 
             let fallback_root = tempfile::tempdir().unwrap();
-            let options = ServeOptions {
-                shell: test_shell(),
-                max_concurrent_sessions: 4,
-                receive_root: fallback_root.path().to_path_buf(),
-            };
+            let options = ServeOptions::new(test_shell(), 4, fallback_root.path().to_path_buf());
 
             assert_eq!(
                 resolve_transfer_root(None, Some(session_id), &table, &options),

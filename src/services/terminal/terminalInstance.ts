@@ -36,6 +36,7 @@ import {
   extractWslPromptCwd,
 } from './promptCwdParsers';
 import { shell } from 'electron';
+import type { OperationHistory } from './operationHistory';
 
 // xterm.js CSS (static import handled by esbuild)
 import '@xterm/xterm/css/xterm.css';
@@ -174,6 +175,8 @@ export class TerminalInstance {
   private exitSubscription: Disposable | null = null;
   private errorSubscription: Disposable | null = null;
   private shellEventSubscription: Disposable | null = null;
+  private readonly shellEventListeners = new Set<(event: ShellEvent) => void>();
+  private userCommandBuffer = '';
   
   private containerEl: HTMLElement | null = null;
   private options: TerminalOptions;
@@ -227,6 +230,7 @@ export class TerminalInstance {
     source: ShellEventSource;
   }> = [];
   private activeCommandStart: number | null = null;
+  private userCommandBufferReliable = true;
   private promptMarkers: IMarker[] = [];
   private commandMarkers: TerminalCommandMarker[] = [];
   private win32InputModeEnabled = false;
@@ -697,9 +701,60 @@ export class TerminalInstance {
     this.shellEventSubscription = null;
   }
 
+  private captureUserInput(data: string | Uint8Array): void {
+    const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
+    const keyNames: Record<string, string> = {
+      '\u001b[A': 'ArrowUp', '\u001b[B': 'ArrowDown', '\u001b[C': 'ArrowRight', '\u001b[D': 'ArrowLeft',
+      '\u001b[Z': 'ShiftTab', '\u001b': 'Escape', '\u0009': 'Tab', '\u0003': 'Ctrl+C', '\u0004': 'Ctrl+D',
+    };
+    const interactiveProgram = this.claudeCodeSessionState.isActive();
+    const unknownSensitiveInput = this.activeCommandStart !== null && !interactiveProgram;
+    if (unknownSensitiveInput) {
+      this.userCommandBuffer = '';
+      this.userCommandBufferReliable = false;
+      return;
+    }
+    for (let index = 0; index < text.length; index += 1) {
+      const sequence = Object.keys(keyNames).find((candidate) => text.startsWith(candidate, index));
+      if (sequence) {
+        if (interactiveProgram || sequence === '\u0003' || sequence === '\u0004' || sequence === '\u001b') {
+          for (const listener of this.operationHistoryListeners) listener(sequence, 'key', keyNames[sequence]);
+        } else {
+          // Shell history navigation and completion can replace the entire
+          // editable line. Without a final command-line signal, stop
+          // treating the local byte buffer as authoritative.
+          this.userCommandBufferReliable = false;
+        }
+        index += sequence.length - 1;
+        continue;
+      }
+      const character = text[index];
+      if (character === '\r' || character === '\n') {
+        const payload = this.userCommandBuffer.trim();
+        if (payload && this.sessionId) {
+          if (this.userCommandBufferReliable) {
+            const kind = interactiveProgram ? 'text' : 'shell';
+            for (const listener of this.operationHistoryListeners) listener(payload, kind, payload);
+          }
+        } else if (this.sessionId) {
+          for (const listener of this.operationHistoryListeners) listener(character, 'confirm', 'Enter');
+        }
+        this.userCommandBuffer = '';
+        this.userCommandBufferReliable = true;
+      } else if (character === '\u007f' || character === '\b') {
+        this.userCommandBuffer = this.userCommandBuffer.slice(0, -1);
+      } else if (character >= ' ' && character !== '\u007f') {
+        this.userCommandBuffer += character;
+      }
+    }
+  }
+
+  private readonly operationHistoryListeners = new Set<(payload: string, kind?: 'shell' | 'text' | 'key' | 'confirm', summary?: string) => void>();
+
   private setupXtermHandlers(): void {
     const keyboardProtocol = new EnhancedKeyboardProtocol({
       queueInput: (data) => {
+        this.captureUserInput(data);
         this.queueInput(data);
       },
       flushPendingInput: () => {
@@ -1732,6 +1787,8 @@ export class TerminalInstance {
 
     if (event.type === 'command_start') {
       this.activeCommandStart = Date.now();
+      this.userCommandBuffer = '';
+      this.userCommandBufferReliable = true;
     }
 
     if (event.type === 'command_end') {
@@ -1753,6 +1810,7 @@ export class TerminalInstance {
     }
 
     this.shellEventCallback?.(event);
+    for (const listener of this.shellEventListeners) listener(event);
   }
 
   /**
@@ -1761,6 +1819,30 @@ export class TerminalInstance {
   onShellEvent(callback: (event: ShellEvent) => void): void {
     this.shellEventCallback = callback;
   }
+
+  addShellEventListener(callback: (event: ShellEvent) => void): () => void {
+    this.shellEventListeners.add(callback);
+    return () => this.shellEventListeners.delete(callback);
+  }
+
+  attachOperationHistory(history: OperationHistory, deviceKey: string): () => void {
+    const sessionId = this.sessionId;
+    if (!sessionId) return () => {};
+    const listener = (payload: string, kind: 'shell' | 'text' | 'key' | 'confirm' = 'shell', summary = payload): void => {
+      history.record({ sessionId, deviceKey, kind, summary, payload, captureQuality: 'complete', completion: 'pending', source: 'user' });
+    };
+    this.operationHistoryListeners.add(listener);
+    const shellListener = (event: ShellEvent): void => {
+      if (event.type === 'command_end') history.resolveLatestShell(sessionId);
+    };
+    this.shellEventListeners.add(shellListener);
+    return () => {
+      this.operationHistoryListeners.delete(listener);
+      this.shellEventListeners.delete(shellListener);
+    };
+  }
+
+  getSessionId(): string | null { return this.sessionId; }
 
   /**
    * Get command history

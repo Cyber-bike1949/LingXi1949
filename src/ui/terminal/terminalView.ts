@@ -51,6 +51,9 @@ import { capabilities, transition, type RemoteState } from '../../services/remot
 import { createVaultLinkSource, readVaultFile } from '../../services/remote/vaultLinkSource';
 import { checkQuotas, collect, type CollectedFile } from '../../services/remote/noteCollector';
 import { DirectoryTreePanel } from './directoryTreePanel';
+import { OperationHistory } from '../../services/terminal/operationHistory';
+import { ShortcutGroupStore, type ShortcutGroup } from '../../services/terminal/shortcutGroupStore';
+import { OperationHistoryModal } from './operationHistoryModal';
 import { LocalDirectoryTreeSource } from '../../services/terminal/directoryTreeSource';
 import type { DirectoryTreeSource } from '../../services/terminal/directoryTreeSource';
 import {
@@ -67,6 +70,9 @@ import {
   withTransferGuard,
 } from '../../services/terminal/directoryTreeTransferProgress';
 import type { DeviceConnectionManager } from '../../services/remote/deviceConnections';
+import { DirectoryModificationStore } from '../../services/terminal/directoryModificationStore';
+import type { ReplaySnapshot } from '../../services/terminal/shortcutReplayController';
+import { confirmedTransferReceipts } from '../../services/remote/transferReceipts';
 import { getHomeDir, isWindows } from '../../utils/platform';
 type XtermTerminal = import('@xterm/xterm').Terminal;
 
@@ -94,12 +100,18 @@ export class TerminalView extends ItemView {
   private titleChangeCleanup: (() => void) | null = null;
   private searchStateCleanup: (() => void) | null = null;
   private connectionStatusCleanup: (() => void) | null = null;
+  private historyCleanup: (() => void) | null = null;
+  private readonly operationHistory = new OperationHistory();
   private initPromise: Promise<TerminalInstance> | null = null;
   private initResolve: ((terminal: TerminalInstance) => void) | null = null;
   private initReject: ((error: Error) => void) | null = null;
   private remoteState: RemoteState = 'LocalMode';
+  private readonly modificationStore = new DirectoryModificationStore();
   private remoteToolbar: HTMLElement | null = null;
   private connectionStatus: TerminalConnectionStatus | 'reconnecting' = 'disconnected';
+  private shortcutReplayEl: HTMLElement | null = null;
+  private shortcutReplayCleanup: (() => void) | null = null;
+  private activeShortcutRunId: string | null = null;
 
   private terminalBody: HTMLElement | null = null;
   private directoryTreePanel: DirectoryTreePanel | null = null;
@@ -159,6 +171,52 @@ export class TerminalView extends ItemView {
 
     const plugin = this.getTerminalPlugin();
     if (plugin) {
+      menu.addItem((item) => {
+        item.setTitle('历史操作').setIcon('history').onClick(() => {
+          const sessionId = this.terminalInstance?.getSessionId() ?? '';
+          const store = new ShortcutGroupStore(
+            () => Promise.resolve({ deviceShortcutGroups: plugin.settings.deviceShortcutGroups }),
+            async (data) => {
+              const previous = plugin.settings.deviceShortcutGroups;
+              plugin.settings.deviceShortcutGroups = data.deviceShortcutGroups ?? [];
+              try {
+                await plugin.saveSettings();
+              } catch (error) {
+                plugin.settings.deviceShortcutGroups = previous;
+                throw error;
+              }
+            },
+          );
+          void store.load().then(() => new OperationHistoryModal(
+            this.app,
+            this.operationHistory.list(sessionId),
+            this.getRemoteNodeId() ?? 'local',
+            store,
+            this.operationHistory.isEnabled(sessionId),
+            (enabled) => this.operationHistory.setEnabled(sessionId, enabled),
+            () => this.operationHistory.clear(sessionId),
+          ).open());
+        });
+      });
+      const currentDeviceKey = this.getRemoteNodeId() ?? 'local';
+      const deviceGroups = plugin.settings.deviceShortcutGroups.filter((group) => group.deviceKey === currentDeviceKey).sort((a, b) => b.creationOrder - a.creationOrder);
+      const latestGroup = deviceGroups[0];
+      if (latestGroup && this.terminalInstance) {
+        menu.addItem((item) => item.setTitle(`运行快捷组：${latestGroup.name}`).setIcon('play').onClick(() => {
+          void plugin.runShortcutGroupOnTerminal(this.terminalInstance!, latestGroup)
+            .then((runId) => this.showShortcutReplay(runId))
+            .catch((error: unknown) => {
+              new Notice(error instanceof Error ? error.message : '快捷组运行失败');
+            });
+        }));
+      }
+      for (const group of deviceGroups.slice(1)) {
+        menu.addItem((item) => item.setTitle(`运行快捷组：${group.name}`).setIcon('play').onClick(() => {
+          void plugin.runShortcutGroupOnTerminal(this.terminalInstance!, group)
+            .then((runId) => this.showShortcutReplay(runId))
+            .catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组运行失败'));
+        }));
+      }
       menu.addItem((item) => {
         item.setTitle(plugin.getAlwaysOnTopTerminalLabel(view))
           .setIcon('pin')
@@ -301,6 +359,13 @@ export class TerminalView extends ItemView {
     this.searchStateCleanup = null;
     this.connectionStatusCleanup?.();
     this.connectionStatusCleanup = null;
+    this.historyCleanup?.();
+    this.historyCleanup = null;
+    this.shortcutReplayCleanup?.();
+    this.shortcutReplayCleanup = null;
+    this.shortcutReplayEl?.remove();
+    this.shortcutReplayEl = null;
+    this.activeShortcutRunId = null;
     this.removeDropHandlers?.();
     this.removeDropHandlers = null;
     this.dragEnterDepth = 0;
@@ -309,6 +374,7 @@ export class TerminalView extends ItemView {
     this.dropCursorHintEl = null;
     this.directoryTreePanel?.destroy();
     this.directoryTreePanel = null;
+    this.modificationStore.dispose();
     this.directoryTreeVisible = false;
     this.terminalBody = null;
 
@@ -449,6 +515,12 @@ export class TerminalView extends ItemView {
       this.connectionStatus = status;
       this.renderRemoteToolbar();
     });
+    const plugin = this.getTerminalPlugin();
+    if (plugin) {
+      const deviceKey = this.getRemoteNodeId() ?? 'local';
+      this.historyCleanup = terminal.attachOperationHistory(this.operationHistory, deviceKey);
+      if (terminal.getSessionId()) this.modificationStore.resetEpoch(deviceKey);
+    }
 
     terminal.setOnNewTerminal(() => {
       void this.createNewTerminal();
@@ -799,6 +871,22 @@ export class TerminalView extends ItemView {
           const outcome = await connections
             .createTransferSender(nodeId, crypto.randomUUID(), source.files, source.readFile, null, targetPath)
             .run();
+          const receipts = confirmedTransferReceipts(outcome, source.files);
+          for (const receipt of receipts) {
+            const path = joinTerminalPaths(targetPath, receipt.relativePath, platform);
+            if (receipt.epoch && receipt.commitSequence !== undefined) {
+              this.modificationStore.mark({
+                deviceKey: nodeId,
+                path,
+                version: receipt.commitSequence,
+                epoch: receipt.epoch,
+                sequence: receipt.commitSequence,
+                eventId: receipt.eventId,
+              });
+            } else {
+              this.modificationStore.markPath(nodeId, path);
+            }
+          }
           if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
           landedPaths.push(joinTerminalPaths(targetPath, file.name, platform));
           filesDone += 1;
@@ -1027,6 +1115,8 @@ export class TerminalView extends ItemView {
           onDropToPath: (dataTransfer, targetPath) => void this.handleDirectoryTreeDrop(dataTransfer, targetPath),
           onCopyToVault: (path, isDirectory, baseName) => void this.handleCopyToVault(path, isDirectory, baseName),
           onRequestClose: () => this.closeDirectoryTree(),
+          modificationStore: this.modificationStore,
+          deviceKey: this.getRemoteNodeId() ?? 'local',
           onDockSideChange: (side) => {
             const current = this.getTerminalPlugin();
             if (!current) return;
@@ -1152,11 +1242,25 @@ export class TerminalView extends ItemView {
             // case (`sendNoteRecursively`), just landing on the local disk
             // instead of over the wire.
             if (entry instanceof TFile && entry.extension.toLowerCase() === 'md') {
-              const result = await copyVaultNoteWithLinksToDirectory(this.app, entry, targetPath, fsAccess, onEntryProgress);
+              const result = await copyVaultNoteWithLinksToDirectory(
+                this.app,
+                entry,
+                targetPath,
+                fsAccess,
+                onEntryProgress,
+                (path) => this.getTerminalPlugin()?.notifyLocalFileCommitted(path),
+              );
               allSkippedNotes.push(...result.skippedNotes);
               totalDone += result.fileCount;
             } else {
-              const result = await copyVaultEntryToDirectory(this.app, entry, targetPath, fsAccess, onEntryProgress);
+              const result = await copyVaultEntryToDirectory(
+                this.app,
+                entry,
+                targetPath,
+                fsAccess,
+                onEntryProgress,
+                (path) => this.getTerminalPlugin()?.notifyLocalFileCommitted(path),
+              );
               totalDone += result.fileCount;
             }
           }
@@ -1194,6 +1298,23 @@ export class TerminalView extends ItemView {
       const outcome = await connections
         .createTransferSender(nodeId, crypto.randomUUID(), files, readFile, null, targetPath, {}, directories)
         .run();
+      const platform = this.guessRemotePathPlatform(targetPath);
+      const receipts = confirmedTransferReceipts(outcome, files);
+      for (const receipt of receipts) {
+        const path = joinTerminalPaths(targetPath, receipt.relativePath, platform);
+        if (receipt.epoch && receipt.commitSequence !== undefined) {
+          this.modificationStore.mark({
+            deviceKey: nodeId,
+            path,
+            version: receipt.commitSequence,
+            epoch: receipt.epoch,
+            sequence: receipt.commitSequence,
+            eventId: receipt.eventId,
+          });
+        } else {
+          this.modificationStore.markPath(nodeId, path);
+        }
+      }
       if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
       // The wire transfer already ran the whole entry (folder or file) as
       // one unit by the time `run()` resolves, so the only progress
@@ -1925,6 +2046,61 @@ export class TerminalView extends ItemView {
     return this.terminalInstance;
   }
 
+  receiveFileCommit(deviceKey: string, path: string, epoch: string, sequence: number, eventId: string): void {
+    this.modificationStore.mark({ deviceKey, path, version: sequence, epoch, sequence, eventId });
+  }
+
+  removeDeviceState(deviceKey: string): void {
+    this.modificationStore.removeDevice(deviceKey);
+  }
+
+  showShortcutReplay(runId: string): void {
+    const plugin = this.getTerminalPlugin();
+    if (!plugin) return;
+    this.shortcutReplayCleanup?.();
+    this.shortcutReplayEl?.remove();
+    this.activeShortcutRunId = runId;
+    const bar = this.contentEl.createDiv('terminal-shortcut-replay');
+    this.shortcutReplayEl = bar;
+    this.terminalBody?.insertAdjacentElement('beforebegin', bar);
+    this.shortcutReplayCleanup = plugin.subscribeShortcutReplay(runId, (snapshot) => {
+      if (this.activeShortcutRunId !== runId) return;
+      this.renderShortcutReplay(snapshot);
+    });
+  }
+
+  private renderShortcutReplay(snapshot: ReplaySnapshot): void {
+    const bar = this.shortcutReplayEl;
+    const plugin = this.getTerminalPlugin();
+    if (!bar || !plugin) return;
+    bar.empty();
+    const displayedStep = Math.min(snapshot.stepIndex + 1, Math.max(snapshot.totalSteps, 1));
+    bar.createSpan({
+      cls: 'terminal-shortcut-replay-status',
+      text: `${snapshot.groupName} · ${displayedStep}/${snapshot.totalSteps} · ${snapshot.pauseReason ?? snapshot.state}`,
+    });
+    const controls = bar.createDiv('terminal-shortcut-replay-controls');
+    if (snapshot.state === 'paused' && (snapshot.dispatchState === 'sent' || snapshot.dispatchState === 'unknown')) {
+      const waitButton = controls.createEl('button', { text: '继续等待' });
+      waitButton.addEventListener('click', () => void plugin.continueShortcutReplay(snapshot.runId, 'wait'));
+      const confirmButton = controls.createEl('button', { text: '手动确认' });
+      confirmButton.addEventListener('click', () => void plugin.continueShortcutReplay(snapshot.runId, 'confirmed'));
+    }
+    if (snapshot.state !== 'completed' && snapshot.state !== 'stopped') {
+      const stopButton = controls.createEl('button', { text: '停止' });
+      stopButton.addEventListener('click', () => plugin.stopShortcutReplay(snapshot.runId));
+    } else {
+      const closeButton = controls.createEl('button', { text: '关闭' });
+      closeButton.addEventListener('click', () => {
+        this.shortcutReplayCleanup?.();
+        this.shortcutReplayCleanup = null;
+        this.shortcutReplayEl?.remove();
+        this.shortcutReplayEl = null;
+        this.activeShortcutRunId = null;
+      });
+    }
+  }
+
   async waitForTerminalInstance(timeoutMs = 8000): Promise<TerminalInstance> {
     if (this.terminalInstance) return this.terminalInstance;
     if (!this.initPromise) {
@@ -1956,6 +2132,11 @@ export class TerminalView extends ItemView {
     handleTerminalViewClosed: (terminalView: TerminalView) => void;
     saveSettings: () => Promise<void>;
     copyDirectoryTreeEntryToVaultWithPicker: (entry: DirectoryTreeDragPayload, explicitTargetFolder?: string) => Promise<void>;
+    runShortcutGroupOnTerminal: (terminal: TerminalInstance, group: ShortcutGroup) => Promise<string>;
+    subscribeShortcutReplay: (runId: string, listener: (snapshot: ReplaySnapshot) => void) => () => void;
+    continueShortcutReplay: (runId: string, action: 'wait' | 'confirmed') => Promise<void>;
+    stopShortcutReplay: (runId: string) => void;
+    notifyLocalFileCommitted: (path: string) => void;
   } | null {
     const appWithPlugins = this.app as typeof this.app & {
       plugins?: { getPlugin?: (id: string) => unknown };
@@ -1978,6 +2159,11 @@ export class TerminalView extends ItemView {
     handleTerminalViewClosed: (terminalView: TerminalView) => void;
     saveSettings: () => Promise<void>;
     copyDirectoryTreeEntryToVaultWithPicker: (entry: DirectoryTreeDragPayload, explicitTargetFolder?: string) => Promise<void>;
+    runShortcutGroupOnTerminal: (terminal: TerminalInstance, group: ShortcutGroup) => Promise<string>;
+    subscribeShortcutReplay: (runId: string, listener: (snapshot: ReplaySnapshot) => void) => () => void;
+    continueShortcutReplay: (runId: string, action: 'wait' | 'confirmed') => Promise<void>;
+    stopShortcutReplay: (runId: string) => void;
+    notifyLocalFileCommitted: (path: string) => void;
   } {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as {
@@ -1993,6 +2179,11 @@ export class TerminalView extends ItemView {
       handleTerminalViewClosed?: unknown;
       saveSettings?: unknown;
       copyDirectoryTreeEntryToVaultWithPicker?: unknown;
+      runShortcutGroupOnTerminal?: unknown;
+      subscribeShortcutReplay?: unknown;
+      continueShortcutReplay?: unknown;
+      stopShortcutReplay?: unknown;
+      notifyLocalFileCommitted?: unknown;
     };
     return typeof candidate.activateTerminalView === 'function'
       && typeof candidate.reconnectTerminalView === 'function'
@@ -2005,6 +2196,11 @@ export class TerminalView extends ItemView {
       && typeof candidate.handleTerminalViewClosed === 'function'
       && typeof candidate.saveSettings === 'function'
       && typeof candidate.copyDirectoryTreeEntryToVaultWithPicker === 'function'
+      && typeof candidate.runShortcutGroupOnTerminal === 'function'
+      && typeof candidate.subscribeShortcutReplay === 'function'
+      && typeof candidate.continueShortcutReplay === 'function'
+      && typeof candidate.stopShortcutReplay === 'function'
+      && typeof candidate.notifyLocalFileCommitted === 'function'
       && typeof candidate.settings === 'object';
   }
 }

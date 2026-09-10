@@ -17,7 +17,20 @@ export interface DirectoryEntry {
 
 export type DirectoryChangeKind = 'created' | 'deleted' | 'renamed' | 'unknown';
 
+export interface DirectoryMetadata {
+  modifiedAtMs: number | null;
+}
+
+export interface DirectorySnapshot {
+  epoch: string;
+  sequence: number;
+}
+
 export interface DirectoryTreeSource {
+  /** Optional metadata capability; unsupported sources keep list/watch unchanged. */
+  stat?(path: string): Promise<DirectoryMetadata>;
+  /** Optional target-side commit barrier used by manual refresh. */
+  snapshot?(path: string): Promise<DirectorySnapshot>;
   /** Lists the direct children of `path` (not recursive). Rejects if `path` cannot be read. */
   list(path: string): Promise<DirectoryEntry[]>;
   /**
@@ -32,6 +45,7 @@ interface MinimalFsWatcher {
 }
 
 interface MinimalFsPromises {
+  stat?(path: string): Promise<{ mtimeMs: number }>;
   readdir(path: string, options: { withFileTypes: true }): Promise<Array<{ name: string; isDirectory(): boolean }>>;
 }
 
@@ -64,6 +78,12 @@ export class LocalDirectoryTreeSource implements DirectoryTreeSource {
 
   constructor(fs: MinimalFsModule) {
     this.fs = fs;
+  }
+
+  async stat(path: string): Promise<DirectoryMetadata> {
+    if (!this.fs.promises.stat) return { modifiedAtMs: null };
+    const { mtimeMs } = await this.fs.promises.stat(path);
+    return { modifiedAtMs: Number.isFinite(mtimeMs) && Math.abs(mtimeMs) <= 8.64e15 ? mtimeMs : null };
   }
 
   async list(path: string): Promise<DirectoryEntry[]> {

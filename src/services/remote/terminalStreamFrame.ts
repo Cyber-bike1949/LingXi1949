@@ -66,14 +66,19 @@ export interface ClosePayload {
 export interface FsEntry {
   name: string;
   isDirectory: boolean;
+  modifiedAtMs?: number | null;
 }
 
 export interface FsListPayload {
   path: string;
+  metadataVersion?: number;
 }
 
 export interface FsListResultPayload {
   entries: FsEntry[];
+  metadataVersion?: number;
+  snapshotSequence?: number;
+  epoch?: string;
 }
 
 /** "created" | "deleted" | "renamed" | "unknown" - see `FsChangedPayload` in `agent/src/termstream.rs`. */
@@ -101,6 +106,7 @@ export interface DirectoryEntry {
 
 export interface TransferManifestPayload {
   transferId: string;
+  receiptVersion?: number;
   rootNote: string;
   entries: TransferEntry[];
   /** v1.9 D-01: every directory under the transferred entry. Absent on an older peer's manifest, which decodes as `[]`. */
@@ -113,6 +119,8 @@ export interface TransferManifestPayload {
 
 export interface TransferAcceptedPayload {
   grantedBytes: number;
+  receiptVersion?: number;
+  epoch?: string;
 }
 
 /** Not JSON - see the module doc. */
@@ -131,12 +139,25 @@ export interface TransferCreditPayload {
   grantedBytes: number;
 }
 
+export interface TransferFileResult {
+  fileIndex: number;
+  relativePath: string;
+  status: 'success' | 'failed' | 'unknown';
+  code?: string | null;
+  message?: string;
+  epoch?: string;
+  commitSequence?: number;
+  eventId?: string;
+}
+
 export type TransferCompletePayload = Record<string, never>;
 
 export interface TransferResultPayload {
   success: boolean;
   code: string | null;
   message: string;
+  /** Optional per-file receipts, absent on older peers. */
+  files?: TransferFileResult[];
 }
 
 /** Handshake for the reverse direction (candidate doc phase 2B): the agent is the sender this time. */
@@ -380,6 +401,22 @@ function requireBoolean(raw: Record<string, unknown>, field: string): boolean {
   return value;
 }
 
+function decodeMetadataVersion(raw: Record<string, unknown>): { metadataVersion?: number } {
+  if (raw.metadataVersion === undefined) return {};
+  if (typeof raw.metadataVersion !== 'number' || !Number.isSafeInteger(raw.metadataVersion) || raw.metadataVersion < 1 || raw.metadataVersion > 0xffffffff) {
+    throw new TerminalStreamFrameError('invalid "metadataVersion"');
+  }
+  return { metadataVersion: raw.metadataVersion };
+}
+
+function decodeReceiptVersion(raw: Record<string, unknown>): { receiptVersion?: number } {
+  if (raw.receiptVersion === undefined) return {};
+  if (typeof raw.receiptVersion !== 'number' || !Number.isSafeInteger(raw.receiptVersion) || raw.receiptVersion < 1 || raw.receiptVersion > 0xffffffff) {
+    throw new TerminalStreamFrameError('invalid "receiptVersion"');
+  }
+  return { receiptVersion: raw.receiptVersion };
+}
+
 function decodeFsEntries(raw: Record<string, unknown>): FsEntry[] {
   const value = raw.entries;
   if (!Array.isArray(value)) {
@@ -390,7 +427,15 @@ function decodeFsEntries(raw: Record<string, unknown>): FsEntry[] {
       throw new TerminalStreamFrameError('invalid entry in "entries"');
     }
     const entry = item as Record<string, unknown>;
-    return { name: requireString(entry, 'name'), isDirectory: requireBoolean(entry, 'isDirectory') };
+    const result: FsEntry = { name: requireString(entry, 'name'), isDirectory: requireBoolean(entry, 'isDirectory') };
+    if (raw.metadataVersion === 1 && entry.modifiedAtMs !== undefined) {
+      const time = entry.modifiedAtMs;
+      if (time !== null && (typeof time !== 'number' || !Number.isFinite(time) || Math.abs(time) > 8.64e15)) {
+        throw new TerminalStreamFrameError('invalid "modifiedAtMs"');
+      }
+      result.modifiedAtMs = time;
+    }
+    return result;
   });
 }
 
@@ -430,6 +475,31 @@ function decodeDirectoryEntries(raw: Record<string, unknown>): DirectoryEntry[] 
     }
     const entry = item as Record<string, unknown>;
     return { relativePath: requireString(entry, 'relativePath') };
+  });
+}
+
+function decodeTransferFileResults(raw: Record<string, unknown>): TransferFileResult[] | undefined {
+  const value = raw.files;
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new TerminalStreamFrameError('invalid "files"');
+  return value.map((item) => {
+    if (typeof item !== 'object' || item === null) throw new TerminalStreamFrameError('invalid entry in "files"');
+    const entry = item as Record<string, unknown>;
+    const status = requireString(entry, 'status');
+    if (status !== 'success' && status !== 'failed' && status !== 'unknown') throw new TerminalStreamFrameError('invalid file receipt status');
+    if (entry.epoch !== undefined && (typeof entry.epoch !== 'string' || entry.epoch.length === 0)) throw new TerminalStreamFrameError('invalid file receipt epoch');
+    if (entry.commitSequence !== undefined && (typeof entry.commitSequence !== 'number' || !Number.isSafeInteger(entry.commitSequence) || entry.commitSequence < 1)) throw new TerminalStreamFrameError('invalid file receipt commitSequence');
+    if (entry.eventId !== undefined && (typeof entry.eventId !== 'string' || entry.eventId.length === 0)) throw new TerminalStreamFrameError('invalid file receipt eventId');
+    return {
+      fileIndex: requireNumber(entry, 'fileIndex'),
+      relativePath: requireString(entry, 'relativePath'),
+      status,
+      ...(entry.code === undefined ? {} : { code: optionalString(entry, 'code') }),
+      ...(typeof entry.message === 'string' ? { message: entry.message } : {}),
+      ...(typeof entry.epoch === 'string' ? { epoch: entry.epoch } : {}),
+      ...(typeof entry.commitSequence === 'number' ? { commitSequence: entry.commitSequence } : {}),
+      ...(typeof entry.eventId === 'string' ? { eventId: entry.eventId } : {}),
+    };
   });
 }
 
@@ -480,11 +550,24 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
     }
     case KIND_FS_LIST: {
       const raw = decodeJson(payload);
-      return { kind: 'fsList', payload: { path: requireString(raw, 'path') } };
+      return { kind: 'fsList', payload: { path: requireString(raw, 'path'), ...decodeMetadataVersion(raw) } };
     }
     case KIND_FS_LIST_RESULT: {
       const raw = decodeJson(payload);
-      return { kind: 'fsListResult', payload: { entries: decodeFsEntries(raw) } };
+      const snapshotSequence = raw.snapshotSequence;
+      if (snapshotSequence !== undefined && (typeof snapshotSequence !== 'number' || !Number.isSafeInteger(snapshotSequence) || snapshotSequence < 0)) {
+        throw new TerminalStreamFrameError('invalid "snapshotSequence"');
+      }
+      if (raw.epoch !== undefined && typeof raw.epoch !== 'string') throw new TerminalStreamFrameError('invalid "epoch"');
+      return {
+        kind: 'fsListResult',
+        payload: {
+          entries: decodeFsEntries(raw),
+          ...decodeMetadataVersion(raw),
+          ...(typeof snapshotSequence === 'number' ? { snapshotSequence } : {}),
+          ...(typeof raw.epoch === 'string' ? { epoch: raw.epoch } : {}),
+        },
+      };
     }
     case KIND_FS_CHANGED: {
       const raw = decodeJson(payload);
@@ -496,6 +579,7 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
         kind: 'transferManifest',
         payload: {
           transferId: requireString(raw, 'transferId'),
+          ...decodeReceiptVersion(raw),
           rootNote: requireString(raw, 'rootNote'),
           entries: decodeTransferEntries(raw),
           directories: decodeDirectoryEntries(raw),
@@ -506,7 +590,11 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
     }
     case KIND_TRANSFER_ACCEPTED: {
       const raw = decodeJson(payload);
-      return { kind: 'transferAccepted', payload: { grantedBytes: requireNumber(raw, 'grantedBytes') } };
+      return { kind: 'transferAccepted', payload: {
+        grantedBytes: requireNumber(raw, 'grantedBytes'),
+        ...decodeReceiptVersion(raw),
+        ...(typeof raw.epoch === 'string' ? { epoch: raw.epoch } : {}),
+      } };
     }
     case KIND_TRANSFER_CHUNK:
       return { kind: 'transferChunk', payload: decodeTransferChunk(payload) };
@@ -532,6 +620,10 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
           success: requireBoolean(raw, 'success'),
           code: optionalString(raw, 'code'),
           message: requireString(raw, 'message'),
+          ...(() => {
+            const files = decodeTransferFileResults(raw);
+            return files === undefined ? {} : { files };
+          })(),
         },
       };
     }

@@ -102,6 +102,26 @@ export class DeviceHomeView extends ItemView {
       cardEl.createEl('h2', { text: t('home.localDevice') });
       cardEl.createEl('p', { text: t('home.localDeviceDescription') });
       this.renderStatus(cardEl, 'connected', t('home.available'));
+      const groups = this.plugin.settings.deviceShortcutGroups
+        .filter((group) => group.deviceKey === 'local')
+        .sort((a, b) => b.creationOrder - a.creationOrder);
+      if (groups.length > 0) {
+        const shortcuts = cardEl.createDiv({ cls: 'termesh-device-shortcuts' });
+        const select = shortcuts.createEl('select', { attr: { 'aria-label': '选择快捷组' } });
+        for (const group of groups) select.createEl('option', { text: group.name, value: group.id });
+        const run = shortcuts.createEl('button', { text: `运行：${groups[0].name}`, cls: 'mod-cta' });
+        select.addEventListener('change', () => run.setText(`运行：${groups.find((group) => group.id === select.value)?.name ?? ''}`));
+        run.addEventListener('click', (event) => {
+          event.stopPropagation();
+          const group = groups.find((item) => item.id === select.value);
+          if (group) void this.plugin.runShortcutGroupOnLocalDevice(group).catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组启动失败'));
+        });
+        const remove = shortcuts.createEl('button', { text: '删除快捷组' });
+        remove.addEventListener('click', (event) => {
+          event.stopPropagation();
+          void this.plugin.removeShortcutGroup(select.value).then(() => this.render());
+        });
+      }
       return;
     }
 
@@ -129,6 +149,7 @@ export class DeviceHomeView extends ItemView {
       new RemoveDeviceModal(this.app, device.name, async () => {
         this.plugin.getDeviceConnectionManager().disconnect(device.nodeId);
         this.plugin.getPairedDeviceStore().remove(device.nodeId);
+        this.plugin.handleDeviceRemoved(device.nodeId);
         await this.plugin.saveSettings();
         new Notice(t('home.deviceRemoved'));
         this.render();
@@ -141,6 +162,39 @@ export class DeviceHomeView extends ItemView {
       : t('home.neverConnected');
     cardEl.createEl('p', { text: lastConnected });
     this.renderStatus(cardEl, status.state, statusText);
+    const groups = this.plugin.settings.deviceShortcutGroups
+      .filter((group) => group.deviceKey === device.nodeId)
+      .sort((a, b) => b.creationOrder - a.creationOrder);
+    if (groups.length > 0) {
+      const shortcuts = cardEl.createDiv({ cls: 'termesh-device-shortcuts' });
+      const latest = shortcuts.createEl('button', { text: `运行：${groups[0].name}`, cls: 'mod-cta' });
+      latest.disabled = status.state !== 'connected';
+      latest.addEventListener('click', (event) => {
+        event.stopPropagation();
+        void this.plugin.runShortcutGroupOnDevice(device.nodeId, groups[0]).catch((error: unknown) => {
+          new Notice(error instanceof Error ? error.message : '快捷组启动失败');
+        });
+      });
+      if (groups.length > 1) {
+        const select = shortcuts.createEl('select', { attr: { 'aria-label': '选择快捷组' } });
+        for (const group of groups) select.createEl('option', { text: group.name, value: group.id });
+        select.addEventListener('change', () => {
+          const group = groups.find((item) => item.id === select.value);
+          if (!group) return;
+          void this.plugin.runShortcutGroupOnDevice(device.nodeId, group).catch((error: unknown) => {
+            new Notice(error instanceof Error ? error.message : '快捷组启动失败');
+          });
+        });
+      }
+      const removeShortcut = shortcuts.createEl('button', { text: '删除快捷组' });
+      removeShortcut.addEventListener('click', (event) => {
+        event.stopPropagation();
+        const selectedId = shortcuts.querySelector<HTMLSelectElement>('select')?.value ?? groups[0].id;
+        void this.plugin.removeShortcutGroup(selectedId).then(() => this.render()).catch((error: unknown) => {
+          new Notice(error instanceof Error ? error.message : '删除快捷组失败');
+        });
+      });
+    }
     if (status.state === 'error') {
       cardEl.createDiv({
         cls: 'termesh-device-error',

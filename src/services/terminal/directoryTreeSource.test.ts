@@ -88,3 +88,28 @@ test('watch() on a directory that disappears does not throw', () => {
     disposable.dispose();
   });
 });
+
+test('stat() reads filesystem mtime and observes later writes without stale caching', async () => {
+  const dir = makeTmpDir();
+  try {
+    const file = path.join(dir, 'demo.txt');
+    fs.writeFileSync(file, 'example');
+    const source = new LocalDirectoryTreeSource(fs);
+    fs.utimesSync(file, 100, 1234);
+    assert.deepEqual(await source.stat(file), { modifiedAtMs: fs.statSync(file).mtimeMs });
+    fs.utimesSync(file, 100, 5678);
+    assert.deepEqual(await source.stat(file), { modifiedAtMs: fs.statSync(file).mtimeMs });
+    fs.unlinkSync(file);
+    await assert.rejects(source.stat(file), { code: 'ENOENT' });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('stat() tolerates an older injected filesystem without metadata support', async () => {
+  const source = new LocalDirectoryTreeSource({
+    promises: { readdir: fs.promises.readdir },
+    watch: fs.watch,
+  });
+  assert.deepEqual(await source.stat('/example/demo.txt'), { modifiedAtMs: null });
+});

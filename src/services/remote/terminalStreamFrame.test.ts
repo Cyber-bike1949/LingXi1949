@@ -102,7 +102,12 @@ test('every frame kind round-trips', () => {
   roundtrip({ kind: 'transferFileEnd', payload: { fileIndex: 0, sentSize: 11 } });
   roundtrip({ kind: 'transferCredit', payload: { grantedBytes: 8 * 1024 * 1024 } });
   roundtrip({ kind: 'transferComplete', payload: {} });
-  roundtrip({ kind: 'transferResult', payload: { success: true, code: null, message: '' } });
+  roundtrip({ kind: 'transferResult', payload: {
+    success: true,
+    code: null,
+    message: '',
+    files: [{ fileIndex: 0, relativePath: 'notes/demo.md', status: 'success', code: null, epoch: 'epoch-1', commitSequence: 1 }],
+  } });
   roundtrip({
     kind: 'transferResult',
     payload: { success: false, code: 'WRITE_FAILED', message: 'disk full' },
@@ -274,4 +279,29 @@ test('feeding an empty chunk is a harmless no-op', () => {
   const decoder = new TerminalStreamFrameDecoder();
   decoder.push(new Uint8Array(0));
   assert.equal(decoder.nextFrame(), null);
+});
+
+test('metadata extension round-trips old shapes, negotiated time, null and pre-epoch time', () => {
+  roundtrip({ kind: 'fsList', payload: { path: '/example', metadataVersion: 1 } });
+  roundtrip({ kind: 'fsListResult', payload: { metadataVersion: 1, entries: [] } });
+  roundtrip({ kind: 'fsListResult', payload: { metadataVersion: 1, epoch: 'agent-epoch', snapshotSequence: 42, entries: [] } });
+  roundtrip({ kind: 'fsListResult', payload: { metadataVersion: 1, entries: [
+    { name: 'demo.txt', isDirectory: false, modifiedAtMs: -1000 },
+    { name: 'unknown.txt', isDirectory: false, modifiedAtMs: null },
+  ] } });
+});
+
+test('metadata decoder rejects invalid negotiated times and versions', () => {
+  for (const value of ['123', 8.64e15 + 1, {}, true]) {
+    const decoder = new TerminalStreamFrameDecoder();
+    decoder.push(encodeTerminalStreamFrame({ kind: 'fsListResult', payload: {
+      metadataVersion: 1, entries: [{ name: 'demo.txt', isDirectory: false, modifiedAtMs: value as number }],
+    } }));
+    assert.throws(() => decoder.nextFrame(), TerminalStreamFrameError);
+  }
+  for (const value of [0, -1, 1.5, '1']) {
+    const decoder = new TerminalStreamFrameDecoder();
+    decoder.push(encodeTerminalStreamFrame({ kind: 'fsList', payload: { path: '/example', metadataVersion: value as number } }));
+    assert.throws(() => decoder.nextFrame(), TerminalStreamFrameError);
+  }
 });

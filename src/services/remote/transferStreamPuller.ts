@@ -18,6 +18,7 @@ import {
   encodeTerminalStreamFrame,
   TerminalStreamFrameDecoder,
   type DirectoryEntry,
+  type TransferFileResult,
   type TerminalStreamFrame,
 } from './terminalStreamFrame.ts';
 import type { ByteStream } from './terminalStreamTransport.ts';
@@ -38,6 +39,7 @@ export interface TransferPullOutcome {
   files: PulledFile[];
   /** v1.9 D-01: every directory under the pulled entry - includes the entry itself when it is a directory, even an empty one. */
   directories: DirectoryEntry[];
+  fileResults?: TransferFileResult[];
 }
 
 /** `PULL_FAILED: no such file`  -> `PULL_FAILED`. Mirrors `terminalStreamTransport.ts`'s local helper. */
@@ -184,6 +186,7 @@ export class TransferStreamPuller {
             ...frame.payload,
             files: frame.payload.success ? files : [],
             directories: frame.payload.success ? directories : [],
+            fileResults: frame.payload.files,
           };
         }
 
