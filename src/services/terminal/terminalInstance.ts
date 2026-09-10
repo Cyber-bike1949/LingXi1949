@@ -37,6 +37,11 @@ import {
 } from './promptCwdParsers';
 import { shell } from 'electron';
 import type { OperationHistory } from './operationHistory';
+import {
+  filterTerminalControlSequences,
+  startsInteractiveCli,
+  type ControlSequenceFilterState,
+} from './operationInputCapture';
 
 // xterm.js CSS (static import handled by esbuild)
 import '@xterm/xterm/css/xterm.css';
@@ -231,6 +236,9 @@ export class TerminalInstance {
   }> = [];
   private activeCommandStart: number | null = null;
   private userCommandBufferReliable = true;
+  private historyInteractiveProgram = false;
+  private readonly historyControlSequenceState: ControlSequenceFilterState = { pending: '' };
+  private historyStandaloneEscapePending = false;
   private promptMarkers: IMarker[] = [];
   private commandMarkers: TerminalCommandMarker[] = [];
   private win32InputModeEnabled = false;
@@ -681,6 +689,9 @@ export class TerminalInstance {
     this.agentSessionStartCwd = null;
     this.pendingControlSequenceText = '';
     this.synchronizedOutputCompatibilityState = createSynchronizedOutputCompatibilityState();
+    this.historyInteractiveProgram = false;
+    this.historyControlSequenceState.pending = '';
+    this.historyStandaloneEscapePending = false;
   }
 
   private writeToTransport(data: string): void {
@@ -702,12 +713,14 @@ export class TerminalInstance {
   }
 
   private captureUserInput(data: string | Uint8Array): void {
-    const text = typeof data === 'string' ? data : new TextDecoder().decode(data);
-    const keyNames: Record<string, string> = {
-      '\u001b[A': 'ArrowUp', '\u001b[B': 'ArrowDown', '\u001b[C': 'ArrowRight', '\u001b[D': 'ArrowLeft',
-      '\u001b[Z': 'ShiftTab', '\u001b': 'Escape', '\u0009': 'Tab', '\u0003': 'Ctrl+C', '\u0004': 'Ctrl+D',
-    };
-    const interactiveProgram = this.claudeCodeSessionState.isActive();
+    const rawText = typeof data === 'string' ? data : new TextDecoder().decode(data);
+    if (this.historyStandaloneEscapePending && rawText === '\x1b') {
+      this.historyStandaloneEscapePending = false;
+      return;
+    }
+    this.historyStandaloneEscapePending = false;
+    const { text } = filterTerminalControlSequences(rawText, this.historyControlSequenceState);
+    const interactiveProgram = this.isHistoryInteractiveProgram();
     const unknownSensitiveInput = this.activeCommandStart !== null && !interactiveProgram;
     if (unknownSensitiveInput) {
       this.userCommandBuffer = '';
@@ -715,26 +728,17 @@ export class TerminalInstance {
       return;
     }
     for (let index = 0; index < text.length; index += 1) {
-      const sequence = Object.keys(keyNames).find((candidate) => text.startsWith(candidate, index));
-      if (sequence) {
-        if (interactiveProgram || sequence === '\u0003' || sequence === '\u0004' || sequence === '\u001b') {
-          for (const listener of this.operationHistoryListeners) listener(sequence, 'key', keyNames[sequence]);
-        } else {
-          // Shell history navigation and completion can replace the entire
-          // editable line. Without a final command-line signal, stop
-          // treating the local byte buffer as authoritative.
-          this.userCommandBufferReliable = false;
-        }
-        index += sequence.length - 1;
-        continue;
-      }
       const character = text[index];
-      if (character === '\r' || character === '\n') {
+      if (character === '\u0003' || character === '\u0004') {
+        const summary = character === '\u0003' ? 'Ctrl+C' : 'Ctrl+D';
+        for (const listener of this.operationHistoryListeners) listener(character, 'key', summary);
+      } else if (character === '\r' || character === '\n') {
         const payload = this.userCommandBuffer.trim();
         if (payload && this.sessionId) {
           if (this.userCommandBufferReliable) {
             const kind = interactiveProgram ? 'text' : 'shell';
             for (const listener of this.operationHistoryListeners) listener(payload, kind, payload);
+            if (!interactiveProgram && startsInteractiveCli(payload)) this.historyInteractiveProgram = true;
           }
         } else if (this.sessionId) {
           for (const listener of this.operationHistoryListeners) listener(character, 'confirm', 'Enter');
@@ -747,6 +751,22 @@ export class TerminalInstance {
         this.userCommandBuffer += character;
       }
     }
+  }
+
+  private captureUserKeyEvent(event: KeyboardEvent): void {
+    if (event.type !== 'keydown' || event.isComposing || event.key === 'Enter') return;
+    const keyName = describeHistoryKey(event);
+    if (!keyName) return;
+    if (!this.isHistoryInteractiveProgram()) {
+      if (event.key.startsWith('Arrow') || event.key === 'Tab') this.userCommandBufferReliable = false;
+      return;
+    }
+    if (event.key === 'Escape') this.historyStandaloneEscapePending = true;
+    for (const listener of this.operationHistoryListeners) listener(keyPayload(event), 'key', keyName);
+  }
+
+  private isHistoryInteractiveProgram(): boolean {
+    return this.historyInteractiveProgram || this.claudeCodeSessionState.isActive();
   }
 
   private readonly operationHistoryListeners = new Set<(payload: string, kind?: 'shell' | 'text' | 'key' | 'confirm', summary?: string) => void>();
@@ -800,6 +820,7 @@ export class TerminalInstance {
     });
 
     this.xterm.attachCustomKeyEventHandler((event: KeyboardEvent) => {
+      this.captureUserKeyEvent(event);
       return keyboardProtocol.handleKeyboardEvent(event);
     });
   }
@@ -866,6 +887,7 @@ export class TerminalInstance {
 
   private observeShellPrompt(): void {
     this.claudeCodeSessionState.observeShellPrompt();
+    this.historyInteractiveProgram = false;
     this.agentSessionStartCwd = null;
     this.applyTitleChange(this.titleState.clearAutomaticTitle());
   }
@@ -2421,4 +2443,20 @@ export class TerminalInstance {
       this.refreshRenderer();
     }
   }
+}
+
+function describeHistoryKey(event: KeyboardEvent): string | null {
+  const modifiers = [event.ctrlKey ? 'Ctrl' : '', event.altKey ? 'Alt' : '', event.shiftKey ? 'Shift' : '', event.metaKey ? 'Meta' : ''].filter(Boolean);
+  const meaningful = event.key.startsWith('Arrow') || ['Escape', 'Tab', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key);
+  if (!meaningful) return null;
+  return [...modifiers, event.key.length === 1 ? event.key.toUpperCase() : event.key].join('+');
+}
+
+function keyPayload(event: KeyboardEvent): string {
+  if (event.key === 'Escape') return '\x1b';
+  if (event.key === 'Tab') return event.shiftKey ? '\x1b[Z' : '\t';
+  const arrows: Record<string, string> = { ArrowUp: '\x1b[A', ArrowDown: '\x1b[B', ArrowRight: '\x1b[C', ArrowLeft: '\x1b[D' };
+  return arrows[event.key] ?? (event.ctrlKey && event.key.length === 1
+    ? String.fromCharCode(event.key.toUpperCase().charCodeAt(0) - 64)
+    : event.key);
 }

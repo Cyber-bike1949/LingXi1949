@@ -136,6 +136,7 @@ export default class TerminalPlugin extends Plugin {
   private _remoteService: RemoteService | null = null;
   private _pairedDeviceStore: PairedDeviceStore | null = null;
   private readonly shortcutReplayController = new ShortcutReplayController();
+  private readonly shortcutGroupListeners = new Set<() => void>();
   private readonly localCommitEpoch = crypto.randomUUID();
   private localCommitSequence = 0;
   private settingsSaveQueue: Promise<void> = Promise.resolve();
@@ -1231,10 +1232,32 @@ export default class TerminalPlugin extends Plugin {
     this.settings.deviceShortcutGroups = next;
     try {
       await this.saveSettings();
+      this.notifyShortcutGroupsChanged();
     } catch (error) {
       this.settings.deviceShortcutGroups = previous;
       throw error;
     }
+  }
+
+  async saveShortcutGroups(groups: ShortcutGroup[]): Promise<void> {
+    const previous = this.settings.deviceShortcutGroups;
+    this.settings.deviceShortcutGroups = groups;
+    try {
+      await this.saveSettings();
+      this.notifyShortcutGroupsChanged();
+    } catch (error) {
+      this.settings.deviceShortcutGroups = previous;
+      throw error;
+    }
+  }
+
+  onShortcutGroupsChange(listener: () => void): () => void {
+    this.shortcutGroupListeners.add(listener);
+    return () => this.shortcutGroupListeners.delete(listener);
+  }
+
+  private notifyShortcutGroupsChanged(): void {
+    for (const listener of this.shortcutGroupListeners) listener();
   }
 
   notifyLocalFileCommitted(path: string): void {
@@ -2380,6 +2403,7 @@ export default class TerminalPlugin extends Plugin {
           return TransferConfirmModal.confirm(this.app, files.length, totalBytes);
         },
       });
+      terminal.view.receiveRemoteTransferCommits(targetPath, result.committedFiles ?? []);
       if (!result.success) {
         if (result.cancelled) return;
         const messageKey = result.quotaExceededByBacklinks ? 'remote.transferQuotaExceededByBacklinks' : 'remote.transferFailed';

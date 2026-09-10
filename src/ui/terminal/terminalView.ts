@@ -73,6 +73,7 @@ import type { DeviceConnectionManager } from '../../services/remote/deviceConnec
 import { DirectoryModificationStore } from '../../services/terminal/directoryModificationStore';
 import type { ReplaySnapshot } from '../../services/terminal/shortcutReplayController';
 import { confirmedTransferReceipts } from '../../services/remote/transferReceipts';
+import type { TransferFileResult } from '../../services/remote/terminalStreamFrame';
 import { getHomeDir, isWindows } from '../../utils/platform';
 type XtermTerminal = import('@xterm/xterm').Terminal;
 
@@ -101,6 +102,7 @@ export class TerminalView extends ItemView {
   private searchStateCleanup: (() => void) | null = null;
   private connectionStatusCleanup: (() => void) | null = null;
   private historyCleanup: (() => void) | null = null;
+  private shortcutGroupsCleanup: (() => void) | null = null;
   private readonly operationHistory = new OperationHistory();
   private initPromise: Promise<TerminalInstance> | null = null;
   private initResolve: ((terminal: TerminalInstance) => void) | null = null;
@@ -177,14 +179,7 @@ export class TerminalView extends ItemView {
           const store = new ShortcutGroupStore(
             () => Promise.resolve({ deviceShortcutGroups: plugin.settings.deviceShortcutGroups }),
             async (data) => {
-              const previous = plugin.settings.deviceShortcutGroups;
-              plugin.settings.deviceShortcutGroups = data.deviceShortcutGroups ?? [];
-              try {
-                await plugin.saveSettings();
-              } catch (error) {
-                plugin.settings.deviceShortcutGroups = previous;
-                throw error;
-              }
+              await plugin.saveShortcutGroups(data.deviceShortcutGroups ?? []);
             },
           );
           void store.load().then(() => new OperationHistoryModal(
@@ -238,6 +233,8 @@ export class TerminalView extends ItemView {
     this.createSearchUI();
 
     this.remoteToolbar = container.createDiv('terminal-remote-toolbar');
+    const plugin = this.getTerminalPlugin();
+    this.shortcutGroupsCleanup = plugin?.onShortcutGroupsChange(() => this.renderRemoteToolbar()) ?? null;
     this.renderRemoteToolbar();
 
     this.terminalBody = container.createDiv('terminal-body');
@@ -361,6 +358,8 @@ export class TerminalView extends ItemView {
     this.connectionStatusCleanup = null;
     this.historyCleanup?.();
     this.historyCleanup = null;
+    this.shortcutGroupsCleanup?.();
+    this.shortcutGroupsCleanup = null;
     this.shortcutReplayCleanup?.();
     this.shortcutReplayCleanup = null;
     this.shortcutReplayEl?.remove();
@@ -1368,6 +1367,43 @@ export class TerminalView extends ItemView {
       cls: `terminal-connection-status is-${this.connectionStatus}`,
       text: t(`terminal.connectionStatus.${this.connectionStatus}`),
     });
+    this.renderShortcutGroups(toolbar);
+  }
+
+  private renderShortcutGroups(toolbar: HTMLElement): void {
+    const plugin = this.getTerminalPlugin();
+    const terminal = this.terminalInstance;
+    if (!plugin || !terminal) return;
+    const deviceKey = this.getRemoteNodeId() ?? 'local';
+    const groups = plugin.settings.deviceShortcutGroups
+      .filter((group) => group.deviceKey === deviceKey)
+      .sort((a, b) => b.creationOrder - a.creationOrder);
+    if (groups.length === 0) return;
+
+    const shortcuts = toolbar.createDiv('terminal-toolbar-shortcuts');
+    const latest = shortcuts.createEl('button', {
+      text: groups[0].name,
+      attr: { title: groups[0].name, 'aria-label': `运行快捷组：${groups[0].name}` },
+    });
+    latest.addEventListener('click', () => this.runToolbarShortcut(terminal, groups[0]));
+    if (groups.length > 1) {
+      const more = shortcuts.createEl('select', { attr: { 'aria-label': '更多快捷组' } });
+      more.createEl('option', { text: '更多…', value: '' });
+      for (const group of groups.slice(1)) more.createEl('option', { text: group.name, value: group.id });
+      more.addEventListener('change', () => {
+        const group = groups.find((item) => item.id === more.value);
+        more.value = '';
+        if (group) this.runToolbarShortcut(terminal, group);
+      });
+    }
+  }
+
+  private runToolbarShortcut(terminal: TerminalInstance, group: ShortcutGroup): void {
+    const plugin = this.getTerminalPlugin();
+    if (!plugin) return;
+    void plugin.runShortcutGroupOnTerminal(terminal, group)
+      .then((runId) => this.showShortcutReplay(runId))
+      .catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组运行失败'));
   }
 
   private async reconnectTerminal(): Promise<void> {
@@ -2050,6 +2086,27 @@ export class TerminalView extends ItemView {
     this.modificationStore.mark({ deviceKey, path, version: sequence, epoch, sequence, eventId });
   }
 
+  receiveRemoteTransferCommits(targetPath: string, receipts: TransferFileResult[]): void {
+    const nodeId = this.getRemoteNodeId();
+    if (!nodeId) return;
+    const platform = this.guessRemotePathPlatform(targetPath);
+    for (const receipt of receipts) {
+      const path = joinTerminalPaths(targetPath, receipt.relativePath, platform);
+      if (receipt.epoch && receipt.commitSequence !== undefined) {
+        this.modificationStore.mark({
+          deviceKey: nodeId,
+          path,
+          version: receipt.commitSequence,
+          epoch: receipt.epoch,
+          sequence: receipt.commitSequence,
+          eventId: receipt.eventId,
+        });
+      } else {
+        this.modificationStore.markPath(nodeId, path);
+      }
+    }
+  }
+
   removeDeviceState(deviceKey: string): void {
     this.modificationStore.removeDevice(deviceKey);
   }
@@ -2137,6 +2194,8 @@ export class TerminalView extends ItemView {
     continueShortcutReplay: (runId: string, action: 'wait' | 'confirmed') => Promise<void>;
     stopShortcutReplay: (runId: string) => void;
     notifyLocalFileCommitted: (path: string) => void;
+    saveShortcutGroups: (groups: ShortcutGroup[]) => Promise<void>;
+    onShortcutGroupsChange: (listener: () => void) => () => void;
   } | null {
     const appWithPlugins = this.app as typeof this.app & {
       plugins?: { getPlugin?: (id: string) => unknown };
@@ -2164,6 +2223,8 @@ export class TerminalView extends ItemView {
     continueShortcutReplay: (runId: string, action: 'wait' | 'confirmed') => Promise<void>;
     stopShortcutReplay: (runId: string) => void;
     notifyLocalFileCommitted: (path: string) => void;
+    saveShortcutGroups: (groups: ShortcutGroup[]) => Promise<void>;
+    onShortcutGroupsChange: (listener: () => void) => () => void;
   } {
     if (!value || typeof value !== 'object') return false;
     const candidate = value as {
@@ -2184,6 +2245,8 @@ export class TerminalView extends ItemView {
       continueShortcutReplay?: unknown;
       stopShortcutReplay?: unknown;
       notifyLocalFileCommitted?: unknown;
+      saveShortcutGroups?: unknown;
+      onShortcutGroupsChange?: unknown;
     };
     return typeof candidate.activateTerminalView === 'function'
       && typeof candidate.reconnectTerminalView === 'function'
@@ -2201,6 +2264,8 @@ export class TerminalView extends ItemView {
       && typeof candidate.continueShortcutReplay === 'function'
       && typeof candidate.stopShortcutReplay === 'function'
       && typeof candidate.notifyLocalFileCommitted === 'function'
+      && typeof candidate.saveShortcutGroups === 'function'
+      && typeof candidate.onShortcutGroupsChange === 'function'
       && typeof candidate.settings === 'object';
   }
 }
