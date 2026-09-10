@@ -371,7 +371,7 @@ async function main() {
   log('');
 
   // 4. Stop running processes that may lock the installed plugin files
-  const targetDir = path.join(pluginsDir, 'termy');
+  const targetDir = path.join(pluginsDir, 'lingxi-bridge');
   if (!fs.existsSync(targetDir)) {
     fs.mkdirSync(targetDir, { recursive: true });
   }
@@ -412,10 +412,10 @@ async function main() {
   log(`  binaries/${binaryName}`, 'green');
   log('  node_modules/@number0/iroh', 'green');
   if (migrateLegacyPluginData(pluginsDir)) {
-    log('  Migrated settings: termy/data.json → termesh/data.json', 'green');
+    log('  Migrated settings: termesh/data.json → lingxi-bridge/data.json', 'green');
   }
   if (migrateEnabledPluginId(pluginsDir)) {
-    log('  Migrated enabled plugin ID: termy → termesh', 'green');
+    log('  Migrated enabled plugin ID: termesh → lingxi-bridge', 'green');
   }
   log('');
 
