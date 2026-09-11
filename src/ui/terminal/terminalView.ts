@@ -2188,7 +2188,7 @@ export class TerminalView extends ItemView {
       const confirmButton = controls.createEl('button', { text: '手动确认' });
       confirmButton.addEventListener('click', () => void plugin.continueShortcutReplay(snapshot.runId, 'confirmed'));
     }
-    if (snapshot.state !== 'completed' && snapshot.state !== 'stopped') {
+    if (snapshot.state !== 'stopped') {
       const stopButton = controls.createEl('button', { text: '停止' });
       stopButton.addEventListener('click', () => plugin.stopShortcutReplay(snapshot.runId));
     } else {

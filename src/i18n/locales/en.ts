@@ -270,6 +270,7 @@ export const en: TranslationKeys = {
       sendBacklinkedNotesDesc: 'When sending a note to the terminal, also send other notes that link back to it (recursively), so the agent gets full context. This sends more of your vault to the remote device than just the current note - turn it off to send only the current note and what it links to.',
       transferConfirmThresholdFiles: 'Confirm above this many files',
       transferConfirmThresholdFilesDesc: 'Before sending to the terminal, ask for confirmation once the collected file count exceeds this. Works together with the size threshold below - either one being exceeded triggers the confirmation.',
+      // eslint-disable-next-line obsidianmd/ui/sentence-case-locale-module -- MB is a standard unit abbreviation.
       transferConfirmThresholdSize: 'Confirm above this size (MB)',
       transferConfirmThresholdSizeDesc: 'Before sending to the terminal, ask for confirmation once the collected files\' total size exceeds this many megabytes.',
       displaySettings: 'Display settings',

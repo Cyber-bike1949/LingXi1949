@@ -1275,11 +1275,12 @@ export default class TerminalPlugin extends Plugin {
     terminal: ReplayTerminal,
     outputCursor: number,
   ): Promise<'complete' | 'failed' | 'unknown'> {
-    if (!terminal.waitForOutputMatch) {
+    const waitForOutputMatch = terminal.waitForOutputMatch;
+    if (!waitForOutputMatch) {
       this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
       return this.completeShortcutStepAfter(this.settings.shortcutReplayDelayMs);
     }
-    return terminal.waitForOutputMatch('Enable full access?', outputCursor, 15000).then(async (promptVisible) => {
+    return waitForOutputMatch('Enable full access?', outputCursor, 15000).then(async (promptVisible) => {
       if (!promptVisible) {
         this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
         return 'complete';
@@ -1287,7 +1288,7 @@ export default class TerminalPlugin extends Plugin {
       const confirmation: ShortcutStep = { ...step, kind: 'confirm', payload: '\r', summary: 'Enter' };
       const confirmedCursor = terminal.outputCursor?.() ?? outputCursor;
       await terminal.write(confirmation);
-      const confirmed = await terminal.waitForOutputMatch(
+      const confirmed = await waitForOutputMatch(
         'Permissions updated to Full Access',
         confirmedCursor,
         15000,
@@ -3854,7 +3855,9 @@ export default class TerminalPlugin extends Plugin {
 }
 
 function normalizeShortcutReplayDelay(value: unknown): number {
-  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  let parsed = Number.NaN;
+  if (typeof value === 'number') parsed = value;
+  else if (typeof value === 'string') parsed = Number.parseInt(value, 10);
   if (!Number.isFinite(parsed)) return 160;
   return Math.min(60000, Math.max(0, Math.round(parsed)));
 }
