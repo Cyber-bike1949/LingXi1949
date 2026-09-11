@@ -2171,6 +2171,10 @@ export class TerminalView extends ItemView {
     const bar = this.shortcutReplayEl;
     const plugin = this.getTerminalPlugin();
     if (!bar || !plugin) return;
+    if (snapshot.state === 'completed') {
+      this.closeShortcutReplay(snapshot.runId);
+      return;
+    }
     bar.empty();
     const displayedStep = Math.min(snapshot.stepIndex + 1, Math.max(snapshot.totalSteps, 1));
     bar.createSpan({
@@ -2189,14 +2193,17 @@ export class TerminalView extends ItemView {
       stopButton.addEventListener('click', () => plugin.stopShortcutReplay(snapshot.runId));
     } else {
       const closeButton = controls.createEl('button', { text: '关闭' });
-      closeButton.addEventListener('click', () => {
-        this.shortcutReplayCleanup?.();
-        this.shortcutReplayCleanup = null;
-        this.shortcutReplayEl?.remove();
-        this.shortcutReplayEl = null;
-        this.activeShortcutRunId = null;
-      });
+      closeButton.addEventListener('click', () => this.closeShortcutReplay(snapshot.runId));
     }
+  }
+
+  private closeShortcutReplay(runId: string): void {
+    if (this.activeShortcutRunId !== runId) return;
+    this.shortcutReplayCleanup?.();
+    this.shortcutReplayCleanup = null;
+    this.shortcutReplayEl?.remove();
+    this.shortcutReplayEl = null;
+    this.activeShortcutRunId = null;
   }
 
   async waitForTerminalInstance(timeoutMs = 8000): Promise<TerminalInstance> {

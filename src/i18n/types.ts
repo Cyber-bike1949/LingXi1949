@@ -376,6 +376,8 @@ export interface TranslationKeys {
       preferredRendererDesc: string;
       scrollback: string;
       scrollbackDesc: string;
+      shortcutReplayDelay: string;
+      shortcutReplayDelayDesc: string;
       presetScripts: string;
       presetScriptsDesc: string;
       presetScriptsAdd: string;
@@ -627,4 +629,3 @@ export interface TranslationKeys {
     webgl: string;
   };
 }
-

@@ -319,6 +319,8 @@ export const ja: TranslationKeys = {
       preferredRendererDesc: 'ターミナルの描画エンジン（WebGL は高速ですが互換性の問題がある場合があります）',
       scrollback: 'スクロールバック',
       scrollbackDesc: 'スクロールバックバッファに保持する行数',
+      shortcutReplayDelay: 'ショートカット再生のフォールバック遅延（ミリ秒）',
+      shortcutReplayDelayDesc: '出力一致条件がない場合にステップ完了まで待機する時間です（0～60000ミリ秒）。',
       presetScripts: 'プリセットスクリプト',
       presetScriptsDesc: 'ステータスバーから実行できるスクリプトを設定',
       presetScriptsAdd: 'スクリプトを追加',
@@ -554,4 +556,3 @@ export const ja: TranslationKeys = {
     webgl: 'WebGL',
   },
 };
-

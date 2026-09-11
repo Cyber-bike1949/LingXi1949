@@ -25,6 +25,7 @@ export class OperationHistoryModal extends Modal {
       toggle.setValue(this.captureEnabled).onChange((enabled) => this.onCaptureEnabledChange?.(enabled));
     });
     const list = this.contentEl.createDiv({ cls: 'operation-history-list' });
+    const outputMatches = new Map<string, string>();
     for (const record of this.records) {
       const row = list.createDiv({ cls: 'operation-history-row' });
       const checkbox = row.createEl('input', { type: 'checkbox' });
@@ -32,6 +33,12 @@ export class OperationHistoryModal extends Modal {
       checkbox.addEventListener('change', () => checkbox.checked ? this.selected.add(record.id) : this.selected.delete(record.id));
       this.checkboxes.set(record.id, checkbox);
       row.createSpan({ text: `${record.kind}: ${record.summary}` });
+      const match = row.createEl('input', {
+        type: 'text',
+        placeholder: '可选：匹配后续终端输出',
+        attr: { 'aria-label': `${record.summary} 的输出匹配` },
+      });
+      match.addEventListener('input', () => outputMatches.set(record.id, match.value));
     }
     new Setting(this.contentEl).setName('快捷组名称').addText((text) => {
       text.setPlaceholder('例如：启动项目');
@@ -44,7 +51,7 @@ export class OperationHistoryModal extends Modal {
       const input = this.contentEl.querySelector<HTMLInputElement>('input[data-role="shortcut-name"]');
       const name = input?.value ?? '';
       const selected = this.records.filter((record) => this.selected.has(record.id));
-      void this.store.create(this.deviceKey, name, selected).then(() => {
+      void this.store.create(this.deviceKey, name, selected, outputMatches).then(() => {
         new Notice('快捷组已保存');
         this.close();
       }).catch((error: unknown) => new Notice(error instanceof Error ? error.message : '保存快捷组失败'));

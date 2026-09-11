@@ -8,6 +8,7 @@ export interface ShortcutStep {
   captureQuality: OperationRecord['captureQuality'];
   completion: OperationRecord['completion'];
   sequence: number;
+  outputMatch?: string;
 }
 
 export interface ShortcutGroup {
@@ -51,12 +52,15 @@ export class ShortcutGroupStore {
   subscribe(callback: (groups: ShortcutGroup[]) => void): () => void { this.subscribers.add(callback); return () => this.subscribers.delete(callback); }
   list(deviceKey?: string): ShortcutGroup[] { return this.groups.filter((g) => deviceKey === undefined || g.deviceKey === deviceKey).sort((a, b) => b.creationOrder - a.creationOrder).map((g) => ({ ...g, steps: g.steps.map((s) => ({ ...s })) })); }
 
-  async create(deviceKey: string, name: string, records: OperationRecord[]): Promise<ShortcutGroup> {
+  async create(deviceKey: string, name: string, records: OperationRecord[], outputMatches: ReadonlyMap<string, string> = new Map()): Promise<ShortcutGroup> {
     const normalized = name.trim();
     if (!records.length) throw new Error('EMPTY_SELECTION');
     if (!normalized) throw new Error('EMPTY_NAME');
     if (this.groups.some((g) => g.deviceKey === deviceKey && g.name === normalized)) throw new Error('DUPLICATE_NAME');
-    const steps = [...records].sort((a, b) => a.sequence - b.sequence).map(({ id, kind, summary, payload, captureQuality, completion, sequence }) => ({ id, kind, summary, payload, captureQuality, completion, sequence }));
+    const steps = [...records].sort((a, b) => a.sequence - b.sequence).map(({ id, kind, summary, payload, captureQuality, completion, sequence }) => {
+      const outputMatch = outputMatches.get(id)?.trim();
+      return { id, kind, summary, payload, captureQuality, completion, sequence, ...(outputMatch ? { outputMatch } : {}) };
+    });
     if (steps.some((step) => step.captureQuality === 'unavailable')) throw new Error('UNAVAILABLE_STEP');
     const group: ShortcutGroup = { id: `shortcut:${crypto.randomUUID()}`, deviceKey, name: normalized, createdAt: Date.now(), creationOrder: ++this.order, schemaVersion: 1, steps };
     const next = [...this.groups, group];

@@ -319,6 +319,8 @@ export const ru: TranslationKeys = {
       preferredRendererDesc: 'Движок рендеринга терминала (WebGL быстрее, но возможны проблемы совместимости)',
       scrollback: 'Буфер прокрутки',
       scrollbackDesc: 'Количество строк в буфере прокрутки',
+      shortcutReplayDelay: 'Задержка воспроизведения группы (мс)',
+      shortcutReplayDelayDesc: 'Ожидание перед завершением шага, если условие совпадения вывода не задано (0–60000 мс).',
       presetScripts: 'Предустановленные скрипты',
       presetScriptsDesc: 'Настройка скриптов, запускаемых из строки состояния',
       presetScriptsAdd: 'Добавить скрипт',
@@ -554,4 +556,3 @@ export const ru: TranslationKeys = {
     webgl: 'WebGL',
   },
 };
-

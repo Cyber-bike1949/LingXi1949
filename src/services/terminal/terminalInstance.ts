@@ -243,6 +243,9 @@ export class TerminalInstance {
   private promptMarkers: IMarker[] = [];
   private commandMarkers: TerminalCommandMarker[] = [];
   private win32InputModeEnabled = false;
+  private terminalOutputSequence = 0;
+  private readonly terminalOutputChunks: Array<{ sequence: number; text: string }> = [];
+  private readonly terminalOutputWaiters = new Set<() => void>();
   private claudeCodeSessionState = new ClaudeCodeSessionState();
   /**
    * `getCwd()` snapshot taken the moment the Claude Code TUI's startup
@@ -628,6 +631,7 @@ export class TerminalInstance {
       );
       this.extractCwdFromOutput(filteredText);
       this.updateWin32InputMode(filteredText);
+      this.recordTerminalOutput(filteredText);
       this.xterm.write(filteredText);
     });
     
@@ -699,6 +703,40 @@ export class TerminalInstance {
     if (this.transport) {
       this.transport.write(new TextEncoder().encode(data));
     }
+  }
+
+  private recordTerminalOutput(text: string): void {
+    if (!text) return;
+    this.terminalOutputChunks.push({ sequence: ++this.terminalOutputSequence, text });
+    while (this.terminalOutputChunks.length > 256) this.terminalOutputChunks.shift();
+    for (const notify of this.terminalOutputWaiters) notify();
+  }
+
+  outputCursor(): number { return this.terminalOutputSequence; }
+
+  waitForOutputMatch(match: string, cursor: number, timeoutMs: number): Promise<boolean> {
+    const normalizedMatch = normalizeReplayOutput(match);
+    if (!normalizedMatch) return Promise.resolve(true);
+    let settled = false;
+    let timer: number | null = null;
+    let resolveResult!: (matched: boolean) => void;
+    const check = (): void => {
+      const output = this.terminalOutputChunks.filter((chunk) => chunk.sequence > cursor).map((chunk) => chunk.text).join('');
+      if (normalizeReplayOutput(output).includes(normalizedMatch)) finish(true);
+    };
+    const finish = (matched: boolean): void => {
+      if (settled) return;
+      settled = true;
+      if (timer !== null) window.clearTimeout(timer);
+      this.terminalOutputWaiters.delete(check);
+      resolveResult(matched);
+    };
+    return new Promise<boolean>((resolve) => {
+      resolveResult = resolve;
+      this.terminalOutputWaiters.add(check);
+      check();
+      timer = window.setTimeout(() => finish(false), timeoutMs);
+    });
   }
 
   private disposeTransportHandlers(): void {
@@ -2477,4 +2515,13 @@ function keyPayload(event: KeyboardEvent): string {
   return arrows[event.key] ?? (event.ctrlKey && event.key.length === 1
     ? String.fromCharCode(event.key.toUpperCase().charCodeAt(0) - 64)
     : event.key);
+}
+
+function normalizeReplayOutput(value: string): string {
+  return value
+    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

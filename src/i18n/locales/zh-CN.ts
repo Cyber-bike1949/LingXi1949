@@ -319,6 +319,8 @@ export const zhCN: TranslationKeys = {
       preferredRendererDesc: '终端渲染引擎（WebGL 更快但可能存在兼容性问题）',
       scrollback: '回滚缓冲',
       scrollbackDesc: '回滚缓冲区保留的行数',
+      shortcutReplayDelay: '快捷组回放无匹配时延时（毫秒）',
+      shortcutReplayDelayDesc: '未配置输出匹配条件时，步骤等待此时长后完成。范围：0-60000 毫秒。',
       presetScripts: '预设工作流',
       presetScriptsDesc: '配置可通过快捷键或状态栏触发的自动化工作流',
       presetScriptsAdd: '新增工作流',
@@ -554,4 +556,3 @@ export const zhCN: TranslationKeys = {
     webgl: 'WebGL',
   },
 };
-

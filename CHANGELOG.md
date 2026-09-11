@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The two "send to terminal" entries (right-click "send to terminal and execute", note toolbar button) now also collect notes that link back to the note being sent, recursively, in addition to the existing forward-link walk - configurable via the new "Include backlinked notes when sending to terminal" setting (on by default). Menu/tooltip text now discloses that linked notes are included, the success notice reports the actual file count sent, and a confirmation dialog gates the send once the collected file count or total size exceeds a configurable threshold (default 20 files / 20 MB).
 
 ### Fixed
+- Shortcut-group replay now waits for Codex permission UI milestones, confirms the Full Access warning when requested, and closes the replay status bar after successful completion. Steps without an output match use a configurable fallback delay (default 160 ms).
 - Failed file-end validation or file creation no longer counts as a completed agent transfer file.
 - Directory list and metadata requests time out after 10 seconds and close late-opened streams without sending a stale request.
 - Production builds dispose the esbuild context instead of forcing process exit while its service is still active.

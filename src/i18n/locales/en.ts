@@ -319,6 +319,8 @@ export const en: TranslationKeys = {
       preferredRendererDesc: 'Terminal rendering engine (WebGL is faster but may have compatibility issues)',
       scrollback: 'Scrollback',
       scrollbackDesc: 'Number of lines to keep in scrollback buffer',
+      shortcutReplayDelay: 'Shortcut replay fallback delay (ms)',
+      shortcutReplayDelayDesc: 'Wait this long before completing a step when no output match is configured. Range: 0-60000 ms.',
       presetScripts: 'Preset workflows',
       presetScriptsDesc: 'Configure automation workflows that can be triggered from the status bar',
       presetScriptsAdd: 'Add workflow',
@@ -554,4 +556,3 @@ export const en: TranslationKeys = {
     webgl: 'WebGL',
   },
 };
-

@@ -56,7 +56,7 @@ import { createLingXiLogoSvg, createLingXiLogoSvgMarkup, LINGXI_RIBBON_ICON_ID }
 import { FeatureVisibilityManager } from './services/visibility';
 import { shell } from 'electron';
 import type { TerminalInstance } from './services/terminal/terminalInstance';
-import { ShortcutReplayController, type ReplaySnapshot } from './services/terminal/shortcutReplayController';
+import { ShortcutReplayController, type ReplaySnapshot, type ReplayTerminal } from './services/terminal/shortcutReplayController';
 import { serializeShortcutStepInput, type ShortcutGroup, type ShortcutStep } from './services/terminal/shortcutGroupStore';
 import { startsInteractiveCli } from './services/terminal/operationInputCapture';
 import {
@@ -137,6 +137,7 @@ export default class TerminalPlugin extends Plugin {
   private _remoteService: RemoteService | null = null;
   private _pairedDeviceStore: PairedDeviceStore | null = null;
   private readonly shortcutReplayController = new ShortcutReplayController();
+  private readonly shortcutPermissionReplaySessions = new Set<string>();
   private readonly shortcutGroupListeners = new Set<() => void>();
   private readonly localCommitEpoch = crypto.randomUUID();
   private localCommitSequence = 0;
@@ -899,6 +900,7 @@ export default class TerminalPlugin extends Plugin {
       remoteConnection: this.normalizeRemoteConnectionSettings(loaded?.remoteConnection),
       pairedDevices: this.normalizePairedDevices(loaded?.pairedDevices),
       controllerIdentitySeed: normalizeControllerIdentitySeed(loaded?.controllerIdentitySeed),
+      shortcutReplayDelayMs: normalizeShortcutReplayDelay(loaded?.shortcutReplayDelayMs),
       // Ensure the presetScripts config exists
       presetScripts: normalizedPresetScripts,
       deviceShortcutGroups: Array.isArray(loaded?.deviceShortcutGroups)
@@ -1175,8 +1177,15 @@ export default class TerminalPlugin extends Plugin {
     const view = await this.openPreparedTerminal(terminal, terminalService);
     const runId = await this.shortcutReplayController.start(
       group,
-      { sessionId: terminal.id, deviceKey: nodeId, write: (step) => this.writeShortcutStep(terminal, step) },
-      { inspect: () => Promise.resolve(true), observeCompletion: (step) => this.observeShortcutStepCompletion(step) },
+      {
+        sessionId: terminal.id,
+        deviceKey: nodeId,
+        write: (step) => this.writeShortcutStep(terminal, step),
+        outputCursor: () => terminal.outputCursor(),
+        waitForOutputMatch: (match, cursor, timeoutMs) => terminal.waitForOutputMatch(match, cursor, timeoutMs),
+        addShellEventListener: (listener) => terminal.addShellEventListener(listener),
+      },
+      { inspect: () => Promise.resolve(true), observeCompletion: (step, replayTerminal, outputCursor) => this.observeShortcutStepCompletion(step, replayTerminal, outputCursor) },
     );
     view.showShortcutReplay(runId);
   }
@@ -1198,22 +1207,96 @@ export default class TerminalPlugin extends Plugin {
     if (!sessionId) throw new Error('CONNECTION_FAILED');
     return this.shortcutReplayController.start(
       group,
-      { sessionId, deviceKey, write: (step) => this.writeShortcutStep(terminal, step) },
+      {
+        sessionId,
+        deviceKey,
+        write: (step) => this.writeShortcutStep(terminal, step),
+        outputCursor: () => terminal.outputCursor(),
+        waitForOutputMatch: (match, cursor, timeoutMs) => terminal.waitForOutputMatch(match, cursor, timeoutMs),
+        addShellEventListener: (listener) => terminal.addShellEventListener(listener),
+      },
       {
         inspect: () => Promise.resolve(true),
-        observeCompletion: (step) => this.observeShortcutStepCompletion(step, terminal),
+        observeCompletion: (step, replayTerminal, outputCursor) => this.observeShortcutStepCompletion(step, replayTerminal, outputCursor),
       },
     );
   }
 
-  private observeShortcutStepCompletion(step: ShortcutStep, terminal?: TerminalInstance): Promise<'complete' | 'failed'> {
-    if (step.kind !== 'shell') return this.completeShortcutStepAfter(160);
+  private observeShortcutStepCompletion(step: ShortcutStep, terminal: ReplayTerminal, outputCursor = 0): Promise<'complete' | 'failed' | 'unknown'> {
+    const sessionId = terminal.sessionId;
+    const command = step.payload.trim();
+    if (step.kind === 'text' && command === '/permissions') {
+      this.shortcutPermissionReplaySessions.add(sessionId);
+    } else if (step.kind === 'shell' && startsInteractiveCli(command)) {
+      this.shortcutPermissionReplaySessions.delete(sessionId);
+    } else if (step.kind !== 'key' && step.kind !== 'confirm') {
+      this.shortcutPermissionReplaySessions.delete(sessionId);
+    }
+    if (this.shortcutPermissionReplaySessions.has(sessionId) && step.kind === 'confirm') {
+      return this.observeShortcutPermissionConfirmation(step, terminal, outputCursor);
+    }
+
+    const configuredOutputMatch = step.outputMatch?.trim();
+    const outputMatch = configuredOutputMatch || this.defaultShortcutOutputMatch(step, sessionId);
+    if (outputMatch) {
+      if (!terminal.waitForOutputMatch) return Promise.resolve('unknown');
+      const output = terminal.waitForOutputMatch(outputMatch, outputCursor, 15000)
+        .then((matched) => matched ? 'complete' as const : 'unknown' as const);
+      // Interactive launchers never emit a shell command_end event while the
+      // session remains open; their startup match is the completion signal.
+      if (!configuredOutputMatch || step.kind !== 'shell' || !terminal.addShellEventListener) return output;
+      const commandEnd = new Promise<'complete' | 'failed'>((resolve) => {
+        const cleanup = terminal.addShellEventListener!((event) => {
+          if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
+        });
+      });
+      return Promise.all([output, commandEnd]).then(([matchResult, commandResult]) => commandResult === 'failed' ? 'failed' : matchResult);
+    }
+    if (step.kind !== 'shell') return this.completeShortcutStepAfter(this.settings.shortcutReplayDelayMs);
     if (startsInteractiveCli(step.payload)) return this.completeShortcutStepAfter(1000);
-    if (!terminal) return this.completeShortcutStepAfter(350);
+    if (!terminal.addShellEventListener) return this.completeShortcutStepAfter(350);
     return new Promise((resolve) => {
-      const cleanup = terminal.addShellEventListener((event) => {
+      const cleanup = terminal.addShellEventListener!((event) => {
         if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
       });
+    });
+  }
+
+  private defaultShortcutOutputMatch(step: ShortcutStep, sessionId: string): string | undefined {
+    const command = step.payload.trim();
+    if (step.kind === 'shell' && /(?:^|\/)codex(?:\s|$)/i.test(command)) return 'Ask Codex to do anything';
+    if (step.kind === 'text' && command === '/permissions') return 'Update Model Permissions';
+    if (step.kind === 'key' && step.payload === '\x1b[A' && this.shortcutPermissionReplaySessions.has(sessionId)) return 'Full Access';
+    return undefined;
+  }
+
+  private observeShortcutPermissionConfirmation(
+    step: ShortcutStep,
+    terminal: ReplayTerminal,
+    outputCursor: number,
+  ): Promise<'complete' | 'failed' | 'unknown'> {
+    if (!terminal.waitForOutputMatch) {
+      this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
+      return this.completeShortcutStepAfter(this.settings.shortcutReplayDelayMs);
+    }
+    return terminal.waitForOutputMatch('Enable full access?', outputCursor, 15000).then(async (promptVisible) => {
+      if (!promptVisible) {
+        this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
+        return 'complete';
+      }
+      const confirmation: ShortcutStep = { ...step, kind: 'confirm', payload: '\r', summary: 'Enter' };
+      const confirmedCursor = terminal.outputCursor?.() ?? outputCursor;
+      await terminal.write(confirmation);
+      const confirmed = await terminal.waitForOutputMatch(
+        'Permissions updated to Full Access',
+        confirmedCursor,
+        15000,
+      );
+      this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
+      return confirmed ? 'complete' : 'unknown';
+    }).catch(() => {
+      this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
+      return 'unknown';
     });
   }
 
@@ -3768,6 +3851,12 @@ export default class TerminalPlugin extends Plugin {
   private isAbsolutePath(path: string): boolean {
     return path.startsWith('/') || /^[A-Za-z]:\//.test(path);
   }
+}
+
+function normalizeShortcutReplayDelay(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number.parseInt(String(value ?? ''), 10);
+  if (!Number.isFinite(parsed)) return 160;
+  return Math.min(60000, Math.max(0, Math.round(parsed)));
 }
 
 /**

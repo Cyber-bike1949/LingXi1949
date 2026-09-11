@@ -319,6 +319,8 @@ export const ko: TranslationKeys = {
       preferredRendererDesc: '터미널 렌더링 엔진(WebGL은 빠르지만 호환성 문제가 있을 수 있음)',
       scrollback: '스크롤백',
       scrollbackDesc: '스크롤백 버퍼에 유지할 줄 수',
+      shortcutReplayDelay: '바로가기 재생 대체 지연 시간(ms)',
+      shortcutReplayDelayDesc: '출력 일치 조건이 없을 때 단계 완료 전 대기 시간입니다(0~60000ms).',
       presetScripts: '프리셋 스크립트',
       presetScriptsDesc: '상태 표시줄에서 실행할 스크립트 설정',
       presetScriptsAdd: '스크립트 추가',
@@ -554,4 +556,3 @@ export const ko: TranslationKeys = {
     webgl: 'WebGL',
   },
 };
-

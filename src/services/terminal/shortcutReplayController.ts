@@ -1,11 +1,21 @@
 import type { ShortcutGroup, ShortcutStep } from './shortcutGroupStore.ts';
+import type { ShellEvent } from '../server/types.ts';
+
+type TerminalInstanceShellListener = (listener: (event: ShellEvent) => void) => () => void;
 
 export type ReplayState = 'preparing' | 'sending' | 'waiting' | 'paused' | 'completed' | 'stopped';
 export type DispatchState = 'unsent' | 'sent' | 'confirmed' | 'unknown';
 export type Completion = 'complete' | 'failed' | 'unknown';
 
-export interface ReplayTerminal { sessionId: string; deviceKey: string; write(step: ShortcutStep): Promise<void>; }
-export interface ReplayAdapter { inspect(step: ShortcutStep, terminal: ReplayTerminal): Promise<boolean | 'unknown'>; observeCompletion(step: ShortcutStep, terminal: ReplayTerminal): Promise<Completion>; }
+export interface ReplayTerminal {
+  sessionId: string;
+  deviceKey: string;
+  write(step: ShortcutStep): Promise<void>;
+  outputCursor?: () => number;
+  waitForOutputMatch?: (match: string, cursor: number, timeoutMs: number) => Promise<boolean>;
+  addShellEventListener?: TerminalInstanceShellListener;
+}
+export interface ReplayAdapter { inspect(step: ShortcutStep, terminal: ReplayTerminal): Promise<boolean | 'unknown'>; observeCompletion(step: ShortcutStep, terminal: ReplayTerminal, outputCursor?: number): Promise<Completion>; }
 export interface ReplaySnapshot { runId: string; state: ReplayState; stepIndex: number; totalSteps: number; groupName: string; dispatchState: DispatchState; pauseReason?: string }
 
 export class ShortcutReplayController {
@@ -98,6 +108,7 @@ export class ShortcutReplayController {
     run.snapshot.state = 'sending';
     run.snapshot.dispatchState = 'sent';
     this.emit(runId);
+    const outputCursor = run.terminal.outputCursor?.() ?? 0;
     try { await run.terminal.write(step); } catch {
       if (this.current(runId, generation)) this.pause(runId, run, '发送结果未知', 'unknown');
       return;
@@ -105,7 +116,7 @@ export class ShortcutReplayController {
     if (!this.current(runId, generation)) return;
     run.snapshot.state = 'waiting';
     this.emit(runId);
-    await this.waitForCompletion(runId, run, step, generation);
+    await this.waitForCompletion(runId, run, step, generation, outputCursor);
   }
 
   private async waitForCompletion(
@@ -113,10 +124,11 @@ export class ShortcutReplayController {
     run: { snapshot: ReplaySnapshot; generation: number; group: ShortcutGroup; terminal: ReplayTerminal; adapter: ReplayAdapter },
     step: ShortcutStep,
     generation = run.generation,
+    outputCursor = 0,
   ): Promise<void> {
     let result: Completion;
     try {
-      result = await run.adapter.observeCompletion(step, run.terminal);
+      result = await run.adapter.observeCompletion(step, run.terminal, outputCursor);
     } catch {
       result = 'unknown';
     }

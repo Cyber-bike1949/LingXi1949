@@ -1753,6 +1753,20 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       return inputEl;
     });
 
+    new Setting(behaviorCard)
+      .setName(t('settingsDetails.terminal.shortcutReplayDelay'))
+      .setDesc(t('settingsDetails.terminal.shortcutReplayDelayDesc'))
+      .addText(text => text
+        .setPlaceholder('160')
+        .setValue(String(this.context.plugin.settings.shortcutReplayDelayMs))
+        .onChange((value) => {
+          const numValue = Number.parseInt(value, 10);
+          if (Number.isInteger(numValue) && numValue >= 0 && numValue <= 60000) {
+            this.context.plugin.settings.shortcutReplayDelayMs = numValue;
+            void this.saveSettings();
+          }
+        }));
+
     // Directory-tree "tree -> vault" duplicate-filename policy (requirement 2)
     new Setting(behaviorCard)
       .setName(t('settingsDetails.terminal.overwriteOnDuplicateFilename'))
