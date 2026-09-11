@@ -214,10 +214,6 @@ export class TerminalView extends ItemView {
     container.empty();
     container.addClass('terminal-view-container');
 
-    this.historyActionEl?.remove();
-    this.historyActionEl = this.addAction('history', '历史操作', () => this.openOperationHistory());
-    this.historyActionEl.addClass('terminal-history-action');
-    this.historyActionEl.createSpan({ cls: 'terminal-history-activity-indicator' });
     this.historyActivityCleanup?.();
     this.historyActivityCleanup = this.operationHistory.subscribe(() => this.showHistoryActivity());
 
@@ -353,7 +349,6 @@ export class TerminalView extends ItemView {
     this.historyCleanup = null;
     this.historyActivityCleanup?.();
     this.historyActivityCleanup = null;
-    this.historyActionEl?.remove();
     this.historyActionEl = null;
     if (this.historyActivityTimer !== null) {
       window.clearTimeout(this.historyActivityTimer);
@@ -1364,8 +1359,10 @@ export class TerminalView extends ItemView {
     treeToggleBtn.toggleClass('is-active', this.directoryTreeVisible);
     treeToggleBtn.addEventListener('click', () => this.toggleDirectoryTree());
 
-    const historyButton = toolbar.createEl('button', { text: '历史操作' });
+    const historyButton = toolbar.createEl('button', { text: '历史操作', cls: 'terminal-history-action' });
     historyButton.disabled = !this.terminalInstance;
+    historyButton.createSpan({ cls: 'terminal-history-activity-indicator' });
+    this.historyActionEl = historyButton;
     historyButton.addEventListener('click', () => this.openOperationHistory());
 
     toolbar.createSpan({
@@ -1401,27 +1398,6 @@ export class TerminalView extends ItemView {
         if (group) this.runToolbarShortcut(terminal, group);
       });
     }
-  }
-
-  private openOperationHistory(): void {
-    const plugin = this.getTerminalPlugin();
-    if (!plugin) return;
-    const sessionId = this.terminalInstance?.getSessionId() ?? '';
-    const store = new ShortcutGroupStore(
-      () => Promise.resolve({ deviceShortcutGroups: plugin.settings.deviceShortcutGroups }),
-      async (data) => {
-        await plugin.saveShortcutGroups(data.deviceShortcutGroups ?? []);
-      },
-    );
-    void store.load().then(() => new OperationHistoryModal(
-      this.app,
-      this.operationHistory.list(sessionId),
-      this.getRemoteNodeId() ?? 'local',
-      store,
-      this.operationHistory.isEnabled(sessionId),
-      (enabled) => this.operationHistory.setEnabled(sessionId, enabled),
-      () => this.operationHistory.clear(sessionId),
-    ).open());
   }
 
   private showHistoryActivity(): void {
