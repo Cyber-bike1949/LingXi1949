@@ -1374,8 +1374,29 @@
   white-space: nowrap;
 }
 .terminal-toolbar-shortcuts select {
-  min-width: 72px;
+  min-width: 42px;
   max-width: 140px;
+}
+
+.terminal-history-action {
+  position: relative;
+}
+
+.terminal-history-activity-indicator {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: none;
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--interactive-accent);
+  border-right-color: transparent;
+  border-radius: 50%;
+}
+
+.is-recording-history .terminal-history-activity-indicator {
+  display: block;
+  animation: termesh-spin 0.7s linear infinite;
 }
 .terminal-connection-status.is-connected {
   color: var(--text-success);
@@ -2557,7 +2578,7 @@
   position: relative;
   min-height: 190px;
   padding: 20px;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid var(--background-modifier-border);
   border-radius: 8px;
   background: color-mix(in srgb, var(--background-secondary) 88%, transparent);
@@ -2569,6 +2590,10 @@
   border-color: color-mix(in srgb, var(--interactive-accent) 58%, var(--background-modifier-border));
   box-shadow: 0 8px 24px color-mix(in srgb, var(--background-modifier-cover) 32%, transparent);
   transform: translateY(-2px);
+}
+
+.termesh-device-card:focus-within {
+  z-index: 3;
 }
 
 .termesh-device-card:focus-visible {
@@ -2631,6 +2656,95 @@
   display: flex;
   align-items: center;
   gap: 2px;
+}
+
+.termesh-device-card-controls {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 7px;
+  min-width: 0;
+}
+
+.termesh-device-card-controls .termesh-device-status {
+  margin-top: 0;
+}
+
+.termesh-device-shortcuts {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  max-width: min(190px, 100%);
+}
+
+.termesh-device-shortcut-latest {
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--button-radius) 0 0 var(--button-radius);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.termesh-device-shortcut-toggle {
+  flex: 0 0 30px;
+  width: 30px;
+  border-left: 0;
+  border-radius: 0 var(--button-radius) var(--button-radius) 0;
+}
+
+.termesh-device-shortcut-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 4;
+  display: none;
+  width: max-content;
+  min-width: 180px;
+  max-width: 260px;
+  padding: 4px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+}
+
+.termesh-device-shortcut-menu.is-open {
+  display: block;
+}
+
+.termesh-device-shortcut-menu-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.termesh-device-shortcut-menu-row > button:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.termesh-device-shortcut-menu-row > button:first-child:hover {
+  background: var(--background-modifier-hover);
+}
+
+.termesh-device-shortcut-remove {
+  flex: 0 0 28px;
+  width: 28px;
+  color: var(--text-muted);
+}
+
+.termesh-device-shortcut-remove:hover {
+  color: var(--text-error);
 }
 
 .termesh-device-status {
@@ -2729,6 +2843,10 @@
   .termesh-device-status.status-connecting .termesh-status-dot {
     animation: none;
     transition: none;
+  }
+
+  .is-recording-history .terminal-history-activity-indicator {
+    animation: none;
   }
 }
 

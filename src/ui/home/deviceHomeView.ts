@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 import { buildDeviceHomeCards, getRefreshNodeIds, type DeviceHomeCard } from '../../services/remote/deviceHomeModel';
 import { pairDevice, type PairDeviceResult } from '../../services/remote/devicePairing';
 import type { Disposable } from '../../services/remote/transport';
+import type { ShortcutGroup } from '../../services/terminal/shortcutGroupStore';
 import { AddDeviceModal } from './addDeviceModal';
 import { RemoveDeviceModal } from './removeDeviceModal';
 
@@ -101,31 +102,17 @@ export class DeviceHomeView extends ItemView {
       const cardEl = this.createInteractiveCard(grid, 'termesh-device-card is-local', t('home.openTerminal'), () => {
         void this.plugin.openLocalDeviceTerminal();
       });
-      const icon = cardEl.createDiv({ cls: 'termesh-device-icon' });
+      const top = cardEl.createDiv({ cls: 'termesh-device-card-top' });
+      const icon = top.createDiv({ cls: 'termesh-device-icon' });
       setIcon(icon, 'monitor');
-      cardEl.createEl('h2', { text: t('home.localDevice') });
-      cardEl.createEl('p', { text: t('home.localDeviceDescription') });
-      this.renderStatus(cardEl, 'connected', t('home.available'));
+      const controls = top.createDiv({ cls: 'termesh-device-card-controls' });
+      this.renderStatus(controls, 'connected', t('home.available'));
       const groups = this.plugin.settings.deviceShortcutGroups
         .filter((group) => group.deviceKey === 'local')
         .sort((a, b) => b.creationOrder - a.creationOrder);
-      if (groups.length > 0) {
-        const shortcuts = cardEl.createDiv({ cls: 'termesh-device-shortcuts' });
-        const select = shortcuts.createEl('select', { attr: { 'aria-label': '选择快捷组' } });
-        for (const group of groups) select.createEl('option', { text: group.name, value: group.id });
-        const run = shortcuts.createEl('button', { text: `运行：${groups[0].name}`, cls: 'mod-cta' });
-        select.addEventListener('change', () => run.setText(`运行：${groups.find((group) => group.id === select.value)?.name ?? ''}`));
-        run.addEventListener('click', (event) => {
-          event.stopPropagation();
-          const group = groups.find((item) => item.id === select.value);
-          if (group) void this.plugin.runShortcutGroupOnLocalDevice(group).catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组启动失败'));
-        });
-        const remove = shortcuts.createEl('button', { text: '删除快捷组' });
-        remove.addEventListener('click', (event) => {
-          event.stopPropagation();
-          void this.plugin.removeShortcutGroup(select.value).then(() => this.render());
-        });
-      }
+      this.renderDeviceShortcuts(controls, groups, (group) => this.plugin.runShortcutGroupOnLocalDevice(group), true);
+      cardEl.createEl('h2', { text: t('home.localDevice') });
+      cardEl.createEl('p', { text: t('home.localDeviceDescription') });
       return;
     }
 
@@ -143,7 +130,8 @@ export class DeviceHomeView extends ItemView {
     const top = cardEl.createDiv({ cls: 'termesh-device-card-top' });
     const icon = top.createDiv({ cls: 'termesh-device-icon' });
     setIcon(icon, 'server');
-    const actions = top.createDiv({ cls: 'termesh-device-actions' });
+    const controls = top.createDiv({ cls: 'termesh-device-card-controls' });
+    const actions = controls.createDiv({ cls: 'termesh-device-actions' });
     if (status.state === 'connected') {
       this.createIconButton(actions, 'unplug', t('home.disconnect'), () => {
         this.plugin.getDeviceConnectionManager().disconnect(device.nodeId);
@@ -160,51 +148,91 @@ export class DeviceHomeView extends ItemView {
       }).open();
     });
 
+    this.renderStatus(controls, status.state, statusText);
+    const groups = this.plugin.settings.deviceShortcutGroups
+      .filter((group) => group.deviceKey === device.nodeId)
+      .sort((a, b) => b.creationOrder - a.creationOrder);
+    this.renderDeviceShortcuts(
+      controls,
+      groups,
+      (group) => this.plugin.runShortcutGroupOnDevice(device.nodeId, group),
+      status.state === 'connected',
+    );
     cardEl.createEl('h2', { text: device.name });
     const lastConnected = device.lastConnectedAt
       ? t('home.lastConnected', { time: this.formatLastConnectedAt(device.lastConnectedAt) })
       : t('home.neverConnected');
     cardEl.createEl('p', { text: lastConnected });
-    this.renderStatus(cardEl, status.state, statusText);
-    const groups = this.plugin.settings.deviceShortcutGroups
-      .filter((group) => group.deviceKey === device.nodeId)
-      .sort((a, b) => b.creationOrder - a.creationOrder);
-    if (groups.length > 0) {
-      const shortcuts = cardEl.createDiv({ cls: 'termesh-device-shortcuts' });
-      const latest = shortcuts.createEl('button', { text: `运行：${groups[0].name}`, cls: 'mod-cta' });
-      latest.disabled = status.state !== 'connected';
-      latest.addEventListener('click', (event) => {
-        event.stopPropagation();
-        void this.plugin.runShortcutGroupOnDevice(device.nodeId, groups[0]).catch((error: unknown) => {
-          new Notice(error instanceof Error ? error.message : '快捷组启动失败');
-        });
-      });
-      if (groups.length > 1) {
-        const select = shortcuts.createEl('select', { attr: { 'aria-label': '选择快捷组' } });
-        for (const group of groups) select.createEl('option', { text: group.name, value: group.id });
-        select.addEventListener('change', () => {
-          const group = groups.find((item) => item.id === select.value);
-          if (!group) return;
-          void this.plugin.runShortcutGroupOnDevice(device.nodeId, group).catch((error: unknown) => {
-            new Notice(error instanceof Error ? error.message : '快捷组启动失败');
-          });
-        });
-      }
-      const removeShortcut = shortcuts.createEl('button', { text: '删除快捷组' });
-      removeShortcut.addEventListener('click', (event) => {
-        event.stopPropagation();
-        const selectedId = shortcuts.querySelector<HTMLSelectElement>('select')?.value ?? groups[0].id;
-        void this.plugin.removeShortcutGroup(selectedId).then(() => this.render()).catch((error: unknown) => {
-          new Notice(error instanceof Error ? error.message : '删除快捷组失败');
-        });
-      });
-    }
     if (status.state === 'error') {
       cardEl.createDiv({
         cls: 'termesh-device-error',
         text: status.code === 'CONTROLLER_ALREADY_CONNECTED'
           ? t('home.controllerAlreadyConnected')
           : status.message,
+      });
+    }
+  }
+
+  private renderDeviceShortcuts(
+    parent: HTMLElement,
+    groups: ShortcutGroup[],
+    run: (group: ShortcutGroup) => Promise<void>,
+    enabled: boolean,
+  ): void {
+    if (groups.length === 0) return;
+    const shortcuts = parent.createDiv({ cls: 'termesh-device-shortcuts' });
+    const latest = shortcuts.createEl('button', {
+      cls: 'termesh-device-shortcut-latest',
+      text: groups[0].name,
+      attr: { title: groups[0].name, 'aria-label': `运行快捷组：${groups[0].name}` },
+    });
+    latest.disabled = !enabled;
+    latest.addEventListener('click', (event) => {
+      event.stopPropagation();
+      void run(groups[0]).catch((error: unknown) => {
+        new Notice(error instanceof Error ? error.message : '快捷组启动失败');
+      });
+    });
+
+    const toggle = shortcuts.createEl('button', {
+      cls: 'clickable-icon termesh-device-shortcut-toggle',
+      attr: { 'aria-label': '展开快捷组', 'aria-expanded': 'false' },
+    });
+    setIcon(toggle, 'chevron-down');
+    const menu = shortcuts.createDiv({ cls: 'termesh-device-shortcut-menu' });
+    toggle.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const open = !menu.hasClass('is-open');
+      menu.toggleClass('is-open', open);
+      toggle.setAttribute('aria-expanded', String(open));
+    });
+    shortcuts.addEventListener('focusout', (event) => {
+      if (event.relatedTarget instanceof Node && shortcuts.contains(event.relatedTarget)) return;
+      menu.removeClass('is-open');
+      toggle.setAttribute('aria-expanded', 'false');
+    });
+
+    for (const group of groups) {
+      const row = menu.createDiv({ cls: 'termesh-device-shortcut-menu-row' });
+      const runButton = row.createEl('button', { text: group.name, attr: { title: group.name } });
+      runButton.disabled = !enabled;
+      runButton.addEventListener('click', (event) => {
+        event.stopPropagation();
+        menu.removeClass('is-open');
+        void run(group).catch((error: unknown) => {
+          new Notice(error instanceof Error ? error.message : '快捷组启动失败');
+        });
+      });
+      const remove = row.createEl('button', {
+        cls: 'clickable-icon termesh-device-shortcut-remove',
+        attr: { 'aria-label': `删除快捷组：${group.name}` },
+      });
+      setIcon(remove, 'trash-2');
+      remove.addEventListener('click', (event) => {
+        event.stopPropagation();
+        void this.plugin.removeShortcutGroup(group.id).then(() => this.render()).catch((error: unknown) => {
+          new Notice(error instanceof Error ? error.message : '删除快捷组失败');
+        });
       });
     }
   }

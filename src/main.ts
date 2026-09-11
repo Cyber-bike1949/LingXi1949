@@ -57,7 +57,8 @@ import { FeatureVisibilityManager } from './services/visibility';
 import { shell } from 'electron';
 import type { TerminalInstance } from './services/terminal/terminalInstance';
 import { ShortcutReplayController, type ReplaySnapshot } from './services/terminal/shortcutReplayController';
-import type { ShortcutGroup, ShortcutStep } from './services/terminal/shortcutGroupStore';
+import { serializeShortcutStepInput, type ShortcutGroup, type ShortcutStep } from './services/terminal/shortcutGroupStore';
+import { startsInteractiveCli } from './services/terminal/operationInputCapture';
 import {
   getAlwaysOnTopTerminalLabelKey,
   getAlwaysOnTopTerminalMenuState,
@@ -1166,8 +1167,7 @@ export default class TerminalPlugin extends Plugin {
     await this.openPreparedTerminal(terminal, terminalService);
   }
 
-  /** Opens a new device terminal and starts the selected group. Steps pause
-   * after dispatch because generic shell completion is not trustworthy yet. */
+  /** Opens a new device terminal and starts the selected shortcut group. */
   async runShortcutGroupOnDevice(nodeId: string, group: ShortcutGroup): Promise<void> {
     if (group.deviceKey !== nodeId) throw new Error('DEVICE_MISMATCH');
     const terminalService = await this.getTerminalService();
@@ -1176,7 +1176,7 @@ export default class TerminalPlugin extends Plugin {
     const runId = await this.shortcutReplayController.start(
       group,
       { sessionId: terminal.id, deviceKey: nodeId, write: (step) => this.writeShortcutStep(terminal, step) },
-      { inspect: () => Promise.resolve(true), observeCompletion: () => Promise.resolve<'unknown'>('unknown') },
+      { inspect: () => Promise.resolve(true), observeCompletion: (step) => this.observeShortcutStepCompletion(step) },
     );
     view.showShortcutReplay(runId);
   }
@@ -1201,16 +1201,24 @@ export default class TerminalPlugin extends Plugin {
       { sessionId, deviceKey, write: (step) => this.writeShortcutStep(terminal, step) },
       {
         inspect: () => Promise.resolve(true),
-        observeCompletion: (step) => {
-          if (step.kind !== 'shell' || terminal.isClaudeCodeSession()) return Promise.resolve<'unknown'>('unknown');
-          return new Promise((resolve) => {
-          const cleanup = terminal.addShellEventListener((event) => {
-            if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
-          });
-          });
-        },
+        observeCompletion: (step) => this.observeShortcutStepCompletion(step, terminal),
       },
     );
+  }
+
+  private observeShortcutStepCompletion(step: ShortcutStep, terminal?: TerminalInstance): Promise<'complete' | 'failed'> {
+    if (step.kind !== 'shell') return this.completeShortcutStepAfter(160);
+    if (startsInteractiveCli(step.payload)) return this.completeShortcutStepAfter(1000);
+    if (!terminal) return this.completeShortcutStepAfter(350);
+    return new Promise((resolve) => {
+      const cleanup = terminal.addShellEventListener((event) => {
+        if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
+      });
+    });
+  }
+
+  private completeShortcutStepAfter(delayMs: number): Promise<'complete'> {
+    return new Promise((resolve) => window.setTimeout(() => resolve('complete'), delayMs));
   }
 
   subscribeShortcutReplay(runId: string, listener: (snapshot: ReplaySnapshot) => void): () => void {
@@ -1278,8 +1286,7 @@ export default class TerminalPlugin extends Plugin {
   }
 
   private writeShortcutStep(terminal: TerminalInstance, step: ShortcutStep): Promise<void> {
-    const payload = step.kind === 'shell' ? `${step.payload}\r` : step.payload;
-    terminal.sendText(payload);
+    terminal.sendText(serializeShortcutStepInput(step));
     return Promise.resolve();
   }
 

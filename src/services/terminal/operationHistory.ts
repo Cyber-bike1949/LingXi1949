@@ -20,6 +20,7 @@ export class OperationHistory {
   private readonly limit: number;
   private readonly records = new Map<string, OperationRecord[]>();
   private readonly enabled = new Map<string, boolean>();
+  private readonly subscribers = new Set<(record: OperationRecord) => void>();
   private sequence = 0;
 
   constructor(limit = 100) {
@@ -37,6 +38,11 @@ export class OperationHistory {
 
   list(sessionId: string): OperationRecord[] { return [...(this.records.get(sessionId) ?? [])]; }
 
+  subscribe(listener: (record: OperationRecord) => void): () => void {
+    this.subscribers.add(listener);
+    return () => this.subscribers.delete(listener);
+  }
+
   resolveLatestShell(sessionId: string): void {
     const records = this.records.get(sessionId);
     if (!records) return;
@@ -51,7 +57,10 @@ export class OperationHistory {
 
   record(input: Omit<OperationRecord, 'id' | 'sequence' | 'timestamp'> & { source?: InputSource }): OperationRecord | null {
     if (!this.isEnabled(input.sessionId) || input.source !== undefined && input.source !== 'user') return null;
-    if (input.captureQuality === 'unavailable' || !input.payload.trim()) return null;
+    const hasPayload = input.kind === 'shell' || input.kind === 'text'
+      ? input.payload.trim().length > 0
+      : input.payload.length > 0;
+    if (input.captureQuality === 'unavailable' || !hasPayload) return null;
     const record: OperationRecord = {
       ...input,
       id: `${input.sessionId}:${++this.sequence}`,
@@ -62,6 +71,7 @@ export class OperationHistory {
     history.push(record);
     while (history.length > this.limit) history.shift();
     this.records.set(input.sessionId, history);
+    for (const listener of this.subscribers) listener(record);
     return record;
   }
 }

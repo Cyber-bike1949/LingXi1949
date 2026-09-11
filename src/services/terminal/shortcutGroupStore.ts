@@ -22,6 +22,12 @@ export interface ShortcutGroup {
 
 export interface ShortcutStoreData { deviceShortcutGroups?: ShortcutGroup[]; shortcutGroupsVersion?: number }
 
+export function serializeShortcutStepInput(step: ShortcutStep): string {
+  const submitsCommand = step.kind === 'shell' || step.kind === 'text';
+  if (!submitsCommand || /[\r\n]$/.test(step.payload)) return step.payload;
+  return `${step.payload}\r`;
+}
+
 export class ShortcutGroupStore {
   private readonly read: () => Promise<ShortcutStoreData>;
   private readonly write: (data: ShortcutStoreData) => Promise<void>;

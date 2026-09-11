@@ -75,3 +75,18 @@ function findStringSequenceEnd(value: string, start: number, allowBell: boolean)
 export function startsInteractiveCli(command: string): boolean {
   return /(?:^|[;&|]\s*)(?:env\s+[^\s=]+=[^\s]+\s+)*(?:sudo\s+)?(?:\S*\/)?(?:codex|claude|opencode)(?:\s|$)/i.test(command.trim());
 }
+
+/**
+ * Uses the text rendered by the interactive program to recover edits that are
+ * not represented as literal input bytes, such as tab completion. The typed
+ * prefix anchors the command so prompt text is not included in the result.
+ */
+export function resolveSubmittedCommand(typedText: string, renderedLine: string): string {
+  const typed = typedText.trim();
+  if (!typed) return '';
+  const visible = renderedLine.replace(/\u00a0/g, ' ');
+  const start = visible.lastIndexOf(typed);
+  if (start < 0) return typed;
+  const completed = visible.slice(start).trim();
+  return completed.startsWith(typed) ? completed : typed;
+}

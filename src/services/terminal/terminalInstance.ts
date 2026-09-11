@@ -39,6 +39,7 @@ import { shell } from 'electron';
 import type { OperationHistory } from './operationHistory';
 import {
   filterTerminalControlSequences,
+  resolveSubmittedCommand,
   startsInteractiveCli,
   type ControlSequenceFilterState,
 } from './operationInputCapture';
@@ -733,9 +734,10 @@ export class TerminalInstance {
         const summary = character === '\u0003' ? 'Ctrl+C' : 'Ctrl+D';
         for (const listener of this.operationHistoryListeners) listener(character, 'key', summary);
       } else if (character === '\r' || character === '\n') {
-        const payload = this.userCommandBuffer.trim();
+        const typedPayload = this.userCommandBuffer.trim();
+        const payload = resolveSubmittedCommand(typedPayload, this.getRenderedInputLine());
         if (payload && this.sessionId) {
-          if (this.userCommandBufferReliable) {
+          if (this.userCommandBufferReliable || payload !== typedPayload) {
             const kind = interactiveProgram ? 'text' : 'shell';
             for (const listener of this.operationHistoryListeners) listener(payload, kind, payload);
             if (!interactiveProgram && startsInteractiveCli(payload)) this.historyInteractiveProgram = true;
@@ -755,6 +757,7 @@ export class TerminalInstance {
 
   private captureUserKeyEvent(event: KeyboardEvent): void {
     if (event.type !== 'keydown' || event.isComposing || event.key === 'Enter') return;
+    if (event.key === 'Tab' && this.isHistoryInteractiveProgram()) return;
     const keyName = describeHistoryKey(event);
     if (!keyName) return;
     if (!this.isHistoryInteractiveProgram()) {
@@ -767,6 +770,21 @@ export class TerminalInstance {
 
   private isHistoryInteractiveProgram(): boolean {
     return this.historyInteractiveProgram || this.claudeCodeSessionState.isActive();
+  }
+
+  private getRenderedInputLine(): string {
+    const buffer = this.xterm?.buffer.active;
+    if (!buffer) return '';
+    const cursorLine = buffer.baseY + buffer.cursorY;
+    let firstLine = cursorLine;
+    while (firstLine > 0 && buffer.getLine(firstLine)?.isWrapped) firstLine -= 1;
+    let text = '';
+    for (let lineIndex = firstLine; lineIndex <= cursorLine; lineIndex += 1) {
+      const line = buffer.getLine(lineIndex);
+      if (!line) continue;
+      text += line.translateToString(false, 0, lineIndex === cursorLine ? buffer.cursorX : undefined);
+    }
+    return text;
   }
 
   private readonly operationHistoryListeners = new Set<(payload: string, kind?: 'shell' | 'text' | 'key' | 'confirm', summary?: string) => void>();
