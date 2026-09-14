@@ -71,14 +71,35 @@ test('late write failure cannot revive a stopped run', async () => {
   assert.equal(controller.get(id)?.state, 'stopped');
 });
 
-test('replay keeps key steps distinct from shell steps', async () => {
+test('replay rejects legacy key steps before writing', () => {
   const keyGroup: ShortcutGroup = { ...group, steps: [{ ...group.steps[0], kind: 'key', summary: 'ArrowDown', payload: '\u001b[B' }] };
-  const received: Array<{ kind: string; payload: string }> = [];
+  let writes = 0;
   const controller = new ShortcutReplayController();
-  const id = await controller.start(keyGroup, { sessionId: 'keys', deviceKey: 'd', async write(step) { received.push(step); } }, {
+  assert.throws(() => controller.start(keyGroup, { sessionId: 'keys', deviceKey: 'd', async write() { writes += 1; } }, {
+    async inspect() { return true; }, async observeCompletion() { return 'complete'; },
+  }), /TUI_REPLAY_UNSUPPORTED/);
+  assert.equal(writes, 0);
+});
+
+test('replay allows an AI TUI launch command as the final step', async () => {
+  const tuiGroup: ShortcutGroup = { ...group, steps: [{ ...group.steps[0], payload: 'claude --resume' }] };
+  let writes = 0;
+  const controller = new ShortcutReplayController();
+  const id = await controller.start(tuiGroup, { sessionId: 'tui', deviceKey: 'd', async write() { writes += 1; } }, {
     async inspect() { return true; }, async observeCompletion() { return 'complete'; },
   });
   for (let index = 0; index < 20 && controller.get(id)?.state !== 'completed'; index += 1) await new Promise((resolve) => setTimeout(resolve, 1));
-  assert.equal(received[0]?.kind, 'key');
-  assert.equal(received[0]?.payload, '\u001b[B');
+  assert.equal(writes, 1);
+  assert.equal(controller.get(id)?.state, 'completed');
+});
+
+test('replay rejects steps after an AI TUI launch command', () => {
+  const tuiGroup: ShortcutGroup = { ...group, steps: [
+    { ...group.steps[0], payload: 'opencode' },
+    { ...group.steps[0], id: 'after', sequence: 2, payload: 'echo after' },
+  ] };
+  const controller = new ShortcutReplayController();
+  assert.throws(() => controller.start(tuiGroup, { sessionId: 'tui-chain', deviceKey: 'd', async write() {} }, {
+    async inspect() { return true; }, async observeCompletion() { return 'complete'; },
+  }), /TUI_LAUNCH_MUST_BE_LAST/);
 });

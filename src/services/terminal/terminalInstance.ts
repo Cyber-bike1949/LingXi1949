@@ -4,7 +4,7 @@
 
  */
 
-import { debugLog, debugWarn, errorLog } from '@/utils/logger';
+import { debugLog, debugWarn, errorLog, shortcutReplayLog } from '@/utils/logger';
 import { getHomeDir, getPlatform, isWindows } from '@/utils/platform';
 import { t } from '@/i18n';
 import type { ServerManager } from '@/services/server/serverManager';
@@ -37,6 +37,7 @@ import {
 } from './promptCwdParsers';
 import { shell } from 'electron';
 import type { OperationHistory } from './operationHistory';
+import { normalizeReplayOutput as normalizeOutputForReplay, outputAfterShellEcho } from './replayOutputMatcher';
 import {
   filterTerminalControlSequences,
   resolveSubmittedCommand,
@@ -239,10 +240,10 @@ export class TerminalInstance {
   private userCommandBufferReliable = true;
   private historyInteractiveProgram = false;
   private readonly historyControlSequenceState: ControlSequenceFilterState = { pending: '' };
-  private historyStandaloneEscapePending = false;
   private promptMarkers: IMarker[] = [];
   private commandMarkers: TerminalCommandMarker[] = [];
   private win32InputModeEnabled = false;
+  private readonly kittyKeyboardProtocolFlags: number[] = [];
   private terminalOutputSequence = 0;
   private readonly terminalOutputChunks: Array<{ sequence: number; text: string }> = [];
   private readonly terminalOutputWaiters = new Set<() => void>();
@@ -624,6 +625,7 @@ export class TerminalInstance {
     
     // Handle output data (session-level)
     this.outputSubscription = this.transport.onData((data: Uint8Array) => {
+      this.logTerminalIo('output', data);
       const rawText = new TextDecoder().decode(data);
       const filteredText = filterSynchronizedOutputScrollbackPurge(
         rawText,
@@ -690,19 +692,32 @@ export class TerminalInstance {
 
   private resetSessionProtocolState(): void {
     this.win32InputModeEnabled = false;
+    this.kittyKeyboardProtocolFlags.length = 0;
     this.claudeCodeSessionState.reset();
     this.agentSessionStartCwd = null;
     this.pendingControlSequenceText = '';
     this.synchronizedOutputCompatibilityState = createSynchronizedOutputCompatibilityState();
     this.historyInteractiveProgram = false;
     this.historyControlSequenceState.pending = '';
-    this.historyStandaloneEscapePending = false;
   }
 
   private writeToTransport(data: string): void {
-    if (this.transport) {
-      this.transport.write(new TextEncoder().encode(data));
-    }
+    this.writeBytesToTransport(new TextEncoder().encode(data));
+  }
+
+  private writeBytesToTransport(data: Uint8Array): void {
+    if (!this.transport) return;
+    this.logTerminalIo('input', data);
+    this.transport.write(data);
+  }
+
+  private logTerminalIo(direction: 'input' | 'output', data: Uint8Array): void {
+    debugLog(`[Terminal I/O] ${direction.toUpperCase()}`, {
+      sessionId: this.sessionId,
+      byteLength: data.byteLength,
+      text: JSON.stringify(new TextDecoder().decode(data)),
+      bytes: Array.from(data),
+    });
   }
 
   private recordTerminalOutput(text: string): void {
@@ -714,14 +729,26 @@ export class TerminalInstance {
 
   outputCursor(): number { return this.terminalOutputSequence; }
 
-  waitForOutputMatch(match: string, cursor: number, timeoutMs: number): Promise<boolean> {
+  waitForOutputMatch(match: string, cursor: number, timeoutMs: number, echoedCommand?: string): Promise<boolean> {
     const normalizedMatch = normalizeReplayOutput(match);
     if (!normalizedMatch) return Promise.resolve(true);
     let settled = false;
     let timer: number | null = null;
+    let lastLoggedSequence = cursor;
     let resolveResult!: (matched: boolean) => void;
     const check = (): void => {
-      const output = this.terminalOutputChunks.filter((chunk) => chunk.sequence > cursor).map((chunk) => chunk.text).join('');
+      const chunks = this.terminalOutputChunks.filter((chunk) => chunk.sequence > cursor);
+      const newOutput = chunks.filter((chunk) => chunk.sequence > lastLoggedSequence);
+      if (newOutput.length > 0) {
+        lastLoggedSequence = newOutput[newOutput.length - 1].sequence;
+        shortcutReplayLog('[ShortcutReplay] Terminal output:', {
+          sessionId: this.sessionId,
+          match,
+          output: newOutput.map((chunk) => chunk.text).join(''),
+        });
+      }
+      const rawOutput = chunks.map((chunk) => chunk.text).join('');
+      const output = echoedCommand ? outputAfterShellEcho(rawOutput, echoedCommand) : rawOutput;
       if (normalizeReplayOutput(output).includes(normalizedMatch)) finish(true);
     };
     const finish = (matched: boolean): void => {
@@ -729,10 +756,21 @@ export class TerminalInstance {
       settled = true;
       if (timer !== null) window.clearTimeout(timer);
       this.terminalOutputWaiters.delete(check);
+      shortcutReplayLog('[ShortcutReplay] Output wait finished:', {
+        sessionId: this.sessionId,
+        match,
+        result: matched ? 'matched' : 'timeout',
+      });
       resolveResult(matched);
     };
     return new Promise<boolean>((resolve) => {
       resolveResult = resolve;
+      shortcutReplayLog('[ShortcutReplay] Waiting for output:', {
+        sessionId: this.sessionId,
+        match,
+        cursor,
+        timeoutMs,
+      });
       this.terminalOutputWaiters.add(check);
       check();
       timer = window.setTimeout(() => finish(false), timeoutMs);
@@ -753,14 +791,13 @@ export class TerminalInstance {
 
   private captureUserInput(data: string | Uint8Array): void {
     const rawText = typeof data === 'string' ? data : new TextDecoder().decode(data);
-    if (this.historyStandaloneEscapePending && rawText === '\x1b') {
-      this.historyStandaloneEscapePending = false;
+    const { text } = filterTerminalControlSequences(rawText, this.historyControlSequenceState);
+    if (this.isHistoryInteractiveProgram()) {
+      this.userCommandBuffer = '';
+      this.userCommandBufferReliable = true;
       return;
     }
-    this.historyStandaloneEscapePending = false;
-    const { text } = filterTerminalControlSequences(rawText, this.historyControlSequenceState);
-    const interactiveProgram = this.isHistoryInteractiveProgram();
-    const unknownSensitiveInput = this.activeCommandStart !== null && !interactiveProgram;
+    const unknownSensitiveInput = this.activeCommandStart !== null;
     if (unknownSensitiveInput) {
       this.userCommandBuffer = '';
       this.userCommandBufferReliable = false;
@@ -768,20 +805,14 @@ export class TerminalInstance {
     }
     for (let index = 0; index < text.length; index += 1) {
       const character = text[index];
-      if (character === '\u0003' || character === '\u0004') {
-        const summary = character === '\u0003' ? 'Ctrl+C' : 'Ctrl+D';
-        for (const listener of this.operationHistoryListeners) listener(character, 'key', summary);
-      } else if (character === '\r' || character === '\n') {
+      if (character === '\r' || character === '\n') {
         const typedPayload = this.userCommandBuffer.trim();
         const payload = resolveSubmittedCommand(typedPayload, this.getRenderedInputLine());
         if (payload && this.sessionId) {
           if (this.userCommandBufferReliable || payload !== typedPayload) {
-            const kind = interactiveProgram ? 'text' : 'shell';
-            for (const listener of this.operationHistoryListeners) listener(payload, kind, payload);
-            if (!interactiveProgram && startsInteractiveCli(payload)) this.historyInteractiveProgram = true;
+            for (const listener of this.operationHistoryListeners) listener(payload, 'shell', payload);
           }
-        } else if (this.sessionId) {
-          for (const listener of this.operationHistoryListeners) listener(character, 'confirm', 'Enter');
+          if (startsInteractiveCli(payload)) this.historyInteractiveProgram = true;
         }
         this.userCommandBuffer = '';
         this.userCommandBufferReliable = true;
@@ -795,15 +826,8 @@ export class TerminalInstance {
 
   private captureUserKeyEvent(event: KeyboardEvent): void {
     if (event.type !== 'keydown' || event.isComposing || event.key === 'Enter') return;
-    if (event.key === 'Tab' && this.isHistoryInteractiveProgram()) return;
-    const keyName = describeHistoryKey(event);
-    if (!keyName) return;
-    if (!this.isHistoryInteractiveProgram()) {
-      if (event.key.startsWith('Arrow') || event.key === 'Tab') this.userCommandBufferReliable = false;
-      return;
-    }
-    if (event.key === 'Escape') this.historyStandaloneEscapePending = true;
-    for (const listener of this.operationHistoryListeners) listener(keyPayload(event), 'key', keyName);
+    if (this.isHistoryInteractiveProgram()) return;
+    if (event.key.startsWith('Arrow') || event.key === 'Tab') this.userCommandBufferReliable = false;
   }
 
   private isHistoryInteractiveProgram(): boolean {
@@ -825,7 +849,7 @@ export class TerminalInstance {
     return text;
   }
 
-  private readonly operationHistoryListeners = new Set<(payload: string, kind?: 'shell' | 'text' | 'key' | 'confirm', summary?: string) => void>();
+  private readonly operationHistoryListeners = new Set<(payload: string, kind?: 'shell', summary?: string) => void>();
 
   private setupXtermHandlers(): void {
     const keyboardProtocol = new EnhancedKeyboardProtocol({
@@ -837,9 +861,7 @@ export class TerminalInstance {
         this.flushPendingInput();
       },
       writeBinary: (data) => {
-        if (this.transport) {
-          this.transport.write(data);
-        }
+        this.writeBytesToTransport(data);
       },
       hasSelection: () => this.xterm.hasSelection(),
       getSelection: () => this.xterm.getSelection(),
@@ -902,6 +924,23 @@ export class TerminalInstance {
 
         this.observeClaudeCodeModifyOtherKeysMode(params[1] === 2);
         return true;
+      }),
+      this.xterm.parser.registerCsiHandler({ prefix: '>', final: 'u' }, (params) => {
+        const flags = params[0];
+        if (typeof flags === 'number') {
+          this.kittyKeyboardProtocolFlags.push(flags);
+          shortcutReplayLog('[ShortcutReplay] Kitty keyboard protocol enabled:', { flags });
+        }
+        return false;
+      }),
+      this.xterm.parser.registerCsiHandler({ prefix: '<', final: 'u' }, (params) => {
+        const count = typeof params[0] === 'number' ? Math.max(1, params[0]) : 1;
+        this.kittyKeyboardProtocolFlags.splice(-count, count);
+        shortcutReplayLog('[ShortcutReplay] Kitty keyboard protocol restored:', {
+          count,
+          flags: this.kittyKeyboardProtocolFlags.at(-1) ?? 0,
+        });
+        return false;
       }),
       this.xterm.parser.registerDcsHandler({ final: 't' }, (data) => {
         const text = decodeTmuxPassthroughOsc52Clipboard(data);
@@ -2501,30 +2540,7 @@ export class TerminalInstance {
   }
 }
 
-function describeHistoryKey(event: KeyboardEvent): string | null {
-  const modifiers = [event.ctrlKey ? 'Ctrl' : '', event.altKey ? 'Alt' : '', event.shiftKey ? 'Shift' : '', event.metaKey ? 'Meta' : ''].filter(Boolean);
-  const meaningful = event.key.startsWith('Arrow') || ['Escape', 'Tab', 'Backspace', 'Delete', 'Home', 'End', 'PageUp', 'PageDown'].includes(event.key);
-  if (!meaningful) return null;
-  return [...modifiers, event.key.length === 1 ? event.key.toUpperCase() : event.key].join('+');
-}
-
-function keyPayload(event: KeyboardEvent): string {
-  if (event.key === 'Escape') return '\x1b';
-  if (event.key === 'Tab') return event.shiftKey ? '\x1b[Z' : '\t';
-  const arrows: Record<string, string> = { ArrowUp: '\x1b[A', ArrowDown: '\x1b[B', ArrowRight: '\x1b[C', ArrowLeft: '\x1b[D' };
-  return arrows[event.key] ?? (event.ctrlKey && event.key.length === 1
-    ? String.fromCharCode(event.key.toUpperCase().charCodeAt(0) - 64)
-    : event.key);
-}
-
 function normalizeReplayOutput(value: string): string {
-  return value
-    // eslint-disable-next-line no-control-regex -- ANSI escape sequences intentionally contain control characters.
-    .replace(/\x1b\][^\x07]*(?:\x07|\x1b\\)/g, '')
-    // eslint-disable-next-line no-control-regex, no-useless-escape -- ANSI escape sequences intentionally contain control characters.
-    .replace(/\x1b\[[0-?]*[ -\/]*[@-~]/g, '')
-    // eslint-disable-next-line no-control-regex -- Terminal output filtering intentionally removes control characters.
-    .replace(/[\u0000-\u001f\u007f]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return normalizeOutputForReplay(value);
 }
+

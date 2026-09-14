@@ -1,4 +1,5 @@
 import type { OperationRecord } from './operationHistory.ts';
+import { startsInteractiveCli } from './operationInputCapture.ts';
 
 export interface ShortcutStep {
   id: string;
@@ -29,6 +30,13 @@ export function serializeShortcutStepInput(step: ShortcutStep): string {
   return `${step.payload}\r`;
 }
 
+export function serializeShortcutStepWrites(step: ShortcutStep): string[] {
+  const input = serializeShortcutStepInput(step);
+  if (step.kind !== 'text') return [input];
+  const text = input.replace(/[\r\n]+$/, '');
+  return text ? [text, '\r'] : ['\r'];
+}
+
 export class ShortcutGroupStore {
   private readonly read: () => Promise<ShortcutStoreData>;
   private readonly write: (data: ShortcutStoreData) => Promise<void>;
@@ -57,7 +65,10 @@ export class ShortcutGroupStore {
     if (!records.length) throw new Error('EMPTY_SELECTION');
     if (!normalized) throw new Error('EMPTY_NAME');
     if (this.groups.some((g) => g.deviceKey === deviceKey && g.name === normalized)) throw new Error('DUPLICATE_NAME');
-    const steps = [...records].sort((a, b) => a.sequence - b.sequence).map(({ id, kind, summary, payload, captureQuality, completion, sequence }) => {
+    if (records.some((record) => record.kind !== 'shell')) throw new Error('TUI_REPLAY_UNSUPPORTED');
+    const orderedRecords = [...records].sort((a, b) => a.sequence - b.sequence);
+    if (orderedRecords.slice(0, -1).some((record) => startsInteractiveCli(record.payload))) throw new Error('TUI_LAUNCH_MUST_BE_LAST');
+    const steps = orderedRecords.map(({ id, kind, summary, payload, captureQuality, completion, sequence }) => {
       const outputMatch = outputMatches.get(id)?.trim();
       return { id, kind, summary, payload, captureQuality, completion, sequence, ...(outputMatch ? { outputMatch } : {}) };
     });

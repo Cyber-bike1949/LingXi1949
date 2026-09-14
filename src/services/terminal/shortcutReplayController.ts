@@ -1,5 +1,6 @@
 import type { ShortcutGroup, ShortcutStep } from './shortcutGroupStore.ts';
 import type { ShellEvent } from '../server/types.ts';
+import { startsInteractiveCli } from './operationInputCapture.ts';
 
 type TerminalInstanceShellListener = (listener: (event: ShellEvent) => void) => () => void;
 
@@ -12,7 +13,7 @@ export interface ReplayTerminal {
   deviceKey: string;
   write(step: ShortcutStep): Promise<void>;
   outputCursor?: () => number;
-  waitForOutputMatch?: (match: string, cursor: number, timeoutMs: number) => Promise<boolean>;
+  waitForOutputMatch?: (match: string, cursor: number, timeoutMs: number, echoedCommand?: string) => Promise<boolean>;
   addShellEventListener?: TerminalInstanceShellListener;
 }
 export interface ReplayAdapter { inspect(step: ShortcutStep, terminal: ReplayTerminal): Promise<boolean | 'unknown'>; observeCompletion(step: ShortcutStep, terminal: ReplayTerminal, outputCursor?: number): Promise<Completion>; }
@@ -25,6 +26,8 @@ export class ShortcutReplayController {
 
   start(group: ShortcutGroup, terminal: ReplayTerminal, adapter: ReplayAdapter): Promise<string> {
     if (group.deviceKey !== terminal.deviceKey) throw new Error('DEVICE_MISMATCH');
+    if (group.steps.some((step) => step.kind !== 'shell')) throw new Error('TUI_REPLAY_UNSUPPORTED');
+    if (group.steps.slice(0, -1).some((step) => startsInteractiveCli(step.payload))) throw new Error('TUI_LAUNCH_MUST_BE_LAST');
     if (this.locks.has(terminal.sessionId)) throw new Error('ALREADY_RUNNING');
     const runId = crypto.randomUUID();
     const snapshot: ReplaySnapshot = { runId, state: 'preparing', stepIndex: 0, totalSteps: group.steps.length, groupName: group.name, dispatchState: 'unsent' };

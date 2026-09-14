@@ -56,10 +56,9 @@ export class OperationHistory {
   }
 
   record(input: Omit<OperationRecord, 'id' | 'sequence' | 'timestamp'> & { source?: InputSource }): OperationRecord | null {
+    if (input.kind !== 'shell') return null;
     if (!this.isEnabled(input.sessionId) || input.source !== undefined && input.source !== 'user') return null;
-    const hasPayload = input.kind === 'shell' || input.kind === 'text'
-      ? input.payload.trim().length > 0
-      : input.payload.length > 0;
+    const hasPayload = input.payload.trim().length > 0;
     if (input.captureQuality === 'unavailable' || !hasPayload) return null;
     const record: OperationRecord = {
       ...input,

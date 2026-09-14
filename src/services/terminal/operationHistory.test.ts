@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { OperationHistory } from './operationHistory.ts';
-import { serializeShortcutStepInput, ShortcutGroupStore, type ShortcutStep } from './shortcutGroupStore.ts';
+import { serializeShortcutStepInput, serializeShortcutStepWrites, ShortcutGroupStore, type ShortcutStep } from './shortcutGroupStore.ts';
 
 function record(history: OperationHistory, sequence: number, payload = `echo ${sequence}`) {
   return history.record({ sessionId: 's', deviceKey: 'd', kind: 'shell', summary: payload, payload, captureQuality: 'complete', completion: 'resolved', source: 'user' })!;
@@ -51,14 +51,31 @@ test('history notifies subscribers only when a user record is added', () => {
 test('shortcut replay submits command steps and preserves semantic key payloads', () => {
   const base: ShortcutStep = { id: 'step', kind: 'text', summary: '/permissions', payload: '/permissions', captureQuality: 'complete', completion: 'resolved', sequence: 1 };
   assert.equal(serializeShortcutStepInput(base), '/permissions\r');
+  assert.deepEqual(serializeShortcutStepWrites(base), ['/permissions', '\r']);
+  assert.deepEqual(serializeShortcutStepWrites({ ...base, payload: '/permissions\r' }), ['/permissions', '\r']);
+  assert.deepEqual(serializeShortcutStepWrites({ ...base, kind: 'shell', payload: 'codex' }), ['codex\r']);
   assert.equal(serializeShortcutStepInput({ ...base, kind: 'shell', payload: 'codex\r' }), 'codex\r');
   assert.equal(serializeShortcutStepInput({ ...base, kind: 'key', payload: '\x1b[A' }), '\x1b[A');
   assert.equal(serializeShortcutStepInput({ ...base, kind: 'confirm', payload: '\r' }), '\r');
 });
 
-test('history preserves an empty Enter as a confirm operation', () => {
+test('history ignores TUI text, key and confirm operations', () => {
   const history = new OperationHistory();
-  const enter = history.record({ sessionId: 's', deviceKey: 'd', kind: 'confirm', summary: 'Enter', payload: '\r', captureQuality: 'complete', completion: 'pending', source: 'user' });
-  assert.equal(enter?.summary, 'Enter');
-  assert.equal(enter?.payload, '\r');
+  assert.equal(history.record({ sessionId: 's', deviceKey: 'd', kind: 'text', summary: '/permissions', payload: '/permissions', captureQuality: 'complete', completion: 'pending', source: 'user' }), null);
+  assert.equal(history.record({ sessionId: 's', deviceKey: 'd', kind: 'key', summary: 'ArrowUp', payload: '\x1b[A', captureQuality: 'complete', completion: 'pending', source: 'user' }), null);
+  assert.equal(history.record({ sessionId: 's', deviceKey: 'd', kind: 'confirm', summary: 'Enter', payload: '\r', captureQuality: 'complete', completion: 'pending', source: 'user' }), null);
+  assert.deepEqual(history.list('s'), []);
+});
+
+test('shortcut groups allow an AI TUI launch command only as the final step', async () => {
+  let saved: import('./shortcutGroupStore.ts').ShortcutStoreData = {};
+  const store = new ShortcutGroupStore(async () => saved, async (data) => { saved = structuredClone(data); });
+  await store.load();
+  const history = new OperationHistory();
+  const launch = record(history, 1, 'codex');
+  const group = await store.create('d', 'TUI', [launch]);
+  assert.equal(group.steps[0]?.payload, 'codex');
+
+  const nextCommand = record(history, 2, 'echo after');
+  await assert.rejects(store.create('d', 'Invalid TUI', [launch, nextCommand]), /TUI_LAUNCH_MUST_BE_LAST/);
 });

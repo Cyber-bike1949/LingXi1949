@@ -51,13 +51,13 @@ import { TransferConfirmModal } from './ui/terminal/transferConfirmModal';
 import { DEVICE_HOME_VIEW_TYPE, DeviceHomeView } from './ui/home/deviceHomeView';
 import { ChangelogModal } from './ui/changelog/changelogModal';
 import { i18n, t } from './i18n';
-import { debugLog, errorLog } from './utils/logger';
+import { debugLog, errorLog, initializeShortcutReplayLog, shortcutReplayLog } from './utils/logger';
 import { createLingXiLogoSvg, createLingXiLogoSvgMarkup, LINGXI_RIBBON_ICON_ID } from './ui/icons';
 import { FeatureVisibilityManager } from './services/visibility';
 import { shell } from 'electron';
 import type { TerminalInstance } from './services/terminal/terminalInstance';
 import { ShortcutReplayController, type ReplaySnapshot, type ReplayTerminal } from './services/terminal/shortcutReplayController';
-import { serializeShortcutStepInput, type ShortcutGroup, type ShortcutStep } from './services/terminal/shortcutGroupStore';
+import { serializeShortcutStepWrites, type ShortcutGroup, type ShortcutStep } from './services/terminal/shortcutGroupStore';
 import { startsInteractiveCli } from './services/terminal/operationInputCapture';
 import {
   getAlwaysOnTopTerminalLabelKey,
@@ -137,7 +137,6 @@ export default class TerminalPlugin extends Plugin {
   private _remoteService: RemoteService | null = null;
   private _pairedDeviceStore: PairedDeviceStore | null = null;
   private readonly shortcutReplayController = new ShortcutReplayController();
-  private readonly shortcutPermissionReplaySessions = new Set<string>();
   private readonly shortcutGroupListeners = new Set<() => void>();
   private readonly localCommitEpoch = crypto.randomUUID();
   private localCommitSequence = 0;
@@ -655,6 +654,10 @@ export default class TerminalPlugin extends Plugin {
     // Set debug mode
     const { setDebugMode } = await import('./utils/logger');
     setDebugMode(this.settings.enableDebugLog);
+    const adapter = this.app.vault.adapter;
+    if (adapter instanceof FileSystemAdapter && this.manifest.dir) {
+      initializeShortcutReplayLog(nodePath.join(adapter.getBasePath(), this.manifest.dir, 'shortcut-replay-debug.log'));
+    }
 
     // Initialize the feature visibility manager
     this.featureVisibilityManager = new FeatureVisibilityManager(this);
@@ -1223,81 +1226,23 @@ export default class TerminalPlugin extends Plugin {
   }
 
   private observeShortcutStepCompletion(step: ShortcutStep, terminal: ReplayTerminal, outputCursor = 0): Promise<'complete' | 'failed' | 'unknown'> {
-    const sessionId = terminal.sessionId;
-    const command = step.payload.trim();
-    if (step.kind === 'text' && command === '/permissions') {
-      this.shortcutPermissionReplaySessions.add(sessionId);
-    } else if (step.kind === 'shell' && startsInteractiveCli(command)) {
-      this.shortcutPermissionReplaySessions.delete(sessionId);
-    } else if (step.kind !== 'key' && step.kind !== 'confirm') {
-      this.shortcutPermissionReplaySessions.delete(sessionId);
-    }
-    if (this.shortcutPermissionReplaySessions.has(sessionId) && step.kind === 'confirm') {
-      return this.observeShortcutPermissionConfirmation(step, terminal, outputCursor);
-    }
-
-    const configuredOutputMatch = step.outputMatch?.trim();
-    const outputMatch = configuredOutputMatch || this.defaultShortcutOutputMatch(step, sessionId);
+    const outputMatch = step.outputMatch?.trim();
     if (outputMatch) {
       if (!terminal.waitForOutputMatch) return Promise.resolve('unknown');
-      const output = terminal.waitForOutputMatch(outputMatch, outputCursor, 15000)
+      return terminal.waitForOutputMatch(
+        outputMatch,
+        outputCursor,
+        15000,
+        step.kind === 'shell' ? step.payload.trim() : undefined,
+      )
         .then((matched) => matched ? 'complete' as const : 'unknown' as const);
-      // Interactive launchers never emit a shell command_end event while the
-      // session remains open; their startup match is the completion signal.
-      if (!configuredOutputMatch || step.kind !== 'shell' || !terminal.addShellEventListener) return output;
-      const commandEnd = new Promise<'complete' | 'failed'>((resolve) => {
-        const cleanup = terminal.addShellEventListener!((event) => {
-          if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
-        });
-      });
-      return Promise.all([output, commandEnd]).then(([matchResult, commandResult]) => commandResult === 'failed' ? 'failed' : matchResult);
     }
-    if (step.kind !== 'shell') return this.completeShortcutStepAfter(this.settings.shortcutReplayDelayMs);
-    if (startsInteractiveCli(step.payload)) return this.completeShortcutStepAfter(1000);
+      if (startsInteractiveCli(step.payload)) return this.completeShortcutStepAfter(1000);
     if (!terminal.addShellEventListener) return this.completeShortcutStepAfter(350);
     return new Promise((resolve) => {
       const cleanup = terminal.addShellEventListener!((event) => {
         if (event.type === 'command_end') { cleanup(); resolve(event.exitCode === 0 ? 'complete' : 'failed'); }
       });
-    });
-  }
-
-  private defaultShortcutOutputMatch(step: ShortcutStep, sessionId: string): string | undefined {
-    const command = step.payload.trim();
-    if (step.kind === 'shell' && /(?:^|\/)codex(?:\s|$)/i.test(command)) return 'Ask Codex to do anything';
-    if (step.kind === 'text' && command === '/permissions') return 'Update Model Permissions';
-    if (step.kind === 'key' && step.payload === '\x1b[A' && this.shortcutPermissionReplaySessions.has(sessionId)) return 'Full Access';
-    return undefined;
-  }
-
-  private observeShortcutPermissionConfirmation(
-    step: ShortcutStep,
-    terminal: ReplayTerminal,
-    outputCursor: number,
-  ): Promise<'complete' | 'failed' | 'unknown'> {
-    const waitForOutputMatch = terminal.waitForOutputMatch;
-    if (!waitForOutputMatch) {
-      this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
-      return this.completeShortcutStepAfter(this.settings.shortcutReplayDelayMs);
-    }
-    return waitForOutputMatch('Enable full access?', outputCursor, 15000).then(async (promptVisible) => {
-      if (!promptVisible) {
-        this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
-        return 'complete';
-      }
-      const confirmation: ShortcutStep = { ...step, kind: 'confirm', payload: '\r', summary: 'Enter' };
-      const confirmedCursor = terminal.outputCursor?.() ?? outputCursor;
-      await terminal.write(confirmation);
-      const confirmed = await waitForOutputMatch(
-        'Permissions updated to Full Access',
-        confirmedCursor,
-        15000,
-      );
-      this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
-      return confirmed ? 'complete' : 'unknown';
-    }).catch(() => {
-      this.shortcutPermissionReplaySessions.delete(terminal.sessionId);
-      return 'unknown';
     });
   }
 
@@ -1369,9 +1314,22 @@ export default class TerminalPlugin extends Plugin {
     }
   }
 
-  private writeShortcutStep(terminal: TerminalInstance, step: ShortcutStep): Promise<void> {
-    terminal.sendText(serializeShortcutStepInput(step));
-    return Promise.resolve();
+  private async writeShortcutStep(terminal: TerminalInstance, step: ShortcutStep): Promise<void> {
+    const writes = serializeShortcutStepWrites(step);
+    shortcutReplayLog('[ShortcutReplay] Sending step:', {
+      sessionId: terminal.getSessionId(),
+      kind: step.kind,
+      summary: step.summary,
+      writes: writes.map((input) => JSON.stringify(input)),
+      outputMatch: step.outputMatch ?? null,
+    });
+    const inputCursor = terminal.outputCursor();
+    for (const [index, input] of writes.entries()) {
+      if (index > 0 && step.kind === 'text') {
+        await terminal.waitForOutputMatch(writes[0], inputCursor, 2000);
+      }
+      terminal.sendText(input);
+    }
   }
 
   /**
