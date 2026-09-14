@@ -1,5 +1,5 @@
-import type { WorkspaceLeaf, Menu } from 'obsidian';
-import { FileSystemAdapter, ItemView, Notice, TFile, TFolder, setIcon } from 'obsidian';
+import type { WorkspaceLeaf } from 'obsidian';
+import { FileSystemAdapter, ItemView, Menu, Notice, TFile, TFolder, setIcon } from 'obsidian';
 import { shell, webUtils } from 'electron';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 
@@ -178,6 +178,9 @@ export class TerminalView extends ItemView {
     if (plugin) {
       menu.addItem((item) => {
         item.setTitle('历史操作').setIcon('history').onClick(() => this.openOperationHistory());
+      });
+      menu.addItem((item) => {
+        item.setTitle('管理命令组').setIcon('list-plus').onClick(() => this.openOperationHistory('groups'));
       });
       const currentDeviceKey = this.getRemoteNodeId() ?? 'local';
       const deviceGroups = plugin.settings.deviceShortcutGroups.filter((group) => group.deviceKey === currentDeviceKey).sort((a, b) => b.creationOrder - a.creationOrder);
@@ -1347,29 +1350,36 @@ export class TerminalView extends ItemView {
     const toolbar = this.remoteToolbar;
     if (!toolbar) return;
     toolbar.empty();
-    const reconnectButton = toolbar.createEl('button', { text: t('terminal.reconnect') });
+    this.renderShortcutGroups(toolbar);
+    const reconnectButton = toolbar.createEl('button', { attr: { 'aria-label': t('terminal.reconnect') } });
+    setIcon(reconnectButton.createSpan('terminal-toolbar-action-icon'), 'refresh-cw');
+    reconnectButton.createSpan({ cls: 'terminal-toolbar-action-label', text: t('terminal.reconnect') });
     reconnectButton.disabled = !this.terminalInstance || this.connectionStatus === 'reconnecting';
     reconnectButton.addEventListener('click', () => void this.reconnectTerminal());
 
     const treeToggleBtn = toolbar.createEl('button', {
       cls: 'terminal-directory-tree-toggle',
-      text: t('directoryTree.toggle'),
       attr: { 'aria-label': t('commands.terminalToggleDirectoryTree') },
     });
+    setIcon(treeToggleBtn.createSpan('terminal-toolbar-action-icon'), 'folder-tree');
+    treeToggleBtn.createSpan({ cls: 'terminal-toolbar-action-label', text: t('directoryTree.toggle') });
     treeToggleBtn.toggleClass('is-active', this.directoryTreeVisible);
     treeToggleBtn.addEventListener('click', () => this.toggleDirectoryTree());
-
-    const historyButton = toolbar.createEl('button', { text: '历史操作', cls: 'terminal-history-action' });
-    historyButton.disabled = !this.terminalInstance;
-    historyButton.createSpan({ cls: 'terminal-history-activity-indicator' });
-    this.historyActionEl = historyButton;
-    historyButton.addEventListener('click', () => this.openOperationHistory());
 
     toolbar.createSpan({
       cls: `terminal-connection-status is-${this.connectionStatus}`,
       text: t(`terminal.connectionStatus.${this.connectionStatus}`),
     });
-    this.renderShortcutGroups(toolbar);
+    const historyButton = toolbar.createEl('button', {
+      cls: 'terminal-history-action',
+      attr: { 'aria-label': '历史操作' },
+    });
+    historyButton.disabled = !this.terminalInstance;
+    setIcon(historyButton.createSpan('terminal-toolbar-action-icon'), 'history');
+    historyButton.createSpan({ cls: 'terminal-toolbar-action-label', text: '历史操作' });
+    historyButton.createSpan({ cls: 'terminal-history-activity-indicator' });
+    this.historyActionEl = historyButton;
+    historyButton.addEventListener('click', () => this.openOperationHistory());
   }
 
   private renderShortcutGroups(toolbar: HTMLElement): void {
@@ -1384,20 +1394,26 @@ export class TerminalView extends ItemView {
 
     const shortcuts = toolbar.createDiv('terminal-toolbar-shortcuts');
     const latest = shortcuts.createEl('button', {
-      text: groups[0].name,
+      cls: 'terminal-toolbar-shortcut-latest',
       attr: { title: groups[0].name, 'aria-label': `运行快捷组：${groups[0].name}` },
     });
+    setIcon(latest.createSpan('terminal-toolbar-shortcut-icon'), 'play');
+    latest.createSpan({ cls: 'terminal-toolbar-shortcut-name', text: groups[0].name });
     latest.addEventListener('click', () => this.runToolbarShortcut(terminal, groups[0]));
-    if (groups.length > 1) {
-      const more = shortcuts.createEl('select', { attr: { 'aria-label': '更多快捷组' } });
-      more.createEl('option', { text: '…', value: '' });
-      for (const group of groups.slice(1)) more.createEl('option', { text: group.name, value: group.id });
-      more.addEventListener('change', () => {
-        const group = groups.find((item) => item.id === more.value);
-        more.value = '';
-        if (group) this.runToolbarShortcut(terminal, group);
-      });
-    }
+    const toggle = shortcuts.createEl('button', {
+      cls: 'clickable-icon terminal-toolbar-shortcut-toggle',
+      attr: { 'aria-label': '展开其它命令组' },
+    });
+    setIcon(toggle, 'chevron-down');
+    toggle.addEventListener('click', (event) => {
+      const menu = new Menu();
+      for (const group of groups.slice(1)) {
+        menu.addItem((item) => item.setTitle(group.name).setIcon('play').onClick(() => this.runToolbarShortcut(terminal, group)));
+      }
+      if (groups.length > 1) menu.addSeparator();
+      menu.addItem((item) => item.setTitle('管理命令组…').setIcon('list-plus').onClick(() => this.openOperationHistory('groups')));
+      menu.showAtMouseEvent(event);
+    });
   }
 
   private showHistoryActivity(): void {
@@ -1419,31 +1435,25 @@ export class TerminalView extends ItemView {
       .catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组运行失败'));
   }
 
-  private openOperationHistory(): void {
+  private openOperationHistory(initialTab: 'history' | 'groups' = 'history'): void {
     const plugin = this.getTerminalPlugin();
     if (!plugin) return;
     const sessionId = this.terminalInstance?.getSessionId() ?? '';
     const store = new ShortcutGroupStore(
       () => Promise.resolve({ deviceShortcutGroups: plugin.settings.deviceShortcutGroups }),
-      async (data) => {
-        const previous = plugin.settings.deviceShortcutGroups;
-        plugin.settings.deviceShortcutGroups = data.deviceShortcutGroups ?? [];
-        try {
-          await plugin.saveSettings();
-        } catch (error) {
-          plugin.settings.deviceShortcutGroups = previous;
-          throw error;
-        }
-      },
+      (data) => plugin.saveShortcutGroups(data.deviceShortcutGroups ?? []),
     );
     void store.load().then(() => new OperationHistoryModal(
       this.app,
       this.operationHistory.list(sessionId),
       this.getRemoteNodeId() ?? 'local',
       store,
-      this.operationHistory.isEnabled(sessionId),
-      (enabled) => this.operationHistory.setEnabled(sessionId, enabled),
-      () => this.operationHistory.clear(sessionId),
+      {
+        initialTab,
+        captureEnabled: this.operationHistory.isEnabled(sessionId),
+        onCaptureEnabledChange: (enabled) => this.operationHistory.setEnabled(sessionId, enabled),
+        onClearHistory: () => this.operationHistory.clear(sessionId),
+      },
     ).open());
   }
 

@@ -78,5 +78,35 @@ export class ShortcutGroupStore {
     this.notify();
   }
 
+  async update(id: string, name: string, steps: ShortcutStep[]): Promise<ShortcutGroup> {
+    const current = this.groups.find((group) => group.id === id);
+    if (!current) throw new Error('GROUP_NOT_FOUND');
+    const normalized = name.trim();
+    if (!normalized) throw new Error('EMPTY_NAME');
+    if (!steps.length) throw new Error('EMPTY_STEPS');
+    if (this.groups.some((group) => group.id !== id && group.deviceKey === current.deviceKey && group.name === normalized)) {
+      throw new Error('DUPLICATE_NAME');
+    }
+    const normalizedSteps = steps.map((step, index) => {
+      const payload = step.payload;
+      const hasPayload = step.kind === 'shell' || step.kind === 'text' ? payload.trim().length > 0 : payload.length > 0;
+      if (!hasPayload) throw new Error('EMPTY_STEP');
+      const outputMatch = step.outputMatch?.trim();
+      return {
+        ...step,
+        summary: step.summary.trim() || payload.trim() || step.kind,
+        payload,
+        sequence: index + 1,
+        ...(outputMatch ? { outputMatch } : { outputMatch: undefined }),
+      };
+    });
+    const updated: ShortcutGroup = { ...current, name: normalized, steps: normalizedSteps };
+    const next = this.groups.map((group) => group.id === id ? updated : group);
+    await this.write({ deviceShortcutGroups: next, shortcutGroupsVersion: 1 });
+    this.groups = next;
+    this.notify();
+    return { ...updated, steps: updated.steps.map((step) => ({ ...step })) };
+  }
+
   private notify(): void { const snapshot = this.list(); for (const subscriber of this.subscribers) subscriber(snapshot); }
 }

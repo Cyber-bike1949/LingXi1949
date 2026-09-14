@@ -37,6 +37,42 @@ test('shortcut groups persist deep-copied steps in sequence order', async () => 
   assert.deepEqual(store.list('d'), []);
 });
 
+test('shortcut groups can be renamed and their steps edited, added, reordered, and removed', async () => {
+  let saved: import('./shortcutGroupStore.ts').ShortcutStoreData = {};
+  const store = new ShortcutGroupStore(() => Promise.resolve(saved), (data) => { saved = data; return Promise.resolve(); });
+  await store.load();
+  const history = new OperationHistory();
+  const first = record(history, 1, 'first');
+  const second = record(history, 2, 'second');
+  const group = await store.create('device', 'Original', [first, second]);
+  const added = {
+    ...group.steps[0],
+    id: 'added',
+    kind: 'text' as const,
+    summary: 'new input',
+    payload: 'new input',
+  };
+
+  const updated = await store.update(group.id, 'Renamed', [added, group.steps[1]]);
+
+  assert.equal(updated.name, 'Renamed');
+  assert.deepEqual(updated.steps.map((step) => [step.id, step.sequence]), [['added', 1], [group.steps[1].id, 2]]);
+  assert.deepEqual(saved.deviceShortcutGroups?.[0].steps.map((step) => step.payload), ['new input', 'second']);
+});
+
+test('shortcut group updates reject empty content and duplicate names', async () => {
+  let saved: import('./shortcutGroupStore.ts').ShortcutStoreData = {};
+  const store = new ShortcutGroupStore(() => Promise.resolve(saved), (data) => { saved = data; return Promise.resolve(); });
+  await store.load();
+  const history = new OperationHistory();
+  const first = await store.create('device', 'First', [record(history, 1)]);
+  await store.create('device', 'Second', [record(history, 2)]);
+
+  await assert.rejects(store.update(first.id, 'Second', first.steps), /DUPLICATE_NAME/);
+  await assert.rejects(store.update(first.id, 'First', []), /EMPTY_STEPS/);
+  await assert.rejects(store.update(first.id, 'First', [{ ...first.steps[0], payload: ' ' }]), /EMPTY_STEP/);
+});
+
 test('history notifies subscribers only when a user record is added', () => {
   const history = new OperationHistory();
   const payloads: string[] = [];

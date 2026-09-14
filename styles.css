@@ -1352,7 +1352,7 @@
   padding: 4px 8px;
   border-bottom: 1px solid var(--background-modifier-border);
   background-color: var(--background-primary);
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
 }
 .terminal-remote-toolbar span {
   color: var(--text-muted);
@@ -1364,22 +1364,64 @@
 .terminal-toolbar-shortcuts {
   display: flex;
   align-items: center;
-  gap: 4px;
-  max-width: min(45%, 360px);
+  align-self: stretch;
+  flex: 0 1 min(220px, 38%);
+  gap: 0;
+  min-width: 0;
+  max-width: 220px;
 }
 .terminal-toolbar-shortcuts button {
+  min-width: 0;
+}
+.terminal-toolbar-shortcut-latest {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 6px;
   overflow: hidden;
-  max-width: 180px;
+  border-radius: var(--button-radius) 0 0 var(--button-radius);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+.terminal-toolbar-shortcut-icon {
+  display: flex;
+  flex: 0 0 auto;
+  color: inherit !important;
+}
+.terminal-toolbar-shortcut-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.terminal-toolbar-shortcut-name {
+  overflow: hidden;
+  color: inherit !important;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.terminal-toolbar-shortcuts select {
-  min-width: 42px;
-  max-width: 140px;
+.terminal-toolbar-shortcut-toggle {
+  flex: 0 0 30px;
+  width: 30px;
+  border-left: 1px solid color-mix(in srgb, var(--text-on-accent) 28%, transparent);
+  border-radius: 0 var(--button-radius) var(--button-radius) 0;
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
 }
 
 .terminal-history-action {
   position: relative;
+}
+.terminal-toolbar-action-icon {
+  display: inline-flex;
+  margin-right: 5px;
+  color: inherit !important;
+  vertical-align: middle;
+}
+.terminal-toolbar-action-icon svg {
+  width: 14px;
+  height: 14px;
+}
+.terminal-toolbar-action-label {
+  color: inherit !important;
 }
 
 .terminal-history-activity-indicator {
@@ -1389,14 +1431,17 @@
   display: none;
   width: 7px;
   height: 7px;
-  border: 1.5px solid var(--interactive-accent);
-  border-right-color: transparent;
+  background: var(--interactive-accent);
   border-radius: 50%;
 }
 
 .is-recording-history .terminal-history-activity-indicator {
   display: block;
-  animation: termesh-spin 0.7s linear infinite;
+  animation: termesh-history-pulse 0.8s ease-out;
+}
+@keyframes termesh-history-pulse {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0.35; transform: scale(1.6); }
 }
 .terminal-connection-status.is-connected {
   color: var(--text-success);
@@ -2576,6 +2621,8 @@
 
 .termesh-device-card {
   position: relative;
+  display: flex;
+  flex-direction: column;
   min-height: 190px;
   padding: 20px;
   overflow: visible;
@@ -2617,15 +2664,19 @@
 }
 
 .termesh-device-card h2 {
-  margin: 18px 0 7px;
+  margin: 0;
   font-size: 18px;
   line-height: 1.25;
   letter-spacing: 0;
   overflow-wrap: anywhere;
 }
 
+.termesh-device-card.is-add h2 {
+  margin: 18px 0 7px;
+}
+
 .termesh-device-card p {
-  margin: 0;
+  margin: 18px 0 0;
   color: var(--text-muted);
   font-size: var(--font-ui-small);
   line-height: 1.45;
@@ -2636,6 +2687,23 @@
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+}
+
+.termesh-device-identity {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+}
+
+.termesh-device-meta {
+  min-width: 0;
+}
+
+.termesh-device-meta h2 {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .termesh-device-icon {
@@ -2652,38 +2720,57 @@
   height: 28px;
 }
 
-.termesh-device-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
+.termesh-device-more {
+  flex: 0 0 32px;
+  width: 32px;
+  height: 32px;
+  opacity: 0.55;
+  transition: opacity 120ms ease;
 }
 
-.termesh-device-card-controls {
-  position: relative;
-  z-index: 2;
-  display: flex;
-  flex: 1 1 auto;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 7px;
-  min-width: 0;
+.termesh-device-card:hover .termesh-device-more,
+.termesh-device-card:focus-within .termesh-device-more {
+  opacity: 1;
 }
 
-.termesh-device-card-controls .termesh-device-status {
-  margin-top: 0;
+.termesh-device-shortcut-label {
+  margin-top: auto;
+  padding-top: 22px;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
 }
 
 .termesh-device-shortcuts {
-  position: relative;
   display: flex;
   align-items: stretch;
-  max-width: min(190px, 100%);
+  width: 100%;
+  margin-top: 7px;
 }
 
 .termesh-device-shortcut-latest {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: 7px;
   min-width: 0;
   overflow: hidden;
   border-radius: var(--button-radius) 0 0 var(--button-radius);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.termesh-device-shortcut-icon {
+  display: flex;
+  flex: 0 0 auto;
+}
+
+.termesh-device-shortcut-icon svg {
+  width: 15px;
+  height: 15px;
+}
+
+.termesh-device-shortcut-name {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2691,67 +2778,17 @@
 .termesh-device-shortcut-toggle {
   flex: 0 0 30px;
   width: 30px;
-  border-left: 0;
+  border-left: 1px solid color-mix(in srgb, var(--text-on-accent) 28%, transparent);
   border-radius: 0 var(--button-radius) var(--button-radius) 0;
-}
-
-.termesh-device-shortcut-menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 0;
-  z-index: 4;
-  display: none;
-  width: max-content;
-  min-width: 180px;
-  max-width: 260px;
-  padding: 4px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-s);
-  background: var(--background-primary);
-  box-shadow: var(--shadow-s);
-}
-
-.termesh-device-shortcut-menu.is-open {
-  display: block;
-}
-
-.termesh-device-shortcut-menu-row {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.termesh-device-shortcut-menu-row > button:first-child {
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.termesh-device-shortcut-menu-row > button:first-child:hover {
-  background: var(--background-modifier-hover);
-}
-
-.termesh-device-shortcut-remove {
-  flex: 0 0 28px;
-  width: 28px;
-  color: var(--text-muted);
-}
-
-.termesh-device-shortcut-remove:hover {
-  color: var(--text-error);
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
 }
 
 .termesh-device-status {
   display: flex;
   align-items: center;
   gap: 7px;
-  margin-top: 22px;
+  margin-top: 3px;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
 }
@@ -2925,11 +2962,243 @@
 .directory-tree-panel__mtime {
   position: fixed;
   z-index: 10000;
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: var(--background-modifier-hover);
-  color: var(--text-muted);
+  min-width: 150px;
+  padding: 7px 9px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  box-shadow: var(--shadow-s);
+  color: var(--text-normal);
   font-size: var(--font-ui-smaller);
   white-space: nowrap;
   pointer-events: none;
+}
+.directory-tree-panel__mtime-label {
+  margin-bottom: 2px;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.directory-tree-panel__mtime-value {
+  color: var(--text-normal);
+}
+
+/* History creation and shortcut-group management modal. */
+.modal:has(.operation-history-tabs) {
+  width: min(720px, calc(100vw - 32px));
+}
+.operation-history-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.operation-history-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.operation-history-tabs button.is-active {
+  border-bottom-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+}
+.operation-history-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.operation-history-toolbar,
+.operation-history-capture,
+.operation-history-row-main,
+.operation-history-footer,
+.operation-history-footer-actions,
+.operation-groups-selector-row,
+.operation-group-steps-header,
+.operation-group-step,
+.operation-group-step-controls,
+.operation-history-confirm-actions {
+  display: flex;
+  align-items: center;
+}
+.operation-history-toolbar,
+.operation-history-footer,
+.operation-group-steps-header {
+  justify-content: space-between;
+  gap: 16px;
+}
+.operation-history-description {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+.operation-history-capture {
+  flex: 0 0 auto;
+  gap: 8px;
+  font-size: var(--font-ui-small);
+}
+.operation-history-list,
+.operation-group-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: min(340px, 42vh);
+  overflow-y: auto;
+  padding-right: 4px;
+}
+.operation-history-row,
+.operation-group-step {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+.operation-history-row-main {
+  gap: 10px;
+  padding: 10px 12px;
+}
+.operation-history-kind {
+  flex: 0 0 auto;
+  min-width: 44px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--background-modifier-hover);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  text-align: center;
+}
+.operation-history-kind.is-shell { color: var(--color-blue); }
+.operation-history-kind.is-text { color: var(--color-purple); }
+.operation-history-kind.is-key,
+.operation-history-kind.is-confirm { color: var(--color-orange); }
+.operation-history-summary {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.operation-history-time {
+  flex: 0 0 auto;
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.operation-history-advanced {
+  padding: 0 12px 10px 44px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+.operation-history-advanced input {
+  width: 100%;
+  margin-top: 8px;
+}
+.operation-history-create-form,
+.operation-group-name-field {
+  display: grid;
+  gap: 6px;
+}
+.operation-history-create-form input,
+.operation-group-name-field input {
+  width: 100%;
+}
+.operation-history-selection-summary {
+  color: var(--text-faint);
+  font-size: var(--font-ui-smaller);
+}
+.operation-history-footer {
+  padding-top: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.operation-history-footer-actions,
+.operation-history-confirm-actions {
+  justify-content: flex-end;
+  gap: 8px;
+}
+.operation-history-clear {
+  color: var(--text-error);
+}
+.operation-groups-selector-row {
+  gap: 12px;
+}
+.operation-groups-selector-row select {
+  flex: 1 1 auto;
+}
+.operation-group-steps-header h3 {
+  margin: 0;
+  font-size: var(--font-ui-medium);
+}
+.operation-group-step {
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px;
+}
+.operation-group-step-number {
+  display: flex;
+  flex: 0 0 24px;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-smaller);
+}
+.operation-group-step-fields {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-columns: 92px minmax(120px, 1fr) minmax(120px, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+.operation-group-step-fields input,
+.operation-group-step-fields select {
+  width: 100%;
+  min-width: 0;
+}
+.operation-group-step-controls {
+  flex: 0 0 auto;
+  gap: 2px;
+}
+.operation-groups-empty {
+  padding: 34px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.operation-groups-empty-icon svg {
+  width: 32px;
+  height: 32px;
+}
+.operation-groups-empty h3 {
+  margin: 10px 0 4px;
+  color: var(--text-normal);
+}
+.operation-groups-empty p {
+  margin: 0 0 16px;
+}
+
+@media (max-width: 640px) {
+  .terminal-remote-toolbar > button:not(.terminal-history-action) {
+    padding-inline: 7px;
+  }
+  .terminal-connection-status {
+    display: none;
+  }
+  .terminal-toolbar-action-label {
+    display: none;
+  }
+  .terminal-toolbar-action-icon {
+    margin-right: 0;
+  }
+  .operation-group-step-fields {
+    grid-template-columns: 1fr;
+  }
+  .operation-history-footer {
+    align-items: stretch;
+    flex-direction: column-reverse;
+  }
+  .operation-history-footer-actions {
+    width: 100%;
+  }
+  .operation-history-footer-actions button {
+    flex: 1 1 0;
+  }
 }
