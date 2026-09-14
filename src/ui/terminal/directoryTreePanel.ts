@@ -33,6 +33,7 @@ import type { Disposable } from '../../services/remote/transport.ts';
 import type { DirectoryEntry, DirectoryTreeSource } from '../../services/terminal/directoryTreeSource.ts';
 import type { DirectoryModificationStore } from '../../services/terminal/directoryModificationStore.ts';
 import { DIRECTORY_TREE_DRAG_MIME, type DirectoryTreeDragPayload } from '../../services/terminal/directoryTreeDrop.ts';
+import { calculateDirectoryTooltipPosition } from '../../services/terminal/directoryTreeTooltip.ts';
 import { t } from '../../i18n';
 
 export type DockSide = 'left' | 'right';
@@ -68,6 +69,7 @@ interface PathApi {
 const MIN_WIDTH_PX = 180;
 const MAX_WIDTH_PX = 640;
 const DEFAULT_WIDTH_PX = 260;
+const MTIME_TOOLTIP_DELAY_MS = 500;
 
 export class DirectoryTreePanel {
   readonly element: HTMLElement;
@@ -86,6 +88,9 @@ export class DirectoryTreePanel {
   private readonly expandedPaths = new Set<string>();
   private destroyed = false;
   private modificationCleanup?: () => void;
+  private mtimeHoverToken = 0;
+  private mtimeHoverTimer: number | null = null;
+  private mtimeTooltip: HTMLElement | null = null;
 
   private readonly source: DirectoryTreeSource;
   private readonly pathApi: PathApi;
@@ -298,6 +303,7 @@ export class DirectoryTreePanel {
   }
 
   async setRootPath(rootPath: string, options: { keepExpanded?: boolean } = {}): Promise<void> {
+    this.clearMtimeTooltip();
     this.rootPath = rootPath;
     this.pathInputEl.value = rootPath;
     this.pathInputEl.setAttribute('title', rootPath);
@@ -402,30 +408,18 @@ export class DirectoryTreePanel {
       this.showNodeContextMenu(event, fullPath, entry.isDirectory, entry.name);
     });
 
-    const ownerWindow = row.ownerDocument.defaultView ?? window;
-    let hoverTimer: number | null = null;
-    let tooltip: HTMLElement | null = null;
-    const clearTooltip = (): void => {
-      if (hoverTimer !== null) ownerWindow.clearTimeout(hoverTimer);
-      hoverTimer = null;
-      tooltip?.remove();
-      tooltip = null;
-    };
-    row.addEventListener('mouseenter', () => {
-      clearTooltip();
-      hoverTimer = ownerWindow.setTimeout(() => {
-        if (!this.source.stat) return;
-        const rect = row.getBoundingClientRect();
-        tooltip = row.ownerDocument.body.createDiv({ cls: 'directory-tree-panel__mtime', text: '正在读取修改时间' });
-        tooltip.style.top = `${Math.min(rect.bottom + 2, ownerWindow.innerHeight - 32)}px`;
-        tooltip.style.left = `${Math.max(8, Math.min(rect.left, ownerWindow.innerWidth - 240))}px`;
-        void this.source.stat(fullPath).then((metadata) => {
-          if (!tooltip) return;
-          tooltip.setText(metadata.modifiedAtMs === null ? '修改时间不可用' : new Date(metadata.modifiedAtMs).toLocaleString());
-        }).catch(() => tooltip?.setText('修改时间不可用'));
-      }, 3000);
+    row.tabIndex = 0;
+    row.addEventListener('mouseenter', () => this.scheduleMtimeTooltip(row, fullPath));
+    row.addEventListener('mouseleave', () => {
+      if (!row.contains(row.ownerDocument.activeElement)) this.clearMtimeTooltip();
     });
-    row.addEventListener('mouseleave', clearTooltip);
+    row.addEventListener('focusin', () => this.scheduleMtimeTooltip(row, fullPath));
+    row.addEventListener('focusout', () => {
+      if (!row.matches(':hover')) this.clearMtimeTooltip();
+    });
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') this.clearMtimeTooltip();
+    });
 
     // Draggable out to Obsidian's file explorer (see this file's top doc
     // comment) - not a real OS file drag, just a same-window HTML5 drag
@@ -489,6 +483,56 @@ export class DirectoryTreePanel {
     menu.showAtMouseEvent(event);
   }
 
+  private scheduleMtimeTooltip(row: HTMLElement, path: string): void {
+    this.clearMtimeTooltip();
+    if (!this.source.stat) return;
+    const token = ++this.mtimeHoverToken;
+    const ownerWindow = row.ownerDocument.defaultView ?? window;
+    this.mtimeHoverTimer = ownerWindow.setTimeout(() => {
+      this.mtimeHoverTimer = null;
+      const active = row.matches(':hover') || row.contains(row.ownerDocument.activeElement);
+      if (this.destroyed || token !== this.mtimeHoverToken || !row.isConnected || !active) return;
+
+      const tooltip = row.ownerDocument.body.createDiv({ cls: 'directory-tree-panel__mtime' });
+      tooltip.setAttribute('role', 'tooltip');
+      tooltip.createDiv({ cls: 'directory-tree-panel__mtime-label', text: '最近修改' });
+      const value = tooltip.createDiv({ cls: 'directory-tree-panel__mtime-value', text: '正在读取…' });
+      this.mtimeTooltip = tooltip;
+      this.positionMtimeTooltip(row, tooltip, ownerWindow);
+
+      void this.source.stat?.(path).then((metadata) => {
+        if (token !== this.mtimeHoverToken || this.mtimeTooltip !== tooltip) return;
+        value.setText(metadata.modifiedAtMs === null ? '修改时间不可用' : new Date(metadata.modifiedAtMs).toLocaleString());
+        this.positionMtimeTooltip(row, tooltip, ownerWindow);
+      }).catch(() => {
+        if (token !== this.mtimeHoverToken || this.mtimeTooltip !== tooltip) return;
+        value.setText('修改时间不可用');
+        this.positionMtimeTooltip(row, tooltip, ownerWindow);
+      });
+    }, MTIME_TOOLTIP_DELAY_MS);
+  }
+
+  private positionMtimeTooltip(row: HTMLElement, tooltip: HTMLElement, ownerWindow: Window): void {
+    const anchor = row.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+    const position = calculateDirectoryTooltipPosition(anchor, tooltipRect, {
+      width: ownerWindow.innerWidth,
+      height: ownerWindow.innerHeight,
+    });
+    tooltip.style.left = `${position.left}px`;
+    tooltip.style.top = `${position.top}px`;
+    tooltip.dataset.side = position.side;
+  }
+
+  private clearMtimeTooltip(): void {
+    this.mtimeHoverToken += 1;
+    const ownerWindow = this.element.ownerDocument.defaultView ?? window;
+    if (this.mtimeHoverTimer !== null) ownerWindow.clearTimeout(this.mtimeHoverTimer);
+    this.mtimeHoverTimer = null;
+    this.mtimeTooltip?.remove();
+    this.mtimeTooltip = null;
+  }
+
   private disposeWatchesUnder(path: string): void {
     for (const [watchedPath, disposable] of Array.from(this.watches.entries())) {
       if (watchedPath === path || watchedPath.startsWith(`${path}${watchedPath.includes('\\') ? '\\' : '/'}`)) {
@@ -505,6 +549,7 @@ export class DirectoryTreePanel {
 
   destroy(): void {
     this.destroyed = true;
+    this.clearMtimeTooltip();
     this.modificationCleanup?.();
     this.modificationCleanup = undefined;
     this.disposeAllWatches();

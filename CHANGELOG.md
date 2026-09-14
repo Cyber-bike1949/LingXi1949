@@ -8,7 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
-- Added an optional directory metadata API for local files and agents that negotiate metadata version 1; older agents retain directory listing support. Hover UI is not yet connected to this API.
+- Added an optional directory metadata API for local files and agents that negotiate metadata version 1; older agents retain directory listing support. Directory rows now show the modification time after a guarded 500 ms hover, with collision-aware placement that avoids covering file names.
+- Added a command-group manager for viewing, renaming, adding, editing, reordering, and deleting saved command steps.
 - Directory-tree same-name conflict handling is now configurable: a new "Overwrite same-name files" setting (on by default) makes a tree-to-vault drop overwrite an existing same-name file in place instead of appending "(2)"; turning it off keeps the previous append-a-suffix behavior. Applies to files inside a dropped folder too.
 - Double-clicking a file row in the terminal's directory tree now inserts that file's path into the agent-cli input at the cursor, as a faster alternative to dragging the row there.
 - Directory-tree and remote-drop transfers now show an immediate "Transferring…" notice with a running file count, and reject a repeat drag/drop of the same source while a transfer for it is still in flight.
@@ -23,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dragging a folder (empty, or containing only subfolders) from the terminal's directory tree onto the Vault no longer fails with "复制到 Vault 失败：PULL_FAILED: nothing to send"; the vault folder is created and populated correctly, including nested subfolders that didn't exist yet. The reverse direction (dropping an empty Vault folder onto the terminal tree) now creates the matching empty directory instead of silently doing nothing. Dragging a folder onto a device still running a pre-upgrade agent now shows an explicit "please upgrade the agent" notice instead of the old generic error.
 
 ### Changed
+- Reorganized device cards, shortcut split buttons, the terminal toolbar, and the history dialog so primary actions and management actions have clear, consistent locations.
 - Renamed the remote terminal agent from `termesh-agent`/`TermeshAgent` to `lingxi1949`/`LingXi1949` (binary, config directory, systemd service, lock file, default device name, install script, release assets). Upgrading is transparent: the agent migrates its old config directory - including the Ed25519 device identity - to the new location on first run, so paired devices do not need to re-pair. Internal-only identifiers (CSS classes, the device-home view type, the plugin-ID allowlist) intentionally keep their historical `termy`/`termesh` values for backward compatibility and are not part of this rename.
 
 ### Removed
