@@ -20,7 +20,7 @@ LingXi1949 是一个给 Obsidian 内嵌真实终端的插件，还带一个可�
 
 ## 2. 前置条件
 
-- **Rust**——版本由 `rust-toolchain.toml` 锁定，`rustup` 会自动拉取，不要手动装别的版本。
+- **Rust 1.97.1**——版本由 `rust-toolchain.toml` 锁定，`rustup` 会自动选择，不要手动使用别的版本。
 - **Node.js 22**——插件测试套件依赖 `--experimental-strip-types`。手头只有 Node 18 时的退路见[第 4 节](#4-测试)。
 - **pnpm**——版本见 `package.json` 的 `packageManager` 字段。
 - **要在 Windows 上构建 Agent 的贡献者**：必须在 Windows 本机构建，见[第 3.3 节](#33-rust-agentlingxi1949)。
@@ -62,10 +62,14 @@ find plugin-package/node_modules -type l   # 应该没有任何输出
 
 **Linux：**
 
+在仓库根目录（即包含 `agent/` 目录的 `LingXi1949/` 目录）执行以下命令。若仓库位于 `~/LingXi1949`，请先运行 `cd ~/LingXi1949`；否则请将其替换为实际的仓库路径。
+
 ```bash
-cargo build --manifest-path agent/Cargo.toml --release
-./agent/packaging/install-linux.sh agent/target/release/lingxi1949
+cargo build --manifest-path agent/Cargo.toml --release && \
+	./agent/packaging/install-linux.sh agent/target/release/lingxi1949
 ```
+
+这是一组连续操作：`cargo build` 只负责编译 Agent；`&&` 确保仅在编译成功后运行安装脚本；行末的 `\` 只是 Bash 续行符。安装脚本接收编译产物 `agent/target/release/lingxi1949` 的路径，并将其安装为 systemd 用户服务。
 
 安装脚本**拒绝以 root 身份运行**——要以将来实际使用它的那个普通用户身份安装。它会把二进制装到 `~/.local/bin`、把 systemd user unit 装到 `~/.config/systemd/user`，并执行 `loginctl enable-linger`（通常需要一次 root/polkit 认证的那一步）。装完之后不需要额外配对：启动服务，复制打印出来的连接码，粘贴进插件即可。
 
@@ -76,10 +80,12 @@ cargo build --manifest-path agent/Cargo.toml --release
 3. `x86_64-pc-windows-msvc` 需要 MSVC 链接器，Linux 上没有。
 
 ```powershell
-rustup toolchain install <rust-toolchain.toml 锁定的版本>
+rustup toolchain install 1.97.1
 cargo build --manifest-path agent\Cargo.toml --release
 # 产物：agent\target\release\lingxi1949.exe
 ```
+
+`rustup toolchain install 1.97.1` 用于提前下载并安装本项目锁定的 Rust 编译器与 Cargo 工具链；随后在仓库目录执行 `cargo` 时，`rustup` 会根据 `rust-toolchain.toml` 自动选择该版本。这个命令只安装开发工具链，不会编译或安装 LingXi1949。
 
 Windows 侧目前没有开机自启的安装脚本，用任务计划程序或注册为服务；要保持运行的命令是 `lingxi1949.exe run`。
 
@@ -154,13 +160,9 @@ cargo test --manifest-path relay/Cargo.toml
 
 原来放在 `docs/需求/` 和 `docs/开发/` 下的早期草案、分阶段实现方案，以及一次性的交接/验收清单，现在已经把仍然有用的部分并进了这份文档，其余随着代码落地已经过时的部分不再保留。需要那个细节层级时，`git log -- docs/` 里还在。
 
-### 10.1 快捷操作输出匹配需求与设计方案
-
-快捷组目前用固定延时判断步骤完成；这对 Codex、Claude Code、OpenCode 等交互式 TUI 不可靠。新增可选的“输出匹配”条件：发送步骤后，只在该步骤产生的新终端输出中匹配到指定文本，才允许继续下一步。未配置时完全保留现有行为。
 
 需求约束：
 
-- 历史操作/快捷组列表的每个步骤提供一个可选的输出匹配输入框；首期按字面量匹配，不支持正则。
 - 匹配超时进入暂停，不得显示为成功，也不得默认重发；用户可继续等待、手动确认或停止。
 - 普通 Shell 步骤配置匹配时，必须同时满足既有 `command_end`/退出码成功和输出命中；交互式 TUI 步骤以输出命中作为完成条件。
 - 空匹配条件继续使用现有完成逻辑；旧版快捷组缺少新字段时按空值读取。
@@ -174,6 +176,4 @@ outputMatch?: string;
 
 该字段保存去除首尾空白后的字面量。它属于快捷组步骤配置，不写回 `OperationRecord`，这样同一条历史操作加入不同快捷组时可以使用不同匹配条件。
 
-回放实现采用输出游标：步骤发送前记录当前输出序号，终端 PTY 数据到达时只把游标之后的数据交给匹配器，匹配成功后注销监听器并推进步骤。输出匹配与现有回放控制器组合为三种等待原因：等待 `command_end`、等待输出匹配、同时等待两者。回放快照可增加非持久化的 `waitReason`，用于显示“等待输出匹配”。
-
-实现分阶段进行：先增加字段和旧数据兼容，再增加编辑 UI、终端增量输出监听和 ANSI 规范化，随后接入超时/人工确认及状态展示。需要覆盖未配置条件、跨块匹配、旧滚屏不得误匹配、ANSI 文本、超时不重发、停止后的迟到输出，以及 `command_end` 与输出匹配先后顺序可交换等测试。Codex 等 CLI 的具体文案由用户按目标版本配置，不在代码中硬编码。
+回放实现采用输出游标：步骤发送前记录当前输出序号，终端 PTY 数据到达时只把游标之后的数据交给匹配器，匹配成功后注销监听器并推进步骤。

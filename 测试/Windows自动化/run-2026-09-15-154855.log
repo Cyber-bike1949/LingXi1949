@@ -1,0 +1,87 @@
+Windows自动化验收测试日志
+=============================
+执行时间: 2026-09-15 15:48:55
+Commit SHA: 662f3b69fe56e49ed180fadb16c957b91fb5c717
+分支: main
+节点版本: v24.18.0
+PowerShell: 7.6.3
+corepack: 0.35.0
+cargo: 1.97.1
+pnpm: 10.33.4
+
+=== WIN-AUTO-01: 确认环境 ===
+结果: 通过
+PowerShell 7.6.3, Node v24.18.0, corepack 0.35.0, cargo 1.97.1
+
+=== WIN-AUTO-02: 启用指定 pnpm ===
+结果: 通过
+pnpm 显示 10.33.4
+
+=== WIN-AUTO-03: 锁文件安装 ===
+结果: 通过
+退出码 0, pnpm-lock.yaml 未变化
+
+=== WIN-AUTO-04: Terminal 测试 ===
+结果: 通过
+186 项测试全部通过, 退出码 0
+
+=== WIN-AUTO-05: Remote 测试 ===
+结果: 通过
+208 项测试全部通过, 退出码 0
+
+=== WIN-AUTO-06: 脚本测试 ===
+结果: 通过
+23 项测试全部通过, 退出码 0
+
+=== WIN-AUTO-07: 协议测试 ===
+结果: 通过
+Schema (16 messages), OpenAPI, frame codec, TypeScript 生成, fixture typecheck 全部通过
+注意: protocol 目录无 pnpm-lock.yaml, 使用 --no-frozen-lockfile 安装依赖
+
+=== WIN-AUTO-08: Obsidian Lint ===
+结果: 通过
+无 error, 无 warning
+
+=== WIN-AUTO-09: 生产构建 ===
+结果: 通过
+退出码 0, Bundle smoke check passed
+
+=== WIN-AUTO-10: 本地 PTY Rust ===
+结果: 通过
+22 项测试全部通过
+
+=== WIN-AUTO-11: Agent Rust ===
+结果: 通过
+76 项测试全部通过
+
+=== WIN-AUTO-12: Relay Rust ===
+结果: 通过
+80 项测试全部通过 (26 unit + 1 main + 25 api + 14 db + 14 gateway)
+
+=== WIN-AUTO-13: 生成最终包 ===
+结果: 通过
+产物: lingxi1949-1.6.5.zip (7.07 MB), 版本 1.6.5
+
+=== WIN-AUTO-14: 检查仓库状态 ===
+结果: 注意
+测试/生成产生以下变更:
+- protocol/fixtures/frames/*.hex (重新生成)
+- protocol/generated/typescript/messages.ts (重新生成)
+- protocol/pnpm-lock.yaml (新文件, 由协议测试依赖安装产生)
+- lingxi1949-1.6.5.zip (打包产物)
+预存在的修改:
+- .github/workflows/build-rust.yml
+- .github/workflows/remote-mvp.yml
+- README_ZH.md
+- docs/development.md
+- docs/development_ZH.md
+- log/python-kaleido-case-api.exe.log
+- src/ui/terminal/operationHistoryModal.ts
+
+=== WIN-AUTO-15: 保存日志 ===
+结果: 完成
+日志已保存至: 测试/Windows自动化/run-2026-09-15-154855.log
+
+总结:
+通过: WIN-AUTO-01 到 WIN-AUTO-13, WIN-AUTO-15 (14项)
+注意: WIN-AUTO-14 (协议测试重新生成了 fixtures 和 TypeScript 类型文件)

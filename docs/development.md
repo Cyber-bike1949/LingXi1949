@@ -20,7 +20,7 @@ Generated build artifacts (`main.js`, `styles.css` at the repo root, `binaries/`
 
 ## 2. Prerequisites
 
-- **Rust** — version is pinned by `rust-toolchain.toml`; `rustup` picks it up automatically, don't install a different version by hand.
+- **Rust 1.97.1** — the version is pinned by `rust-toolchain.toml`; `rustup` selects it automatically, so don't use a different version.
 - **Node.js 22** — the plugin's test suites need `--experimental-strip-types`. See the Node 18 fallback note in [§4](#4-testing) if that's all you have.
 - **pnpm** — version pinned in `package.json`'s `packageManager` field.
 - **Windows contributors building the agent**: you must build directly on Windows. See [§3.3](#33-rust-agent-lingxi1949).
@@ -62,10 +62,14 @@ find plugin-package/node_modules -type l   # should print nothing
 
 **Linux:**
 
+Run the following commands from the repository root (the `LingXi1949/` directory that contains `agent/`). If the repository is at `~/LingXi1949`, run `cd ~/LingXi1949` first; otherwise, replace it with the actual repository path.
+
 ```bash
-cargo build --manifest-path agent/Cargo.toml --release
-./agent/packaging/install-linux.sh agent/target/release/lingxi1949
+cargo build --manifest-path agent/Cargo.toml --release && \
+	./agent/packaging/install-linux.sh agent/target/release/lingxi1949
 ```
+
+This is a chained operation: `cargo build` only compiles the agent; `&&` runs the install script only if the build succeeds; and the trailing `\` is only a Bash line continuation. The install script receives the compiled `agent/target/release/lingxi1949` binary path and installs it as a systemd user service.
 
 The install script **refuses to run as root** — install it as the normal user that will run the agent. It installs the binary to `~/.local/bin`, installs a systemd user unit under `~/.config/systemd/user`, and runs `loginctl enable-linger` (the one step that typically needs a root/polkit prompt). No pairing step is needed afterward — start the service, copy the printed connection code, paste it into the plugin.
 
@@ -76,10 +80,12 @@ The install script **refuses to run as root** — install it as the normal user 
 3. `x86_64-pc-windows-msvc` needs the MSVC linker, which doesn't exist on Linux.
 
 ```powershell
-rustup toolchain install <version pinned in rust-toolchain.toml>
+rustup toolchain install 1.97.1
 cargo build --manifest-path agent\Cargo.toml --release
 # artifact: agent\target\release\lingxi1949.exe
 ```
+
+`rustup toolchain install 1.97.1` downloads and installs the Rust compiler and Cargo toolchain pinned by this project ahead of time. When you subsequently run `cargo` in the repository, `rustup` selects that version from `rust-toolchain.toml`. This command only installs the development toolchain; it does not build or install LingXi1949.
 
 There's no autostart install script for Windows yet — register it with Task Scheduler or as a service; `lingxi1949.exe run` is the command to keep running.
 

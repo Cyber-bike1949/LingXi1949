@@ -182,11 +182,6 @@ export class OperationHistoryModal extends Modal {
     main.createSpan({ cls: `operation-history-kind is-${record.kind}`, text: this.kindLabel(record.kind) });
     main.createSpan({ cls: 'operation-history-summary', text: record.summary });
     main.createSpan({ cls: 'operation-history-time', text: new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-    const advanced = row.createEl('details', { cls: 'operation-history-advanced' });
-    advanced.createEl('summary', { text: '输出匹配（可选）' });
-    const match = advanced.createEl('input', { type: 'text', placeholder: '检测到这些文字后执行下一步' });
-    match.value = this.outputMatches.get(record.id) ?? '';
-    match.addEventListener('input', () => this.outputMatches.set(record.id, match.value));
   }
 
   private renderGroups(parent: HTMLElement): void {
@@ -283,16 +278,6 @@ export class OperationHistoryModal extends Modal {
       step.summary = payload.value;
       this.dirty = true;
       this.updateGroupSaveButton(this.contentEl);
-    });
-    const match = fields.createEl('input', {
-      type: 'text',
-      placeholder: '输出匹配（可选）',
-      attr: { 'aria-label': `步骤 ${index + 1} 输出匹配` },
-    });
-    match.value = step.outputMatch ?? '';
-    match.addEventListener('input', () => {
-      step.outputMatch = match.value;
-      this.dirty = true;
     });
     const controls = row.createDiv('operation-group-step-controls');
     this.createStepButton(controls, 'arrow-up', `上移步骤 ${index + 1}`, index === 0, () => this.moveStep(index, -1));
