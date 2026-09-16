@@ -33,6 +33,7 @@ import type { Disposable } from '../../services/remote/transport.ts';
 import type { DirectoryEntry, DirectoryTreeSource } from '../../services/terminal/directoryTreeSource.ts';
 import type { DirectoryModificationStore } from '../../services/terminal/directoryModificationStore.ts';
 import { DIRECTORY_TREE_DRAG_MIME, type DirectoryTreeDragPayload } from '../../services/terminal/directoryTreeDrop.ts';
+import { resolveDirectoryTreeDropTarget } from '../../services/terminal/directoryTreeDropTarget.ts';
 import { calculateDirectoryTooltipPosition } from '../../services/terminal/directoryTreeTooltip.ts';
 import { t } from '../../i18n';
 
@@ -47,7 +48,7 @@ export interface DirectoryTreePanelCallbacks {
    * lower-friction alternative to dragging the row there.
    */
   onActivateFile(path: string): void;
-  /** A vault drag landed on a directory node; caller resolves and copies the payload. */
+  /** A vault drag landed on a tree node; the path is the destination directory. */
   onDropToPath(dataTransfer: DataTransfer, targetPath: string): void;
   /** The dock-side toggle button was used; caller may persist the new side. */
   onDockSideChange?(side: DockSide): void;
@@ -149,9 +150,9 @@ export class DirectoryTreePanel {
   }
 
   /**
-   * Catch-all drop handler for anywhere in the panel that isn't a directory
-   * row (a file row, the empty-state text, blank tree space, the header).
-   * Directory rows already handle their own drops (see `renderNode`'s
+   * Catch-all drop handler for anywhere in the panel that isn't a tree row
+   * (the empty-state text, blank tree space, or header). Tree rows already
+   * handle their own drops (see `renderNode`'s
    * `dragover`/`drop` wiring below) and always `stopPropagation`, so this
    * never double-handles those. Without this, a drop that misses every row
    * bubbles out of the panel to the terminal view's own container-level drop
@@ -448,24 +449,26 @@ export class DirectoryTreePanel {
       if (version !== null) this.modificationStore.acknowledge(this.deviceKey, fullPath, version);
     });
 
-    if (entry.isDirectory) {
-      row.addEventListener('dragover', (event) => {
-        // A row we ourselves made draggable passing back over another row
-        // in the same tree isn't a vault-drop - let it fall through as a
-        // no-op instead of flashing this row as a drop target.
-        if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
-        event.preventDefault();
-        row.addClass('is-drop-target');
-      });
-      row.addEventListener('dragleave', () => row.removeClass('is-drop-target'));
-      row.addEventListener('drop', (event) => {
-        if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
-        event.preventDefault();
-        event.stopPropagation();
-        row.removeClass('is-drop-target');
-        if (event.dataTransfer) this.callbacks.onDropToPath(event.dataTransfer, fullPath);
-      });
-    }
+    row.addEventListener('dragover', (event) => {
+      // A row we ourselves made draggable passing back over another row in
+      // the same tree isn't a vault-drop. Let it remain a no-op instead of
+      // flashing the row as a target.
+      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
+      event.preventDefault();
+      row.addClass('is-drop-target');
+    });
+    row.addEventListener('dragleave', () => row.removeClass('is-drop-target'));
+    row.addEventListener('drop', (event) => {
+      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      row.removeClass('is-drop-target');
+      if (!event.dataTransfer) return;
+      // A file cannot contain the dropped note. Treat its containing folder
+      // as the target instead of letting the panel fallback use the tree root.
+      const targetPath = resolveDirectoryTreeDropTarget(parentPath, fullPath, entry.isDirectory);
+      this.callbacks.onDropToPath(event.dataTransfer, targetPath);
+    });
 
     if (this.expandedPaths.has(fullPath) && entry.isDirectory) {
       void toggle();

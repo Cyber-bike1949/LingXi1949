@@ -19,52 +19,41 @@
 
 ## 核心亮点
 
-点击下面的页签手动翻页；展开新页时，上一页会自动收起。
+点击任意预览图可查看原图。
 
-<details name="highlights" open>
-<summary><strong>1 / 4 · 在 Obsidian 中使用完整终端</strong></summary>
-
-在工作区内打开本机或远程 Shell，一边查看笔记，一边运行 Claude Code、Codex、OpenCode 等 AI CLI 工具。
-
-<img src="assets/main-interface.png" width="980" alt="LingXi1949 主界面与终端工作区" />
-
-</details>
-
-<details name="highlights">
-<summary><strong>2 / 4 · 一键把笔记上下文交给 Agent</strong></summary>
-
-发送当前笔记、选中内容或笔记路径；发送整篇笔记时，还可以收集其引用笔记和反向链接笔记。
-
-<img src="assets/one_click.png" width="980" alt="一键将笔记上下文发送到终端" />
-
-</details>
-
-<details name="highlights">
-<summary><strong>3 / 4 · 在 Vault 与终端之间拖放文件</strong></summary>
-
-从 Obsidian 向本机或远程设备传输文件，也可以通过终端目录树把文件送回指定 Vault 文件夹。
-
-<img src="assets/drag_and_drop.png" width="980" alt="在 Vault 与终端之间拖拽传输文件" />
-
-</details>
-
-<details name="highlights">
-<summary><strong>4 / 4 · 保存并复用工作流</strong></summary>
-
-从状态栏启动 AI 工具或自定义工作流，把常用终端操作保存为设备专属快捷组，需要时一键再次运行。
-
-<img src="assets/termy-settings-workflows.png" width="980" alt="LingXi1949 工作流设置" />
-
-</details>
+<table>
+  <tr>
+    <td width="50%">
+      <a href="assets/main-interface.png"><img src="assets/main-interface.png" alt="LingXi1949 主界面与终端工作区" /></a><br />
+      <strong>在 Obsidian 中使用完整终端</strong><br />让笔记与本机或远程 Shell 留在同一个工作区。
+    </td>
+    <td width="50%">
+      <a href="assets/one_click.png"><img src="assets/one_click.png" alt="一键将笔记上下文发送到终端" /></a><br />
+      <strong>一键把完整上下文交给 Agent</strong><br />无需复制粘贴，即可发送笔记、选中内容、路径、引用与反链。
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="assets/drag_and_drop.png"><img src="assets/drag_and_drop.png" alt="在 Vault 与终端之间拖拽传输文件" /></a><br />
+      <strong>不离开 Obsidian 也能传文件</strong><br />在 Vault 与终端目录树之间直接拖放文件和文件夹。
+    </td>
+    <td width="50%">
+      <a href="assets/termy-settings-workflows.png"><img src="assets/termy-settings-workflows.png" alt="LingXi1949 工作流设置" /></a><br />
+      <strong>保存并复用工作流</strong><br />把重复的终端操作变成设备专属快捷组。
+    </td>
+  </tr>
+</table>
 
 ## 其它主要功能
 
-- **本机与远程终端：** 从设备首页直接打开本机 Shell，或使用连接码添加远程 Windows/Linux 设备。
-- **目录树与传输回执：** 浏览本机或远程目录，按文件查看成功、失败或未知状态，减少同步遗漏。
-- **修改标记：** 仅对收到成功回执的文件显示标记，文件夹会聚合后代文件的状态。
-- **历史操作与快捷组：** 查看当前会话的 Shell 输入，将常用操作保存为设备专属快捷组；无法确认步骤完成时自动暂停。
-- **AI 启动器：** 集中启动 Claude Code、Codex 和 OpenCode，并显示工具可用状态。
-- **离线与隐私：** 支持离线模式；不包含客户端遥测，不上传使用统计或错误报告。
+- **远程连接不再折腾网络：** 用连接码配对 Windows 或 Linux 设备，无需注册账号、申请公网 IP 或开放入站端口；优先点对点直连，必要时才使用加密中继。
+- **多项任务互不打扰：** 同时连接多台设备，并为每台设备打开多个独立终端；某个会话断开或关闭，不影响其它工作。
+- **不用再手抄文件路径：** 双击目录，终端自动进入该目录；双击文件，路径自动插入 AI TUI 光标处，也支持直接拖拽。
+- **笔记直接送到工作目录：** 把笔记拖进终端或目录树，并保留 Vault 相对结构；逐文件回执与修改标记会告诉你哪些内容确实送达。
+- **一次交给 Agent 完整上下文：** 一键发送当前笔记、选中内容或路径，还可自动收集引用笔记与多层反链，减少遗漏。
+- **重复操作只做一次：** 从会话历史保存设备专属快捷组，之后一键回放；无法确认上一步完成时会暂停，不会盲目连续输入。
+- **AI 工具随你选择：** 集中启动 Claude Code、Codex 或 OpenCode，开始前即可看到工具是否可用。
+- **私密内容不做数据生意：** 离线模式会关闭可选网络检查；不包含客户端遥测，不上传使用统计或错误报告。
 
 ## 安装
 

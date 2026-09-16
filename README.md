@@ -19,52 +19,41 @@ English / [简体中文](./README_ZH.md)
 
 ## Core highlights
 
-Select a tab below to turn the page. Opening a new page automatically closes the previous one.
+Click any preview to open the full-size screenshot.
 
-<details name="highlights" open>
-<summary><strong>1 / 4 · A complete terminal inside Obsidian</strong></summary>
-
-Open a local or remote shell in your workspace, keep your notes in view, and run AI CLI tools such as Claude Code, Codex, and OpenCode.
-
-<img src="assets/main-interface.png" width="980" alt="LingXi1949 main interface and terminal workspace" />
-
-</details>
-
-<details name="highlights">
-<summary><strong>2 / 4 · Give note context to an agent in one click</strong></summary>
-
-Send the current note, a selection, or the note path. A full-note transfer can also collect linked notes and backlinks.
-
-<img src="assets/one_click.png" width="980" alt="Send note context to a terminal with one click" />
-
-</details>
-
-<details name="highlights">
-<summary><strong>3 / 4 · Drag files between a vault and a terminal</strong></summary>
-
-Transfer Obsidian files to a local or remote device, or use the terminal directory tree to send files back to a chosen vault folder.
-
-<img src="assets/drag_and_drop.png" width="980" alt="Drag files between a vault and a terminal" />
-
-</details>
-
-<details name="highlights">
-<summary><strong>4 / 4 · Save and reuse workflows</strong></summary>
-
-Launch AI tools or custom workflows from the status bar, and save frequent terminal operations as device-specific shortcut groups to run again later.
-
-<img src="assets/termy-settings-workflows.png" width="980" alt="LingXi1949 workflow settings" />
-
-</details>
+<table>
+  <tr>
+    <td width="50%">
+      <a href="assets/main-interface.png"><img src="assets/main-interface.png" alt="LingXi1949 main interface and terminal workspace" /></a><br />
+      <strong>A complete terminal inside Obsidian</strong><br />Keep notes and a local or remote shell in the same workspace.
+    </td>
+    <td width="50%">
+      <a href="assets/one_click.png"><img src="assets/one_click.png" alt="Send note context to a terminal with one click" /></a><br />
+      <strong>Give note context to an agent in one click</strong><br />Send a note, selection, path, linked notes, and backlinks without copy-paste.
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="assets/drag_and_drop.png"><img src="assets/drag_and_drop.png" alt="Drag files between a vault and a terminal" /></a><br />
+      <strong>Move files without leaving Obsidian</strong><br />Drag files and folders between the Vault and the terminal directory tree.
+    </td>
+    <td width="50%">
+      <a href="assets/termy-settings-workflows.png"><img src="assets/termy-settings-workflows.png" alt="LingXi1949 workflow settings" /></a><br />
+      <strong>Save and reuse workflows</strong><br />Turn repeated terminal operations into device-specific shortcut groups.
+    </td>
+  </tr>
+</table>
 
 ## More features
 
-- **Local and remote terminals:** open a local shell from the device home, or add a remote Windows/Linux device with its connection code.
-- **Directory tree and transfer receipts:** browse local or remote directories and see per-file success, failure, or unknown states.
-- **Modification markers:** mark only files confirmed by a successful receipt, with folder states aggregated from descendants.
-- **History and shortcut groups:** review shell input from the current session and save reusable, device-specific operation groups. Replay pauses when step completion is uncertain.
-- **AI launcher:** start Claude Code, Codex, and OpenCode from one place and see whether each tool is available.
-- **Offline mode and privacy:** work offline when needed. LingXi1949 has no client-side telemetry and sends no usage analytics or error reports.
+- **Reach another computer without network setup:** pair a Windows or Linux device with a connection code—no account, public IP, or inbound port required. Connections prefer peer-to-peer and use an encrypted relay only when necessary.
+- **Keep every task in its own terminal:** work across several devices and independent terminal sessions without one disconnected or closed session interrupting the others.
+- **Stop hunting for paths:** double-click a directory to make the terminal enter it; double-click a file to insert its path at the AI TUI cursor. Dragging works too.
+- **Put notes where the work is:** drag a note into the terminal or its directory tree and keep its Vault-relative structure. Per-file receipts and modification markers show what actually arrived.
+- **Give the agent complete context:** send the current note, selection, or path in one action, with optional linked notes and recursively collected backlinks.
+- **Avoid repeating terminal routines:** review session input, save useful steps as a device-specific shortcut group, and replay them later. LingXi1949 pauses instead of guessing when completion is uncertain.
+- **Use your preferred AI CLI:** launch Claude Code, Codex, or OpenCode from one place and see availability before starting.
+- **Keep private work private:** offline mode suppresses optional network checks, and LingXi1949 includes no client-side telemetry, usage analytics, or error-reporting beacon.
 
 ## Installation
 

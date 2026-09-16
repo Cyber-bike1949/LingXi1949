@@ -1354,6 +1354,11 @@
   background-color: var(--background-primary);
   flex-wrap: nowrap;
 }
+.terminal-remote-toolbar button:not(:disabled),
+.terminal-search-btn:not(:disabled),
+.directory-tree-panel__icon-btn:not(:disabled) {
+  cursor: pointer;
+}
 .terminal-remote-toolbar span {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
@@ -2631,6 +2636,11 @@
   background: color-mix(in srgb, var(--background-secondary) 88%, transparent);
   cursor: pointer;
   transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.termesh-device-card button:not(:disabled),
+.termesh-home-refresh:not(:disabled) {
+  cursor: pointer;
 }
 
 .termesh-device-card:hover {
