@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-09-16
+
 ### Added
 - Added an optional directory metadata API for local files and agents that negotiate metadata version 1; older agents retain directory listing support. Directory rows now show the modification time after a guarded 500 ms hover, with collision-aware placement that avoids covering file names.
 - Added a command-group manager for viewing, renaming, adding, editing, reordering, and deleting saved command steps.
