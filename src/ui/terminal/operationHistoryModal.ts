@@ -1,5 +1,6 @@
 import { Modal, Notice, setIcon } from 'obsidian';
 import type { App } from 'obsidian';
+import { t } from '../../i18n';
 import type { OperationKind, OperationRecord } from '../../services/terminal/operationHistory.ts';
 import type { ShortcutGroup, ShortcutGroupStore, ShortcutStep } from '../../services/terminal/shortcutGroupStore.ts';
 
@@ -18,7 +19,7 @@ class ConfirmActionModal extends Modal {
     this.titleEl.setText(this.title);
     this.contentEl.createEl('p', { text: this.message });
     const actions = this.contentEl.createDiv('operation-history-confirm-actions');
-    actions.createEl('button', { text: '取消' }).addEventListener('click', () => this.close());
+    actions.createEl('button', { text: t('common.cancel') }).addEventListener('click', () => this.close());
     const confirm = actions.createEl('button', { text: this.confirmLabel, cls: 'mod-warning' });
     confirm.addEventListener('click', () => {
       this.onConfirm();
@@ -60,7 +61,7 @@ export class OperationHistoryModal extends Modal {
   }
 
   onOpen(): void {
-    this.titleEl.setText('历史操作与命令组');
+    this.titleEl.setText(t('operationHistory.title'));
     this.selectInitialGroup();
     this.render();
   }
@@ -69,9 +70,9 @@ export class OperationHistoryModal extends Modal {
     if (!this.allowClose && this.dirty) {
       new ConfirmActionModal(
         this.app,
-        '放弃未保存的修改？',
-        '当前命令组有尚未保存的修改。',
-        '放弃修改',
+        t('operationHistory.discardTitle'),
+        t('operationHistory.discardMessage'),
+        t('operationHistory.discardConfirm'),
         () => this.finishClose(),
       ).open();
       return;
@@ -93,8 +94,8 @@ export class OperationHistoryModal extends Modal {
   private render(): void {
     this.contentEl.empty();
     const tabs = this.contentEl.createDiv({ cls: 'operation-history-tabs', attr: { role: 'tablist' } });
-    this.createTab(tabs, 'history', '操作历史');
-    this.createTab(tabs, 'groups', '命令组管理');
+    this.createTab(tabs, 'history', t('operationHistory.historyTab'));
+    this.createTab(tabs, 'groups', t('operationHistory.groupsTab'));
     const panel = this.contentEl.createDiv({ cls: 'operation-history-panel', attr: { role: 'tabpanel' } });
     if (this.activeTab === 'history') this.renderHistory(panel);
     else this.renderGroups(panel);
@@ -109,7 +110,7 @@ export class OperationHistoryModal extends Modal {
     button.addEventListener('click', () => {
       if (tab === this.activeTab) return;
       if (this.dirty) {
-        new Notice('请先保存或放弃当前命令组修改');
+        new Notice(t('operationHistory.saveOrDiscardFirst'));
         return;
       }
       this.activeTab = tab;
@@ -122,10 +123,10 @@ export class OperationHistoryModal extends Modal {
     const toolbar = parent.createDiv('operation-history-toolbar');
     toolbar.createDiv({
       cls: 'operation-history-description',
-      text: this.records.length ? '选择操作并按原始顺序保存为命令组。' : '暂无可用历史操作。',
+      text: this.records.length ? t('operationHistory.historyDescription') : t('operationHistory.historyEmpty'),
     });
     const capture = toolbar.createEl('label', { cls: 'operation-history-capture' });
-    capture.createSpan({ text: '采集历史' });
+    capture.createSpan({ text: t('operationHistory.captureHistory') });
     const toggle = capture.createEl('input', { type: 'checkbox' });
     toggle.checked = this.captureEnabled;
     toggle.addEventListener('change', () => {
@@ -137,33 +138,33 @@ export class OperationHistoryModal extends Modal {
     for (const record of this.records) this.renderHistoryRow(list, record);
 
     const form = parent.createDiv('operation-history-create-form');
-    form.createEl('label', { text: '命令组名称', attr: { for: 'operation-history-group-name' } });
+    form.createEl('label', { text: t('operationHistory.groupName'), attr: { for: 'operation-history-group-name' } });
     const name = form.createEl('input', {
       type: 'text',
-      attr: { id: 'operation-history-group-name', placeholder: '例如：启动 Claude' },
+      attr: { id: 'operation-history-group-name', placeholder: t('operationHistory.groupNamePlaceholder') },
     });
     const summary = form.createDiv('operation-history-selection-summary');
     const footer = parent.createDiv('operation-history-footer');
     const destructive = footer.createDiv('operation-history-footer-destructive');
-    const clear = destructive.createEl('button', { text: '清空历史', cls: 'operation-history-clear' });
+    const clear = destructive.createEl('button', { text: t('operationHistory.clearHistory'), cls: 'operation-history-clear' });
     clear.disabled = this.records.length === 0;
     clear.addEventListener('click', () => this.confirmClearHistory());
     const actions = footer.createDiv('operation-history-footer-actions');
-    actions.createEl('button', { text: '取消' }).addEventListener('click', () => this.close());
-    const save = actions.createEl('button', { text: '保存命令组', cls: 'mod-cta' });
+    actions.createEl('button', { text: t('common.cancel') }).addEventListener('click', () => this.close());
+    const save = actions.createEl('button', { text: t('operationHistory.saveGroup'), cls: 'mod-cta' });
     const updateState = (): void => {
-      summary.setText(`已选择 ${this.selected.size} 项，将按时间顺序执行`);
+      summary.setText(t('operationHistory.selectedCount', { count: this.selected.size }));
       save.disabled = this.selected.size === 0 || name.value.trim().length === 0;
     };
     save.addEventListener('click', () => {
       const selected = this.records.filter((record) => this.selected.has(record.id));
       void this.store.create(this.deviceKey, name.value, selected, this.outputMatches).then((group) => {
-        new Notice('命令组已保存');
+        new Notice(t('operationHistory.groupSaved'));
         this.selectedGroupId = group.id;
         this.loadEditingGroup(group);
         this.activeTab = 'groups';
         this.render();
-      }).catch((error: unknown) => this.showStoreError(error, '保存命令组失败'));
+      }).catch((error: unknown) => this.showStoreError(error, t('operationHistory.saveGroupFailed')));
     });
     name.addEventListener('input', updateState);
     list.addEventListener('change', updateState);
@@ -182,6 +183,11 @@ export class OperationHistoryModal extends Modal {
     main.createSpan({ cls: `operation-history-kind is-${record.kind}`, text: this.kindLabel(record.kind) });
     main.createSpan({ cls: 'operation-history-summary', text: record.summary });
     main.createSpan({ cls: 'operation-history-time', text: new Date(record.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+    const advanced = row.createEl('details', { cls: 'operation-history-advanced' });
+    advanced.createEl('summary', { text: t('operationHistory.outputMatchOptional') });
+    const match = advanced.createEl('input', { type: 'text', placeholder: t('operationHistory.outputMatchPlaceholder') });
+    match.value = this.outputMatches.get(record.id) ?? '';
+    match.addEventListener('input', () => this.outputMatches.set(record.id, match.value));
   }
 
   private renderGroups(parent: HTMLElement): void {
@@ -189,9 +195,9 @@ export class OperationHistoryModal extends Modal {
     if (!groups.length) {
       const empty = parent.createDiv('operation-groups-empty');
       setIcon(empty.createDiv('operation-groups-empty-icon'), 'list-plus');
-      empty.createEl('h3', { text: '还没有命令组' });
-      empty.createEl('p', { text: '从“操作历史”中选择记录并保存，即可在这里继续编辑。' });
-      empty.createEl('button', { text: '从历史创建' }).addEventListener('click', () => {
+      empty.createEl('h3', { text: t('operationHistory.noGroupsTitle') });
+      empty.createEl('p', { text: t('operationHistory.noGroupsDescription') });
+      empty.createEl('button', { text: t('operationHistory.createFromHistory') }).addEventListener('click', () => {
         this.activeTab = 'history';
         this.render();
       });
@@ -204,14 +210,14 @@ export class OperationHistoryModal extends Modal {
       this.loadEditingGroup(selected);
     }
     const selectorRow = parent.createDiv('operation-groups-selector-row');
-    selectorRow.createEl('label', { text: '命令组', attr: { for: 'operation-group-selector' } });
+    selectorRow.createEl('label', { text: t('operationHistory.group'), attr: { for: 'operation-group-selector' } });
     const selector = selectorRow.createEl('select', { attr: { id: 'operation-group-selector' } });
     for (const group of groups) selector.createEl('option', { text: group.name, value: group.id });
     selector.value = selected.id;
     selector.addEventListener('change', () => this.selectManagedGroup(selector.value));
 
     const nameField = parent.createDiv('operation-group-name-field');
-    nameField.createEl('label', { text: '名称', attr: { for: 'operation-group-name' } });
+    nameField.createEl('label', { text: t('operationHistory.name'), attr: { for: 'operation-group-name' } });
     const name = nameField.createEl('input', { type: 'text', attr: { id: 'operation-group-name' } });
     name.value = this.editingName;
     name.addEventListener('input', () => {
@@ -221,8 +227,8 @@ export class OperationHistoryModal extends Modal {
     });
 
     const stepsHeader = parent.createDiv('operation-group-steps-header');
-    stepsHeader.createEl('h3', { text: `命令步骤（${this.editingSteps.length}）` });
-    stepsHeader.createEl('button', { text: '＋ 新增步骤' }).addEventListener('click', () => {
+    stepsHeader.createEl('h3', { text: t('operationHistory.stepsCount', { count: this.editingSteps.length }) });
+    stepsHeader.createEl('button', { text: t('operationHistory.addStep') }).addEventListener('click', () => {
       this.editingSteps.push(this.createEmptyStep());
       this.dirty = true;
       this.render();
@@ -232,12 +238,12 @@ export class OperationHistoryModal extends Modal {
 
     const footer = parent.createDiv('operation-history-footer');
     const destructive = footer.createDiv('operation-history-footer-destructive');
-    destructive.createEl('button', { text: '删除命令组', cls: 'operation-history-clear' }).addEventListener('click', () => {
+    destructive.createEl('button', { text: t('operationHistory.deleteGroup'), cls: 'operation-history-clear' }).addEventListener('click', () => {
       this.confirmDeleteGroup(selected);
     });
     const actions = footer.createDiv('operation-history-footer-actions');
-    actions.createEl('button', { text: '关闭' }).addEventListener('click', () => this.close());
-    const save = actions.createEl('button', { text: '保存修改', cls: 'mod-cta operation-group-save' });
+    actions.createEl('button', { text: t('operationHistory.close') }).addEventListener('click', () => this.close());
+    const save = actions.createEl('button', { text: t('operationHistory.saveChanges'), cls: 'mod-cta operation-group-save' });
     save.addEventListener('click', () => this.saveManagedGroup());
     this.updateGroupSaveButton(parent);
   }
@@ -246,7 +252,7 @@ export class OperationHistoryModal extends Modal {
     const row = parent.createDiv('operation-group-step');
     row.createSpan({ cls: 'operation-group-step-number', text: String(index + 1) });
     const fields = row.createDiv('operation-group-step-fields');
-    const kind = fields.createEl('select', { attr: { 'aria-label': `步骤 ${index + 1} 类型` } });
+    const kind = fields.createEl('select', { attr: { 'aria-label': t('operationHistory.stepType', { number: index + 1 }) } });
     const kinds: OperationKind[] = ['shell', 'text', 'key', 'confirm'];
     for (const value of kinds) kind.createEl('option', { text: this.kindLabel(value), value });
     kind.value = step.kind;
@@ -268,8 +274,8 @@ export class OperationHistoryModal extends Modal {
     });
     const payload = fields.createEl('input', {
       type: 'text',
-      placeholder: step.kind === 'shell' ? '输入 Shell 命令' : '输入发送内容',
-      attr: { 'aria-label': `步骤 ${index + 1} 内容` },
+      placeholder: step.kind === 'shell' ? t('operationHistory.shellCommandPlaceholder') : t('operationHistory.sentContentPlaceholder'),
+      attr: { 'aria-label': t('operationHistory.stepContent', { number: index + 1 }) },
     });
     payload.value = step.kind === 'shell' || step.kind === 'text' ? step.payload : step.summary;
     payload.readOnly = step.kind === 'key' || step.kind === 'confirm';
@@ -279,10 +285,20 @@ export class OperationHistoryModal extends Modal {
       this.dirty = true;
       this.updateGroupSaveButton(this.contentEl);
     });
+    const match = fields.createEl('input', {
+      type: 'text',
+      placeholder: t('operationHistory.outputMatchOptional'),
+      attr: { 'aria-label': t('operationHistory.stepOutputMatch', { number: index + 1 }) },
+    });
+    match.value = step.outputMatch ?? '';
+    match.addEventListener('input', () => {
+      step.outputMatch = match.value;
+      this.dirty = true;
+    });
     const controls = row.createDiv('operation-group-step-controls');
-    this.createStepButton(controls, 'arrow-up', `上移步骤 ${index + 1}`, index === 0, () => this.moveStep(index, -1));
-    this.createStepButton(controls, 'arrow-down', `下移步骤 ${index + 1}`, index === this.editingSteps.length - 1, () => this.moveStep(index, 1));
-    this.createStepButton(controls, 'trash-2', `删除步骤 ${index + 1}`, false, () => {
+    this.createStepButton(controls, 'arrow-up', t('operationHistory.moveStepUp', { number: index + 1 }), index === 0, () => this.moveStep(index, -1));
+    this.createStepButton(controls, 'arrow-down', t('operationHistory.moveStepDown', { number: index + 1 }), index === this.editingSteps.length - 1, () => this.moveStep(index, 1));
+    this.createStepButton(controls, 'trash-2', t('operationHistory.deleteStep', { number: index + 1 }), false, () => {
       this.editingSteps.splice(index, 1);
       this.dirty = true;
       this.render();
@@ -309,17 +325,17 @@ export class OperationHistoryModal extends Modal {
     if (!this.selectedGroupId) return;
     void this.store.update(this.selectedGroupId, this.editingName, this.editingSteps).then((group) => {
       this.loadEditingGroup(group);
-      new Notice('命令组已更新');
+      new Notice(t('operationHistory.groupUpdated'));
       this.render();
-    }).catch((error: unknown) => this.showStoreError(error, '保存修改失败'));
+    }).catch((error: unknown) => this.showStoreError(error, t('operationHistory.saveChangesFailed')));
   }
 
   private confirmClearHistory(): void {
     new ConfirmActionModal(
       this.app,
-      '清空历史操作？',
-      '这会清空当前终端的历史操作，但不会删除已经保存的命令组。',
-      '清空历史',
+      t('operationHistory.clearHistoryTitle'),
+      t('operationHistory.clearHistoryMessage'),
+      t('operationHistory.clearHistory'),
       () => {
         this.options.onClearHistory?.();
         this.records.splice(0);
@@ -332,17 +348,17 @@ export class OperationHistoryModal extends Modal {
   private confirmDeleteGroup(group: ShortcutGroup): void {
     new ConfirmActionModal(
       this.app,
-      '删除命令组？',
-      `将删除“${group.name}”，此操作无法撤销。`,
-      '删除命令组',
+      t('operationHistory.deleteGroupTitle'),
+      t('operationHistory.deleteGroupMessage', { name: group.name }),
+      t('operationHistory.deleteGroup'),
       () => {
         void this.store.remove(group.id).then(() => {
           this.dirty = false;
           this.selectedGroupId = this.store.list(this.deviceKey)[0]?.id ?? null;
           this.selectInitialGroup();
-          new Notice('命令组已删除');
+          new Notice(t('operationHistory.groupDeleted'));
           this.render();
-        }).catch((error: unknown) => this.showStoreError(error, '删除命令组失败'));
+        }).catch((error: unknown) => this.showStoreError(error, t('operationHistory.deleteGroupFailed')));
       },
     ).open();
   }
@@ -353,9 +369,9 @@ export class OperationHistoryModal extends Modal {
     if (this.dirty) {
       new ConfirmActionModal(
         this.app,
-        '切换命令组？',
-        '当前修改尚未保存，切换后会丢失这些修改。',
-        '放弃并切换',
+        t('operationHistory.switchGroupTitle'),
+        t('operationHistory.switchGroupMessage'),
+        t('operationHistory.switchGroupConfirm'),
         () => {
           this.selectedGroupId = id;
           this.loadEditingGroup(group);
@@ -409,19 +425,19 @@ export class OperationHistoryModal extends Modal {
   private kindLabel(kind: OperationKind): string {
     switch (kind) {
       case 'shell': return 'Shell';
-      case 'text': return '输入';
-      case 'key': return '按键';
-      case 'confirm': return '确认';
+      case 'text': return t('operationHistory.kindInput');
+      case 'key': return t('operationHistory.kindKey');
+      case 'confirm': return t('operationHistory.kindConfirm');
     }
   }
 
   private showStoreError(error: unknown, fallback: string): void {
     const code = error instanceof Error ? error.message : '';
-    const message = code === 'EMPTY_NAME' ? '请输入命令组名称'
-      : code === 'EMPTY_SELECTION' ? '请至少选择一条操作'
-        : code === 'DUPLICATE_NAME' ? '当前设备已有同名命令组'
-          : code === 'EMPTY_STEPS' ? '命令组至少需要一个步骤'
-            : code === 'EMPTY_STEP' ? '步骤内容不能为空'
+    const message = code === 'EMPTY_NAME' ? t('operationHistory.emptyName')
+      : code === 'EMPTY_SELECTION' ? t('operationHistory.emptySelection')
+        : code === 'DUPLICATE_NAME' ? t('operationHistory.duplicateName')
+          : code === 'EMPTY_STEPS' ? t('operationHistory.emptySteps')
+            : code === 'EMPTY_STEP' ? t('operationHistory.emptyStep')
               : fallback;
     new Notice(message);
   }

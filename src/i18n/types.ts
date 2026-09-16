@@ -74,6 +74,13 @@ export interface TranslationKeys {
     pairTooShort: string;
     pairUnparseable: string;
     operationFailed: string;
+    openTerminalHint: string;
+    connectTerminalHint: string;
+    quickCommands: string;
+    runShortcutGroup: string;
+    expandShortcutGroups: string;
+    manageCommandGroups: string;
+    shortcutGroupRunFailed: string;
   };
 
   remote: {
@@ -161,6 +168,69 @@ export interface TranslationKeys {
     openInFileManagerFailed: string;
     transferring: string;
     transferAlreadyInProgress: string;
+    recentlyModified: string;
+    readingModifiedTime: string;
+    modifiedTimeUnavailable: string;
+  };
+
+  operationHistory: {
+    historyAction: string;
+    title: string;
+    historyTab: string;
+    groupsTab: string;
+    historyDescription: string;
+    historyEmpty: string;
+    captureHistory: string;
+    groupName: string;
+    groupNamePlaceholder: string;
+    clearHistory: string;
+    saveGroup: string;
+    selectedCount: string;
+    groupSaved: string;
+    saveGroupFailed: string;
+    outputMatchOptional: string;
+    outputMatchPlaceholder: string;
+    noGroupsTitle: string;
+    noGroupsDescription: string;
+    createFromHistory: string;
+    group: string;
+    name: string;
+    stepsCount: string;
+    addStep: string;
+    deleteGroup: string;
+    close: string;
+    saveChanges: string;
+    stepType: string;
+    shellCommandPlaceholder: string;
+    sentContentPlaceholder: string;
+    stepContent: string;
+    stepOutputMatch: string;
+    moveStepUp: string;
+    moveStepDown: string;
+    deleteStep: string;
+    groupUpdated: string;
+    saveChangesFailed: string;
+    discardTitle: string;
+    discardMessage: string;
+    discardConfirm: string;
+    saveOrDiscardFirst: string;
+    clearHistoryTitle: string;
+    clearHistoryMessage: string;
+    deleteGroupTitle: string;
+    deleteGroupMessage: string;
+    groupDeleted: string;
+    deleteGroupFailed: string;
+    switchGroupTitle: string;
+    switchGroupMessage: string;
+    switchGroupConfirm: string;
+    kindInput: string;
+    kindKey: string;
+    kindConfirm: string;
+    emptyName: string;
+    emptySelection: string;
+    duplicateName: string;
+    emptySteps: string;
+    emptyStep: string;
   };
 
   // Commands

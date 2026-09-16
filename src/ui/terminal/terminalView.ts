@@ -177,28 +177,28 @@ export class TerminalView extends ItemView {
     const plugin = this.getTerminalPlugin();
     if (plugin) {
       menu.addItem((item) => {
-        item.setTitle('历史操作').setIcon('history').onClick(() => this.openOperationHistory());
+        item.setTitle(t('operationHistory.historyAction')).setIcon('history').onClick(() => this.openOperationHistory());
       });
       menu.addItem((item) => {
-        item.setTitle('管理命令组').setIcon('list-plus').onClick(() => this.openOperationHistory('groups'));
+        item.setTitle(t('home.manageCommandGroups')).setIcon('list-plus').onClick(() => this.openOperationHistory('groups'));
       });
       const currentDeviceKey = this.getRemoteNodeId() ?? 'local';
       const deviceGroups = plugin.settings.deviceShortcutGroups.filter((group) => group.deviceKey === currentDeviceKey).sort((a, b) => b.creationOrder - a.creationOrder);
       const latestGroup = deviceGroups[0];
       if (latestGroup && this.terminalInstance) {
-        menu.addItem((item) => item.setTitle(`运行快捷组：${latestGroup.name}`).setIcon('play').onClick(() => {
+        menu.addItem((item) => item.setTitle(t('home.runShortcutGroup', { name: latestGroup.name })).setIcon('play').onClick(() => {
           void plugin.runShortcutGroupOnTerminal(this.terminalInstance!, latestGroup)
             .then((runId) => this.showShortcutReplay(runId))
             .catch((error: unknown) => {
-              new Notice(error instanceof Error ? error.message : '快捷组运行失败');
+              new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed'));
             });
         }));
       }
       for (const group of deviceGroups.slice(1)) {
-        menu.addItem((item) => item.setTitle(`运行快捷组：${group.name}`).setIcon('play').onClick(() => {
+        menu.addItem((item) => item.setTitle(t('home.runShortcutGroup', { name: group.name })).setIcon('play').onClick(() => {
           void plugin.runShortcutGroupOnTerminal(this.terminalInstance!, group)
             .then((runId) => this.showShortcutReplay(runId))
-            .catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组运行失败'));
+            .catch((error: unknown) => new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed')));
         }));
       }
       menu.addItem((item) => {
@@ -1372,11 +1372,11 @@ export class TerminalView extends ItemView {
     });
     const historyButton = toolbar.createEl('button', {
       cls: 'terminal-history-action',
-      attr: { 'aria-label': '历史操作' },
+      attr: { 'aria-label': t('operationHistory.historyAction') },
     });
     historyButton.disabled = !this.terminalInstance;
     setIcon(historyButton.createSpan('terminal-toolbar-action-icon'), 'history');
-    historyButton.createSpan({ cls: 'terminal-toolbar-action-label', text: '历史操作' });
+    historyButton.createSpan({ cls: 'terminal-toolbar-action-label', text: t('operationHistory.historyAction') });
     historyButton.createSpan({ cls: 'terminal-history-activity-indicator' });
     this.historyActionEl = historyButton;
     historyButton.addEventListener('click', () => this.openOperationHistory());
@@ -1395,14 +1395,14 @@ export class TerminalView extends ItemView {
     const shortcuts = toolbar.createDiv('terminal-toolbar-shortcuts');
     const latest = shortcuts.createEl('button', {
       cls: 'terminal-toolbar-shortcut-latest',
-      attr: { title: groups[0].name, 'aria-label': `运行快捷组：${groups[0].name}` },
+      attr: { title: groups[0].name, 'aria-label': t('home.runShortcutGroup', { name: groups[0].name }) },
     });
     setIcon(latest.createSpan('terminal-toolbar-shortcut-icon'), 'play');
     latest.createSpan({ cls: 'terminal-toolbar-shortcut-name', text: groups[0].name });
     latest.addEventListener('click', () => this.runToolbarShortcut(terminal, groups[0]));
     const toggle = shortcuts.createEl('button', {
       cls: 'clickable-icon terminal-toolbar-shortcut-toggle',
-      attr: { 'aria-label': '展开其它命令组' },
+      attr: { 'aria-label': t('home.expandShortcutGroups') },
     });
     setIcon(toggle, 'chevron-down');
     toggle.addEventListener('click', (event) => {
@@ -1411,7 +1411,7 @@ export class TerminalView extends ItemView {
         menu.addItem((item) => item.setTitle(group.name).setIcon('play').onClick(() => this.runToolbarShortcut(terminal, group)));
       }
       if (groups.length > 1) menu.addSeparator();
-      menu.addItem((item) => item.setTitle('管理命令组…').setIcon('list-plus').onClick(() => this.openOperationHistory('groups')));
+      menu.addItem((item) => item.setTitle(t('home.manageCommandGroups')).setIcon('list-plus').onClick(() => this.openOperationHistory('groups')));
       menu.showAtMouseEvent(event);
     });
   }
@@ -1432,7 +1432,7 @@ export class TerminalView extends ItemView {
     if (!plugin) return;
     void plugin.runShortcutGroupOnTerminal(terminal, group)
       .then((runId) => this.showShortcutReplay(runId))
-      .catch((error: unknown) => new Notice(error instanceof Error ? error.message : '快捷组运行失败'));
+      .catch((error: unknown) => new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed')));
   }
 
   private openOperationHistory(initialTab: 'history' | 'groups' = 'history'): void {
