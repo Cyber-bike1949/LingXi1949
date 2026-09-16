@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.0.2] - 2026-09-16
+
+### Fixed
+- Removed the redundant word "Obsidian" from the plugin description to satisfy the Community Plugins directory guidelines.
+
 ## [2.0.1] - 2026-09-16
 
 ### Changed
