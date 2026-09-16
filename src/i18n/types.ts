@@ -454,7 +454,7 @@ export interface TranslationKeys {
       title: string;
       intro: string;
       wechat: string;
-      alipay: string;
+      kofi: string;
     };
   };
 

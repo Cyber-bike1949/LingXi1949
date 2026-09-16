@@ -1,10 +1,6 @@
-<div align="center">
-
 <img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
 # LingXi1949
-
-An Obsidian terminal workspace for connecting local and remote devices and handing note context to AI CLI agents.
 
 **Notes are the best friend you and your agent have.**
 
@@ -14,15 +10,15 @@ English / [简体中文](./README_ZH.md)
 
 <table>
   <tr>
-    <td width="50%" align="center">
+    <td width="50%">
       <img src="assets/remote_terminal_en.png" alt="Connect to a local or remote terminal with one click" />
     </td>
-    <td width="50%" align="center">
+    <td width="50%">
       <img src="assets/easy_agent_en.png" alt="Send notes and context to a terminal agent with one click" />
     </td>
   </tr>
   <tr>
-    <td colspan="2" align="center">
+    <td colspan="2">
       <img src="assets/operate.gif" width="980" alt="LingXi1949 operation demo" />
     </td>
   </tr>
@@ -72,14 +68,37 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 
 Keep the Agent running, then use its connection code to add the device in LingXi1949.
 
-## Plugin usage
+## Usage
 
-Add a device with its connection code, open a terminal, and start working from Obsidian.
+> **Core flow:** choose a device → open a terminal → send note context to an AI CLI agent.
 
-- Drag and drop notes from Obsidian or files from the terminal to transfer them directly between devices.
-<img src="assets/drag_and_drop.png" width="980" alt="LingXi1949 main interface demonstration" />
-- Send the current note and its related references to the terminal with one click. LingXi1949 automatically finds the referenced notes and includes them in the transfer.
-<img src="assets/one_click.png" width="980" alt="LingXi1949 main interface demonstration" />
+### Open a local or remote terminal
+
+- Run **LingXi1949: Open terminal** from the Obsidian command palette to open the device home.
+- Select **This device** to start a local shell immediately.
+- To use a remote shell, add a device with the connection code printed by the Agent, then select its device card.
+
+### Give note context to an agent
+
+- Use the command palette to send the current note, editor selection, or current note path.
+- When sending a note, LingXi1949 can collect the notes it links to. You can also include recursively discovered backlinks from settings.
+- Start Claude Code, Codex, or OpenCode from the workflow launcher and continue with the transferred context.
+
+<img src="assets/one_click.png" width="980" alt="Send note context to a terminal with one click" />
+
+### Transfer files between the vault and a terminal
+
+- Drag Obsidian files into the terminal or directory tree to transfer them to the active local or remote device.
+- Browse, drag, or copy files and folders in the terminal directory tree, and copy entries back into a chosen vault folder.
+- Modification markers and per-file transfer receipts show which content was synchronized successfully.
+
+<img src="assets/drag_and_drop.png" width="980" alt="Drag files between the vault and a terminal" />
+
+### Reuse terminal operations
+
+- Open **Operation history** from the terminal pane menu to review shell operations entered during the current session.
+- Save frequently used operations as a device-specific shortcut group, then run them again from a terminal menu or device card.
+- Add terminal-output match conditions when a step must wait for an interactive CLI. Replay pauses when completion cannot be confirmed instead of silently resending a step.
 
 ## Current terminal features
 
@@ -94,5 +113,3 @@ Shortcut replay never treats an uncertain completion as success or silently rese
 ## Compatibility and verification
 
 New directory metadata and per-file receipt fields are optional, so older peers remain usable. Verify the Agent connection, shell identity (`hostname` and `pwd`), and a sample note transfer before using real content. Full AI TUI readiness and shell-history edge cases still require verification on the target host.
-
-</div>

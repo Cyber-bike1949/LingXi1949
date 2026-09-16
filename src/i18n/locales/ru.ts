@@ -396,7 +396,7 @@ export const ru: TranslationKeys = {
       title: 'Поддержать автора',
       intro: 'Если этот плагин оказался полезен, вы можете угостить автора кофе:',
       wechat: 'WeChat',
-      alipay: 'Alipay',
+      kofi: 'Ko-fi',
     },
   },
 

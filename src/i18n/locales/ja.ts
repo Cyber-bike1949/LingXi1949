@@ -396,7 +396,7 @@ export const ja: TranslationKeys = {
       title: '作者を応援する',
       intro: 'このプラグインが役に立ったら、作者にコーヒーを一杯おごってみませんか：',
       wechat: 'WeChat',
-      alipay: 'Alipay',
+      kofi: 'Ko-fi',
     },
   },
 

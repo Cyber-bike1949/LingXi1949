@@ -396,7 +396,7 @@ export const zhCN: TranslationKeys = {
       title: '支持作者',
       intro: '如果这个插件对你有帮助，可以请作者喝杯咖啡：',
       wechat: '微信',
-      alipay: '支付宝',
+      kofi: 'Ko-fi',
     },
   },
 

@@ -222,9 +222,6 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
     // Instance behavior settings card
     this.renderInstanceBehaviorSettings(containerEl);
 
-    // Preset scripts settings card
-    this.renderPresetScriptsSettings(containerEl);
-
     // Display settings card (unified theme + appearance)
     this.renderDisplaySettings(containerEl);
 
