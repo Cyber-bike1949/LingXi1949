@@ -17,34 +17,7 @@
   </tr>
 </table>
 
-## 核心亮点
-
-点击任意预览图可查看原图。
-
-<table>
-  <tr>
-    <td width="50%">
-      <a href="assets/main-interface.png"><img src="assets/main-interface.png" alt="LingXi1949 主界面与终端工作区" /></a><br />
-      <strong>在 Obsidian 中使用完整终端</strong><br />让笔记与本机或远程 Shell 留在同一个工作区。
-    </td>
-    <td width="50%">
-      <a href="assets/one_click.png"><img src="assets/one_click.png" alt="一键将笔记上下文发送到终端" /></a><br />
-      <strong>一键把完整上下文交给 Agent</strong><br />无需复制粘贴，即可发送笔记、选中内容、路径、引用与反链。
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <a href="assets/drag_and_drop.png"><img src="assets/drag_and_drop.png" alt="在 Vault 与终端之间拖拽传输文件" /></a><br />
-      <strong>不离开 Obsidian 也能传文件</strong><br />在 Vault 与终端目录树之间直接拖放文件和文件夹。
-    </td>
-    <td width="50%">
-      <a href="assets/termy-settings-workflows.png"><img src="assets/termy-settings-workflows.png" alt="LingXi1949 工作流设置" /></a><br />
-      <strong>保存并复用工作流</strong><br />把重复的终端操作变成设备专属快捷组。
-    </td>
-  </tr>
-</table>
-
-## 其它主要功能
+## 功能
 
 - **远程连接不再折腾网络：** 用连接码配对 Windows 或 Linux 设备，无需注册账号、申请公网 IP 或开放入站端口；优先点对点直连，必要时才使用加密中继。
 - **多项任务互不打扰：** 同时连接多台设备，并为每台设备打开多个独立终端；某个会话断开或关闭，不影响其它工作。
