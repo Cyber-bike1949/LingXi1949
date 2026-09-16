@@ -35,6 +35,7 @@ const context = await esbuild.context({
 	bundle: true,
 	loader: {
 		'.md': 'text',
+		'.png': 'dataurl',
 		'.svg': 'text',
 	},
 	external: [

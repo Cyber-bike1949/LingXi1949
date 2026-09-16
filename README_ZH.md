@@ -1,10 +1,6 @@
-<div align="center">
-
 <img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
 # LingXi1949
-
-连接本地与远程设备，并将笔记上下文交给 AI CLI Agent 的 Obsidian 终端工作台。
 
 **笔记，才是你和 Agent 之间最好的朋友。**
 
@@ -14,15 +10,15 @@
 
 <table>
   <tr>
-    <td width="50%" align="center">
+    <td width="50%">
       <img src="assets/remote_terminal_cn.png" alt="一键连接本地或远程终端" />
     </td>
-    <td width="50%" align="center">
+    <td width="50%">
       <img src="assets/easy_agent_cn.png" alt="一键将笔记与上下文发送给终端 Agent" />
     </td>
   </tr>
   <tr>
-    <td colspan="2" align="center">
+    <td colspan="2">
       <img src="assets/operate.gif" width="980" alt="LingXi1949 操作演示" />
     </td>
   </tr>
@@ -71,17 +67,37 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 
 保持 Agent 运行，然后使用输出的连接码在 LingXi1949 中添加设备。
 
-## 插件端使用
+## 用法
 
-输入连接码添加设备，打开终端，即可在 Obsidian 中开始使用。
+> **核心流程：** 选择设备 → 打开终端 → 将笔记上下文发送给 AI CLI Agent。
 
-- Obsidian 笔记和终端中的文件均可通过拖拽，在设备间直接传输。
+### 打开本地或远程终端
 
-<img src="assets/drag_and_drop.png" width="980" alt="LingXi1949 main interface demonstration" />
+- 从 Obsidian 命令面板运行“LingXi1949：打开终端”，进入设备首页。
+- 使用“本机”卡片直接打开本地 Shell。
+- 使用 Agent 输出的连接码添加远程设备，然后点击设备卡片打开远程 Shell。
 
-- 当前笔记及其相关引用可一键传输到终端，LingXi1949 会自动查找被引用的笔记并一并传输。
+### 将笔记上下文交给 Agent
 
-<img src="assets/one_click.png" width="980" alt="LingXi1949 main interface demonstration" />
+- 从命令面板发送当前笔记、编辑器选中内容或当前笔记路径。
+- 发送当前笔记时，可一并收集其引用的笔记；设置中还可选择是否包含反向链接笔记。
+- 从工作流启动器打开 Claude Code、Codex 或 OpenCode，直接继续处理已发送的上下文。
+
+<img src="assets/one_click.png" width="980" alt="一键将笔记上下文发送到终端" />
+
+### 在 Vault 与终端之间传输文件
+
+- 将 Obsidian 文件拖入终端或目录树，传输到当前的本地或远程设备。
+- 在终端目录树中浏览、拖拽或复制文件与文件夹；也可将条目送回 Vault 的指定文件夹。
+- 修改标记和逐文件传输回执会帮助你确认哪些内容已成功同步。
+
+<img src="assets/drag_and_drop.png" width="980" alt="在 Vault 与终端之间拖拽传输文件" />
+
+### 复用终端操作
+
+- 从终端窗格菜单打开“历史操作”，查看当前会话中输入的 Shell 操作。
+- 将常用操作保存为设备专属快捷组，以后可从终端菜单或设备卡片再次运行。
+- 需要等待交互式 CLI 时，可为步骤配置终端输出匹配条件；无法确认完成时，回放会暂停而不是重复发送。
 
 ## 当前终端功能
 
@@ -96,5 +112,3 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 ## 兼容性与首次验证
 
 新目录元数据和逐文件回执都是可选字段，因此兼容旧版端。首次部署时，请先验证 Agent 连接、Shell 身份（`hostname` 和 `pwd`）以及一份示例笔记传输，再处理真实内容。完整 AI TUI 就绪信号和复杂 Shell 历史场景仍需在目标宿主环境验证。
-
-</div>

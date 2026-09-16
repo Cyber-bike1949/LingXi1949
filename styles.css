@@ -2889,7 +2889,7 @@
 
 /* v1.9 R-03: "support the author" settings section. */
 .support-author-card {
-  margin-top: 24px;
+  margin-bottom: 24px;
 }
 
 .support-author-intro {
@@ -2911,9 +2911,11 @@
   gap: 8px;
 }
 
-.support-author-qr-item svg {
+.support-author-qr-item svg,
+.support-author-qr-item img {
   width: 140px;
   height: 140px;
+  object-fit: contain;
 }
 
 .support-author-qr-label {
@@ -2921,33 +2923,6 @@
   color: var(--text-muted);
 }
 
-.support-author-links-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.support-author-link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: var(--radius-s);
-  border: 1px solid var(--background-modifier-border);
-  text-decoration: none;
-  color: var(--text-normal);
-}
-
-.support-author-link:hover {
-  background-color: var(--background-modifier-hover);
-}
-
-.support-author-link svg {
-  width: 16px;
-  height: 16px;
-  color: var(--support-author-link-color, currentColor);
-  fill: currentColor;
-}
 .directory-tree-panel__row.is-modified > .directory-tree-panel__node-name::after {
   content: '';
   display: inline-block;

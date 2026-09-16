@@ -397,7 +397,7 @@ export const en: TranslationKeys = {
       title: 'Support the author',
       intro: 'If this plugin has been useful to you, you can buy the author a coffee:',
       wechat: 'WeChat',
-      alipay: 'Alipay',
+      kofi: 'Ko-fi',
     },
   },
 
