@@ -2,11 +2,9 @@
 
 # LingXi1949
 
-**笔记，才是你和 Agent 之间最好的朋友。**
-
 简体中文 / [English](./README.md)
 
-## 告别繁琐操作
+**告别上下文搬运：笔记一键交给 Agent。**
 
 <table>
   <tr>
@@ -17,43 +15,88 @@
       <img src="assets/easy_agent_cn.png" alt="一键将笔记与上下文发送给终端 Agent" />
     </td>
   </tr>
-  <tr>
-    <td colspan="2">
-      <img src="assets/operate.gif" width="980" alt="LingXi1949 操作演示" />
-    </td>
-  </tr>
 </table>
 
-## 主界面
+## 核心亮点
 
-<img src="assets/main-interface.png" width="980" alt="LingXi1949 主界面操作演示" />
+点击下面的页签手动翻页；展开新页时，上一页会自动收起。
 
-## Linux Agent
-首次使用需要简单配置下
-```bash
-useradd -m cow
+<details name="highlights" open>
+<summary><strong>1 / 4 · 在 Obsidian 中使用完整终端</strong></summary>
 
-sudo usermod -aG sudo cow
+在工作区内打开本机或远程 Shell，一边查看笔记，一边运行 Claude Code、Codex、OpenCode 等 AI CLI 工具。
 
-passwd cow
+<img src="assets/main-interface.png" width="980" alt="LingXi1949 主界面与终端工作区" />
 
-su - cow
-```
+</details>
 
-在 Linux x64 上，以将要使用远程 Shell 的普通用户身份运行安装脚本：
+<details name="highlights">
+<summary><strong>2 / 4 · 一键把笔记上下文交给 Agent</strong></summary>
+
+发送当前笔记、选中内容或笔记路径；发送整篇笔记时，还可以收集其引用笔记和反向链接笔记。
+
+<img src="assets/one_click.png" width="980" alt="一键将笔记上下文发送到终端" />
+
+</details>
+
+<details name="highlights">
+<summary><strong>3 / 4 · 在 Vault 与终端之间拖放文件</strong></summary>
+
+从 Obsidian 向本机或远程设备传输文件，也可以通过终端目录树把文件送回指定 Vault 文件夹。
+
+<img src="assets/drag_and_drop.png" width="980" alt="在 Vault 与终端之间拖拽传输文件" />
+
+</details>
+
+<details name="highlights">
+<summary><strong>4 / 4 · 保存并复用工作流</strong></summary>
+
+从状态栏启动 AI 工具或自定义工作流，把常用终端操作保存为设备专属快捷组，需要时一键再次运行。
+
+<img src="assets/termy-settings-workflows.png" width="980" alt="LingXi1949 工作流设置" />
+
+</details>
+
+## 其它主要功能
+
+- **本机与远程终端：** 从设备首页直接打开本机 Shell，或使用连接码添加远程 Windows/Linux 设备。
+- **目录树与传输回执：** 浏览本机或远程目录，按文件查看成功、失败或未知状态，减少同步遗漏。
+- **修改标记：** 仅对收到成功回执的文件显示标记，文件夹会聚合后代文件的状态。
+- **历史操作与快捷组：** 查看当前会话的 Shell 输入，将常用操作保存为设备专属快捷组；无法确认步骤完成时自动暂停。
+- **AI 启动器：** 集中启动 Claude Code、Codex 和 OpenCode，并显示工具可用状态。
+- **离线与隐私：** 支持离线模式；不包含客户端遥测，不上传使用统计或错误报告。
+
+## 安装
+
+LingXi1949 仅支持 Obsidian 桌面版。
+
+### 安装插件
+
+推荐从 Obsidian 社区插件市场安装：
+
+1. 打开“设置 → 第三方插件”，关闭“安全模式”（如已开启）。
+2. 点击“浏览”，搜索 `LingXi`。
+3. 安装并启用 **LingXi1949**。
+
+希望更早使用最新标签版本时，也可以安装 [BRAT](https://github.com/TfTHacker/obsidian42-brat)，然后添加仓库 `Cyber-bike1949/LingXi1949`。
+
+### 使用本机终端
+
+从 Obsidian 命令面板运行“LingXi1949：打开终端”，选择“本机”即可。Claude Code、Codex、OpenCode 等 AI CLI 工具需在本机单独安装并登录。
+
+### 连接远程 Linux Agent
+
+在 Linux x64 设备上，以将要使用远程 Shell 的普通用户身份运行：
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh | bash
 ```
 
-安装完成后，使用输出的连接码在 LingXi1949 中添加设备。
+脚本会下载并校验 Agent、启动用户服务并显示连接码。将连接码粘贴到插件的“添加设备”入口。若未看到连接码，可运行 `~/.local/bin/lingxi1949 status` 查询状态。
 
+### 连接远程 Windows Agent
 
-## Windows Agent
-
-下载 [Windows x64 Agent 安装包](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe)及其 [SHA-256 校验文件](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe.sha256)。
-
-也可以通过 PowerShell 下载、校验并启动 Agent：
+下载 [Windows x64 Agent](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe) 及其 [SHA-256 校验文件](https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download/lingxi1949-win32-x64.exe.sha256)，或在 PowerShell 中运行：
 
 ```powershell
 $baseUrl = 'https://github.com/Cyber-bike1949/LingXi1949/releases/latest/download'
@@ -65,50 +108,6 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 .\lingxi1949.exe run
 ```
 
-保持 Agent 运行，然后使用输出的连接码在 LingXi1949 中添加设备。
+保持 Agent 运行，再使用其输出的连接码添加设备。首次使用时，请先核对 `hostname` 和 `pwd`（PowerShell 使用 `Get-Location`），并用不含个人信息的示例笔记验证传输。
 
-## 用法
-
-> **核心流程：** 选择设备 → 打开终端 → 将笔记上下文发送给 AI CLI Agent。
-
-### 打开本地或远程终端
-
-- 从 Obsidian 命令面板运行“LingXi1949：打开终端”，进入设备首页。
-- 使用“本机”卡片直接打开本地 Shell。
-- 使用 Agent 输出的连接码添加远程设备，然后点击设备卡片打开远程 Shell。
-
-### 将笔记上下文交给 Agent
-
-- 从命令面板发送当前笔记、编辑器选中内容或当前笔记路径。
-- 发送当前笔记时，可一并收集其引用的笔记；设置中还可选择是否包含反向链接笔记。
-- 从工作流启动器打开 Claude Code、Codex 或 OpenCode，直接继续处理已发送的上下文。
-
-<img src="assets/one_click.png" width="980" alt="一键将笔记上下文发送到终端" />
-
-### 在 Vault 与终端之间传输文件
-
-- 将 Obsidian 文件拖入终端或目录树，传输到当前的本地或远程设备。
-- 在终端目录树中浏览、拖拽或复制文件与文件夹；也可将条目送回 Vault 的指定文件夹。
-- 修改标记和逐文件传输回执会帮助你确认哪些内容已成功同步。
-
-<img src="assets/drag_and_drop.png" width="980" alt="在 Vault 与终端之间拖拽传输文件" />
-
-### 复用终端操作
-
-- 从终端窗格菜单打开“历史操作”，查看当前会话中输入的 Shell 操作。
-- 将常用操作保存为设备专属快捷组，以后可从终端菜单或设备卡片再次运行。
-- 需要等待交互式 CLI 时，可为步骤配置终端输出匹配条件；无法确认完成时，回放会暂停而不是重复发送。
-
-## 当前终端功能
-
-- **目录树传输：** 浏览本地或远程目录，传输文件或文件夹，也可以拖放到指定目标路径。
-- **修改标记：** 只有收到传输成功回执的文件才会点亮。点击或拖动文件可确认当前版本；文件夹标记会聚合后代文件。
-- **操作历史：** 在终端窗格菜单中选择“历史操作”，查看当前会话中的用户 Shell 输入。
-- **快捷组：** 将选中的历史操作保存为设备专属快捷组，可从终端菜单或设备卡片启动运行。执行前会校验设备归属，无法确认完成时会暂停。
-- **传输回执：** 支持的 Agent 会按文件报告成功、失败或未知状态；旧版 Agent 仍可使用。
-
-快捷组回放不会把不明确的完成状态判定为成功，也不会静默重复发送步骤。
-
-## 兼容性与首次验证
-
-新目录元数据和逐文件回执都是可选字段，因此兼容旧版端。首次部署时，请先验证 Agent 连接、Shell 身份（`hostname` 和 `pwd`）以及一份示例笔记传输，再处理真实内容。完整 AI TUI 就绪信号和复杂 Shell 历史场景仍需在目标宿主环境验证。
+> 活得像水一样吧，朋友。—— 李小龙（Be water, my friend!）
