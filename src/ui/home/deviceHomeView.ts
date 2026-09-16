@@ -173,7 +173,7 @@ export class DeviceHomeView extends ItemView {
       .filter((group) => group.deviceKey === device.nodeId)
       .sort((a, b) => b.creationOrder - a.creationOrder);
     cardEl.createEl('p', {
-      text: status.state === 'connected' ? '点击卡片空白处打开新终端' : '点击连接并打开终端',
+      text: status.state === 'connected' ? t('home.openTerminalHint') : t('home.connectTerminalHint'),
     });
     if (status.state === 'error') {
       cardEl.createDiv({
@@ -200,11 +200,11 @@ export class DeviceHomeView extends ItemView {
     deviceKey: string,
   ): void {
     if (groups.length === 0) return;
-    parent.createDiv({ cls: 'termesh-device-shortcut-label', text: '快捷命令' });
+    parent.createDiv({ cls: 'termesh-device-shortcut-label', text: t('home.quickCommands') });
     const shortcuts = parent.createDiv({ cls: 'termesh-device-shortcuts' });
     const latest = shortcuts.createEl('button', {
       cls: 'termesh-device-shortcut-latest',
-      attr: { title: groups[0].name, 'aria-label': `运行快捷组：${groups[0].name}` },
+      attr: { title: groups[0].name, 'aria-label': t('home.runShortcutGroup', { name: groups[0].name }) },
     });
     setIcon(latest.createSpan('termesh-device-shortcut-icon'), 'play');
     latest.createSpan({ cls: 'termesh-device-shortcut-name', text: groups[0].name });
@@ -212,13 +212,13 @@ export class DeviceHomeView extends ItemView {
     latest.addEventListener('click', (event) => {
       event.stopPropagation();
       void run(groups[0]).catch((error: unknown) => {
-        new Notice(error instanceof Error ? error.message : '快捷组启动失败');
+        new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed'));
       });
     });
 
     const toggle = shortcuts.createEl('button', {
       cls: 'clickable-icon termesh-device-shortcut-toggle',
-      attr: { 'aria-label': '展开其它命令组' },
+      attr: { 'aria-label': t('home.expandShortcutGroups') },
     });
     setIcon(toggle, 'chevron-down');
     toggle.addEventListener('click', (event) => {
@@ -227,12 +227,12 @@ export class DeviceHomeView extends ItemView {
       for (const group of groups.slice(1)) {
         menu.addItem((item) => item.setTitle(group.name).setIcon('play').setDisabled(!enabled).onClick(() => {
           void run(group).catch((error: unknown) => {
-            new Notice(error instanceof Error ? error.message : '快捷组启动失败');
+            new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed'));
           });
         }));
       }
       if (groups.length > 1) menu.addSeparator();
-      menu.addItem((item) => item.setTitle('管理命令组…').setIcon('list-plus').onClick(() => {
+      menu.addItem((item) => item.setTitle(t('home.manageCommandGroups')).setIcon('list-plus').onClick(() => {
         void this.openShortcutGroupManager(deviceKey);
       }));
       menu.showAtMouseEvent(event);

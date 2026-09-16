@@ -1376,7 +1376,11 @@
   max-width: 220px;
 }
 .terminal-toolbar-shortcuts button {
+  box-sizing: border-box;
+  align-self: stretch;
+  height: auto;
   min-width: 0;
+  margin: 0;
 }
 .terminal-toolbar-shortcut-latest {
   display: flex;

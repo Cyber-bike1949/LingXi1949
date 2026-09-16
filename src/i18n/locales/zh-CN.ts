@@ -29,7 +29,7 @@ export const zhCN: TranslationKeys = {
 
   home: {
     controllerAlreadyConnected: '连接失败：远程 Agent 已有一个控制端连接，当前仅允许一个控制端连接，无法同时连接多个设备。这个功能暂不支持。',
-    title: '设备', description: '从本机或已配对设备打开新终端。', refresh: '刷新设备状态', refreshing: '正在刷新...', addDevice: '添加设备', addDeviceDescription: '粘贴 Agent 显示的设备码', localDevice: '本机', localDeviceDescription: '在当前设备上打开终端', available: '可用', openTerminal: '打开终端', deviceName: '设备名称', deviceNamePlaceholder: '可选的显示名称', connectionCode: '设备码', connectionCodePlaceholder: '粘贴 endpoint 设备码', addingDevice: '正在添加...', deviceAdded: '设备已添加。', moreActions: '更多设备操作', disconnect: '断开连接', removeDevice: '移除设备', removeDeviceTitle: '移除设备？', removeDeviceDescription: '将从本机删除“{{name}}”及其设备码。', deviceRemoved: '设备已移除。', returnHome: '返回设备首页', neverConnected: '从未连接', lastConnected: '上次连接：{{time}}', statusDisconnected: '未连接', statusConnecting: '连接中', statusConnected: '已连接', statusError: '连接失败', pairEmpty: '请粘贴设备码。', pairWrongPrefix: '这不是有效的 endpoint 设备码。', pairBadCharacters: '设备码包含无效字符。', pairTooShort: '设备码不完整。', pairUnparseable: '无法解析设备码，请从 Agent 重新复制。', operationFailed: '设备操作失败：{{message}}',
+    title: '设备', description: '从本机或已配对设备打开新终端。', refresh: '刷新设备状态', refreshing: '正在刷新...', addDevice: '添加设备', addDeviceDescription: '粘贴 Agent 显示的设备码', localDevice: '本机', localDeviceDescription: '在当前设备上打开终端', available: '可用', openTerminal: '打开终端', deviceName: '设备名称', deviceNamePlaceholder: '可选的显示名称', connectionCode: '设备码', connectionCodePlaceholder: '粘贴 endpoint 设备码', addingDevice: '正在添加...', deviceAdded: '设备已添加。', moreActions: '更多设备操作', disconnect: '断开连接', removeDevice: '移除设备', removeDeviceTitle: '移除设备？', removeDeviceDescription: '将从本机删除“{{name}}”及其设备码。', deviceRemoved: '设备已移除。', returnHome: '返回设备首页', neverConnected: '从未连接', lastConnected: '上次连接：{{time}}', statusDisconnected: '未连接', statusConnecting: '连接中', statusConnected: '已连接', statusError: '连接失败', pairEmpty: '请粘贴设备码。', pairWrongPrefix: '这不是有效的 endpoint 设备码。', pairBadCharacters: '设备码包含无效字符。', pairTooShort: '设备码不完整。', pairUnparseable: '无法解析设备码，请从 Agent 重新复制。', operationFailed: '设备操作失败：{{message}}', openTerminalHint: '点击卡片空白处打开新终端', connectTerminalHint: '点击连接并打开终端', quickCommands: '快捷命令', runShortcutGroup: '运行快捷组：{{name}}', expandShortcutGroups: '展开其它命令组', manageCommandGroups: '管理命令组…', shortcutGroupRunFailed: '快捷组运行失败',
   },
 
   remote: {
@@ -110,6 +110,14 @@ export const zhCN: TranslationKeys = {
     openInFileManagerFailed: '打开文件管理器失败：{{message}}',
     transferring: '传输中…',
     transferAlreadyInProgress: '该文件正在传输中，请稍候。',
+    recentlyModified: '最近修改',
+    readingModifiedTime: '正在读取…',
+    modifiedTimeUnavailable: '修改时间不可用',
+  },
+
+  operationHistory: {
+    historyAction: '历史操作',
+    title: '历史操作与命令组', historyTab: '操作历史', groupsTab: '命令组管理', historyDescription: '选择操作并按原始顺序保存为命令组。', historyEmpty: '暂无可用历史操作。', captureHistory: '采集历史', groupName: '命令组名称', groupNamePlaceholder: '例如：启动 Claude', clearHistory: '清空历史', saveGroup: '保存命令组', selectedCount: '已选择 {{count}} 项，将按时间顺序执行', groupSaved: '命令组已保存', saveGroupFailed: '保存命令组失败', outputMatchOptional: '输出匹配（可选）', outputMatchPlaceholder: '检测到这些文字后执行下一步', noGroupsTitle: '还没有命令组', noGroupsDescription: '从“操作历史”中选择记录并保存，即可在这里继续编辑。', createFromHistory: '从历史创建', group: '命令组', name: '名称', stepsCount: '命令步骤（{{count}}）', addStep: '＋ 新增步骤', deleteGroup: '删除命令组', close: '关闭', saveChanges: '保存修改', stepType: '步骤 {{number}} 类型', shellCommandPlaceholder: '输入 Shell 命令', sentContentPlaceholder: '输入发送内容', stepContent: '步骤 {{number}} 内容', stepOutputMatch: '步骤 {{number}} 输出匹配', moveStepUp: '上移步骤 {{number}}', moveStepDown: '下移步骤 {{number}}', deleteStep: '删除步骤 {{number}}', groupUpdated: '命令组已更新', saveChangesFailed: '保存修改失败', discardTitle: '放弃未保存的修改？', discardMessage: '当前命令组有尚未保存的修改。', discardConfirm: '放弃修改', saveOrDiscardFirst: '请先保存或放弃当前命令组修改', clearHistoryTitle: '清空历史操作？', clearHistoryMessage: '这会清空当前终端的历史操作，但不会删除已经保存的命令组。', deleteGroupTitle: '删除命令组？', deleteGroupMessage: '将删除“{{name}}”，此操作无法撤销。', groupDeleted: '命令组已删除', deleteGroupFailed: '删除命令组失败', switchGroupTitle: '切换命令组？', switchGroupMessage: '当前修改尚未保存，切换后会丢失这些修改。', switchGroupConfirm: '放弃并切换', kindInput: '输入', kindKey: '按键', kindConfirm: '确认', emptyName: '请输入命令组名称', emptySelection: '请至少选择一条操作', duplicateName: '当前设备已有同名命令组', emptySteps: '命令组至少需要一个步骤', emptyStep: '步骤内容不能为空',
   },
 
   commands: {

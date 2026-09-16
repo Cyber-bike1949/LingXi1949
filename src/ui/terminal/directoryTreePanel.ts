@@ -498,18 +498,18 @@ export class DirectoryTreePanel {
 
       const tooltip = row.ownerDocument.body.createDiv({ cls: 'directory-tree-panel__mtime' });
       tooltip.setAttribute('role', 'tooltip');
-      tooltip.createDiv({ cls: 'directory-tree-panel__mtime-label', text: '最近修改' });
-      const value = tooltip.createDiv({ cls: 'directory-tree-panel__mtime-value', text: '正在读取…' });
+      tooltip.createDiv({ cls: 'directory-tree-panel__mtime-label', text: t('directoryTree.recentlyModified') });
+      const value = tooltip.createDiv({ cls: 'directory-tree-panel__mtime-value', text: t('directoryTree.readingModifiedTime') });
       this.mtimeTooltip = tooltip;
       this.positionMtimeTooltip(row, tooltip, ownerWindow);
 
       void this.source.stat?.(path).then((metadata) => {
         if (token !== this.mtimeHoverToken || this.mtimeTooltip !== tooltip) return;
-        value.setText(metadata.modifiedAtMs === null ? '修改时间不可用' : new Date(metadata.modifiedAtMs).toLocaleString());
+        value.setText(metadata.modifiedAtMs === null ? t('directoryTree.modifiedTimeUnavailable') : new Date(metadata.modifiedAtMs).toLocaleString());
         this.positionMtimeTooltip(row, tooltip, ownerWindow);
       }).catch(() => {
         if (token !== this.mtimeHoverToken || this.mtimeTooltip !== tooltip) return;
-        value.setText('修改时间不可用');
+        value.setText(t('directoryTree.modifiedTimeUnavailable'));
         this.positionMtimeTooltip(row, tooltip, ownerWindow);
       });
     }, MTIME_TOOLTIP_DELAY_MS);
