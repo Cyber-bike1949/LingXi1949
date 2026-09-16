@@ -17,34 +17,7 @@ English / [简体中文](./README_ZH.md)
   </tr>
 </table>
 
-## Core highlights
-
-Click any preview to open the full-size screenshot.
-
-<table>
-  <tr>
-    <td width="50%">
-      <a href="assets/main-interface.png"><img src="assets/main-interface.png" alt="LingXi1949 main interface and terminal workspace" /></a><br />
-      <strong>A complete terminal inside Obsidian</strong><br />Keep notes and a local or remote shell in the same workspace.
-    </td>
-    <td width="50%">
-      <a href="assets/one_click.png"><img src="assets/one_click.png" alt="Send note context to a terminal with one click" /></a><br />
-      <strong>Give note context to an agent in one click</strong><br />Send a note, selection, path, linked notes, and backlinks without copy-paste.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <a href="assets/drag_and_drop.png"><img src="assets/drag_and_drop.png" alt="Drag files between a vault and a terminal" /></a><br />
-      <strong>Move files without leaving Obsidian</strong><br />Drag files and folders between the Vault and the terminal directory tree.
-    </td>
-    <td width="50%">
-      <a href="assets/termy-settings-workflows.png"><img src="assets/termy-settings-workflows.png" alt="LingXi1949 workflow settings" /></a><br />
-      <strong>Save and reuse workflows</strong><br />Turn repeated terminal operations into device-specific shortcut groups.
-    </td>
-  </tr>
-</table>
-
-## More features
+## Features
 
 - **Reach another computer without network setup:** pair a Windows or Linux device with a connection code—no account, public IP, or inbound port required. Connections prefer peer-to-peer and use an encrypted relay only when necessary.
 - **Keep every task in its own terminal:** work across several devices and independent terminal sessions without one disconnected or closed session interrupting the others.
