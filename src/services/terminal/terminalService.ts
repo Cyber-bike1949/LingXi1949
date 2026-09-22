@@ -226,6 +226,7 @@ export class TerminalService {
       
       // Create the terminal instance with the current settings
       const terminal = new TerminalInstance({
+        remotePathContext: remote || !!transport,
         shellType: shellType,
         shellArgs: shellArgs,
         cwd: cwd,

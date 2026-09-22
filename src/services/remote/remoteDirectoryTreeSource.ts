@@ -62,6 +62,7 @@ async function readOneFrame(stream: ByteStream, decoder: TerminalStreamFrameDeco
 export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
   private readonly openStream: () => Promise<ByteStream>;
   private readonly requestTimeoutMs: number;
+  private readonly lastListings = new Map<string, DirectoryEntry[]>();
 
   constructor(openStream: () => Promise<ByteStream>, requestTimeoutMs = 10_000) {
     this.openStream = openStream;
@@ -73,7 +74,9 @@ export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
 
   async list(path: string): Promise<DirectoryEntry[]> {
     const result = await this.requestList({ path });
-    return result.entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }));
+    const entries = result.entries.map((entry) => ({ name: entry.name, isDirectory: entry.isDirectory }));
+    this.lastListings.set(path, entries);
+    return entries;
   }
 
   async stat(path: string): Promise<DirectoryMetadata> {
@@ -156,10 +159,15 @@ export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
           if (frame.kind === 'fsChanged') {
             onChange(normalizeChangeKind(frame.payload.kind));
           }
-          // The initial fsListResult (the caller already has its own
-          // listing from `list()`) and anything else are ignored rather
-          // than treated as protocol errors - tolerate a peer quirk rather
-          // than killing an otherwise-healthy watch over it.
+          if (frame.kind === 'fsListResult') {
+            // A transfer can finish after list() but before this watch starts.
+            const previous = this.lastListings.get(path);
+            const current = frame.payload.entries;
+            if (previous && (previous.length !== current.length || previous.some((entry, index) =>
+              entry.name !== current[index].name || entry.isDirectory !== current[index].isDirectory))) {
+              onChange('unknown');
+            }
+          }
           frame = decoder.nextFrame();
         }
         if (disposed) return;

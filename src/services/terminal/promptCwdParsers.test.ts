@@ -166,3 +166,8 @@ test('extractCwdFromPromptLines expands ~ against the supplied home directory', 
     'F:\\Users\\example/projects/demo'
   );
 });
+
+test('remote Git Bash prompts keep ~ when the controller home is unavailable', () => {
+  assert.equal(extractGitBashPromptCwd('example@host MINGW64 ~\n$', ''), '~');
+  assert.equal(extractCwdFromPromptLines('$', 'example@host MINGW64 ~', ''), '~');
+});

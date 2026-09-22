@@ -153,6 +153,26 @@ test('watch() delivers fsChanged notifications until disposed', async () => {
   assert.deepEqual(changes, ['unknown'], 'no further changes after dispose');
 });
 
+test('watch() reports a file created between the initial list and watch subscription', async () => {
+  const { source, agents } = setup();
+  const listing = source.list('/example');
+  await Promise.resolve();
+  await agents[0].nextFrame();
+  await agents[0].send({ kind: 'fsListResult', payload: { entries: [] } });
+  assert.deepEqual(await listing, []);
+
+  const changes: string[] = [];
+  const watch = source.watch('/example', (kind) => changes.push(kind));
+  await Promise.resolve();
+  await agents[1].nextFrame();
+  await agents[1].send({ kind: 'fsListResult', payload: {
+    entries: [{ name: 'example.md', isDirectory: false }],
+  } });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(changes, ['unknown']);
+  watch.dispose();
+});
+
 test('an unrecognized change kind normalizes to "unknown"', async () => {
   const { source, agents } = setup();
   const changes: string[] = [];

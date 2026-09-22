@@ -128,6 +128,8 @@ async function loadXtermModules() {
 }
 
 export interface TerminalOptions {
+  /** Prompt paths belong to another device; leave ~ for that device to expand. */
+  remotePathContext?: boolean;
   shellType?: string;
   shellArgs?: string[];
   cwd?: string;
@@ -2204,7 +2206,7 @@ export class TerminalInstance {
       return;
     }
 
-    const gitBashCwd = extractGitBashPromptCwd(cleanData, getHomeDir());
+    const gitBashCwd = extractGitBashPromptCwd(cleanData, this.options.remotePathContext ? '' : getHomeDir());
     if (gitBashCwd) {
       this.currentCwd = gitBashCwd;
       debugLog('[Terminal CWD] Git Bash prompt matched:', gitBashCwd);
@@ -2276,7 +2278,7 @@ export class TerminalInstance {
       return extractCwdFromPromptLines(
         cursorLine,
         previousLine,
-        getHomeDir()
+        this.options.remotePathContext ? '' : getHomeDir()
       );
     } catch (error) {
       debugWarn('[Terminal CWD] readCwdFromScreen failed:', error);
@@ -2543,4 +2545,3 @@ export class TerminalInstance {
 function normalizeReplayOutput(value: string): string {
   return normalizeOutputForReplay(value);
 }
-
