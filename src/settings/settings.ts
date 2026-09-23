@@ -119,6 +119,7 @@ export interface TerminalSettings {
   presetScripts: PresetScript[];
 
   /** Device-owned shortcut groups; runtime history remains in memory. */
+  feedbackUrl: string;
   deviceShortcutGroups: import('../services/terminal/shortcutGroupStore.ts').ShortcutGroup[];
 
   /** Delay used when replay cannot observe a step-specific completion signal. */
@@ -445,6 +446,7 @@ export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
   pairedDevices: [],
   controllerIdentitySeed: null,
   presetScripts: [...DEFAULT_PRESET_SCRIPTS],
+  feedbackUrl: '',
   deviceShortcutGroups: [],
   shortcutReplayDelayMs: 160,
   hideUnavailableAiLaunchers: false,

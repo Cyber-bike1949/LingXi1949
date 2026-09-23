@@ -1,3 +1,5 @@
+import { FileDeleteModal } from './fileDeleteModal';
+import { availableShortcutGroups } from '../../services/terminal/builtinShortcutGroups';
 import type { WorkspaceLeaf } from 'obsidian';
 import { FileSystemAdapter, ItemView, Menu, Notice, TFile, TFolder, setIcon } from 'obsidian';
 import { shell, webUtils } from 'electron';
@@ -188,7 +190,7 @@ export class TerminalView extends ItemView {
       if (latestGroup && this.terminalInstance) {
         menu.addItem((item) => item.setTitle(t('home.runShortcutGroup', { name: latestGroup.name })).setIcon('play').onClick(() => {
           void plugin.runShortcutGroupOnTerminal(this.terminalInstance!, latestGroup)
-            .then((runId) => this.showShortcutReplay(runId))
+            .then((runId) => { if (runId) this.showShortcutReplay(runId); })
             .catch((error: unknown) => {
               new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed'));
             });
@@ -197,7 +199,7 @@ export class TerminalView extends ItemView {
       for (const group of deviceGroups.slice(1)) {
         menu.addItem((item) => item.setTitle(t('home.runShortcutGroup', { name: group.name })).setIcon('play').onClick(() => {
           void plugin.runShortcutGroupOnTerminal(this.terminalInstance!, group)
-            .then((runId) => this.showShortcutReplay(runId))
+            .then((runId) => { if (runId) this.showShortcutReplay(runId); })
             .catch((error: unknown) => new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed')));
         }));
       }
@@ -1096,7 +1098,13 @@ export class TerminalView extends ItemView {
     if (nodeId && connections) {
       return connections.createDirectoryTreeSource(nodeId);
     }
-    return new LocalDirectoryTreeSource(this.fs);
+    return new LocalDirectoryTreeSource(this.fs, async request => {
+      const plugin = this.getTerminalPlugin();
+      if (!plugin) throw new Error('PLUGIN_UNAVAILABLE');
+      const adapter = this.app.vault.adapter;
+      const vaultRoot = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : undefined;
+      return (await plugin.getServerManager()).operateFile(request, vaultRoot);
+    });
   }
 
   private openDirectoryTree(): void {
@@ -1108,6 +1116,7 @@ export class TerminalView extends ItemView {
         this.buildDirectoryTreeSource(),
         this.buildDirectoryTreePathApi(this.getRemoteNodeId() !== null),
         {
+          confirmDelete: (path, type) => FileDeleteModal.confirm(this.app, path, type),
           onActivateDirectory: (path) => this.activateDirectoryFromTree(path),
           onActivateFile: (path) => this.activateFileFromTree(path),
           onDropToPath: (dataTransfer, targetPath) => void this.handleDirectoryTreeDrop(dataTransfer, targetPath),
@@ -1387,9 +1396,7 @@ export class TerminalView extends ItemView {
     const terminal = this.terminalInstance;
     if (!plugin || !terminal) return;
     const deviceKey = this.getRemoteNodeId() ?? 'local';
-    const groups = plugin.settings.deviceShortcutGroups
-      .filter((group) => group.deviceKey === deviceKey)
-      .sort((a, b) => b.creationOrder - a.creationOrder);
+    const groups = availableShortcutGroups(plugin.settings.deviceShortcutGroups, deviceKey, t('release21.install'));
     if (groups.length === 0) return;
 
     const shortcuts = toolbar.createDiv('terminal-toolbar-shortcuts');
@@ -1431,7 +1438,7 @@ export class TerminalView extends ItemView {
     const plugin = this.getTerminalPlugin();
     if (!plugin) return;
     void plugin.runShortcutGroupOnTerminal(terminal, group)
-      .then((runId) => this.showShortcutReplay(runId))
+      .then((runId) => { if (runId) this.showShortcutReplay(runId); })
       .catch((error: unknown) => new Notice(error instanceof Error ? error.message : t('home.shortcutGroupRunFailed')));
   }
 
@@ -2239,6 +2246,7 @@ export class TerminalView extends ItemView {
     activateTerminalView: () => Promise<void>;
     reconnectTerminalView: (terminalView: TerminalView) => Promise<void>;
     isRemoteTerminal: (terminal: TerminalInstance) => boolean;
+    getServerManager: () => Promise<import('../../services/server/serverManager').ServerManager>;
     getRemoteNodeId: (terminal: TerminalInstance) => string | null;
     getDeviceConnectionManager: () => DeviceConnectionManager;
     toggleAlwaysOnTopTerminal: (terminalView: TerminalView) => Promise<void>;
@@ -2268,6 +2276,7 @@ export class TerminalView extends ItemView {
     activateTerminalView: () => Promise<void>;
     reconnectTerminalView: (terminalView: TerminalView) => Promise<void>;
     isRemoteTerminal: (terminal: TerminalInstance) => boolean;
+    getServerManager: () => Promise<import('../../services/server/serverManager').ServerManager>;
     getRemoteNodeId: (terminal: TerminalInstance) => string | null;
     getDeviceConnectionManager: () => DeviceConnectionManager;
     toggleAlwaysOnTopTerminal: (terminalView: TerminalView) => Promise<void>;
@@ -2290,6 +2299,7 @@ export class TerminalView extends ItemView {
       activateTerminalView?: unknown;
       reconnectTerminalView?: unknown;
       isRemoteTerminal?: unknown;
+      getServerManager?: unknown;
       getRemoteNodeId?: unknown;
       getDeviceConnectionManager?: unknown;
       toggleAlwaysOnTopTerminal?: unknown;
@@ -2309,6 +2319,7 @@ export class TerminalView extends ItemView {
     return typeof candidate.activateTerminalView === 'function'
       && typeof candidate.reconnectTerminalView === 'function'
       && typeof candidate.isRemoteTerminal === 'function'
+      && typeof candidate.getServerManager === 'function'
       && typeof candidate.getRemoteNodeId === 'function'
       && typeof candidate.getDeviceConnectionManager === 'function'
       && typeof candidate.toggleAlwaysOnTopTerminal === 'function'

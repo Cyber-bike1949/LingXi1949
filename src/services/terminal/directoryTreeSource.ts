@@ -1,3 +1,4 @@
+import type { FileOperationRequest, FileOperationResponse } from './fileOperations.ts';
 /**
  * Local directory-tree data source (candidate doc "目录树与双向文件传输" §4.1/§4.7).
  *
@@ -27,6 +28,7 @@ export interface DirectorySnapshot {
 }
 
 export interface DirectoryTreeSource {
+  operate?(request: FileOperationRequest): Promise<FileOperationResponse>;
   /** Optional metadata capability; unsupported sources keep list/watch unchanged. */
   stat?(path: string): Promise<DirectoryMetadata>;
   /** Optional target-side commit barrier used by manual refresh. */
@@ -76,7 +78,10 @@ function compareEntries(a: DirectoryEntry, b: DirectoryEntry): number {
 export class LocalDirectoryTreeSource implements DirectoryTreeSource {
   private readonly fs: MinimalFsModule;
 
-  constructor(fs: MinimalFsModule) {
+  readonly operate?: (request: FileOperationRequest) => Promise<FileOperationResponse>;
+
+  constructor(fs: MinimalFsModule, operate?: (request: FileOperationRequest) => Promise<FileOperationResponse>) {
+    this.operate = operate;
     this.fs = fs;
   }
 

@@ -1,179 +1,127 @@
 #!/usr/bin/env bash
-#
-# Installs lingxi1949 as a user service on Ubuntu (doc 7.4).
-#
-# One-liner remote install (downloads the latest release, no local checkout
-# needed):
-#
-#   curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh | bash
-#
-# Or, from a local checkout/build, pass the binary path explicitly:
-#
-#   ./agent/packaging/install-linux.sh /path/to/lingxi1949
-#
-# Everything except one step runs unprivileged. `loginctl enable-linger` needs
-# root or a polkit prompt on most distributions - that is the documented
-# one-off exception in doc 7.4: install with sudo once, run as an ordinary user
-# forever after. Without lingering the agent is killed when the SSH session
-# ends, which is exactly what MVP completion item 2 forbids.
-
+# Install the pinned Agent for a dedicated ordinary user.
 set -euo pipefail
-
-BIN_DIR="${HOME}/.local/bin"
-UNIT_DIR="${HOME}/.config/systemd/user"
-UNIT_NAME="lingxi1949.service"
-# v1.9 R-01: the pre-rename unit name, retired below before the new one is
-# installed so the two never run at once fighting over the same identity file.
-OLD_UNIT_NAME="termesh-agent.service"
+AGENT_VERSION="2.1.0"
 RELEASE_REPO="Cyber-bike1949/LingXi1949"
-RELEASE_ASSET="lingxi1949-linux-x64"
-# Only set when this script is run from a real file (a local checkout), not
-# piped through `curl | bash`, where BASH_SOURCE[0] is empty - falling back to
-# the current directory there would risk matching an unrelated binary that
-# happens to sit at a candidate path below.
-SOURCE_DIR=""
-if [[ -n "${BASH_SOURCE[0]:-}" ]]; then
-  SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd || true)"
+TARGET_USER="monkey"
+SEEN_USER=0
+STAGE="arguments"
+TMP_INSTALL=""
+CREATED_USER=0
+ACTIVATING=0
+HAD_BINARY=0
+HAD_UNIT=0
+WAS_ACTIVE=0
+say() { printf '%s\n' "$*"; }
+die() { printf 'Install failed (%s): %s\n' "$STAGE" "$*" >&2; exit 1; }
+usage() { printf 'Usage: install-linux.sh [--user NAME] [--help]\nDefault user: monkey. Re-running upgrades the same user and preserves identity.\n'; }
+while (($#)); do
+  case "$1" in
+    --help) usage; exit 0 ;;
+    --user) [[ $# -ge 2 && $SEEN_USER -eq 0 ]] || die '--user requires one value and may only occur once'; TARGET_USER="$2"; SEEN_USER=1; shift 2 ;;
+    *) die "unknown argument: $1" ;;
+  esac
+done
+[[ "$TARGET_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "$TARGET_USER" != root ]] || die 'invalid ordinary username'
+STAGE="preflight"
+[[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || die 'this release only provides the Linux x86_64 Agent'
+[[ -d /run/systemd/system ]] || die 'systemd is required'
+for cmd in curl sha256sum getent useradd runuser loginctl systemctl flock install mktemp; do command -v "$cmd" >/dev/null || die "missing required command: $cmd"; done
+[[ -r /etc/os-release ]] || die 'cannot identify distribution'
+# Read only operating-system metadata, never user-supplied shell configuration.
+. /etc/os-release
+case "${ID:-}:${VERSION_ID:-}" in ubuntu:22.04|ubuntu:24.04|debian:12) ;; *) die "distribution not in the release candidate matrix: ${ID:-unknown} ${VERSION_ID:-unknown}" ;; esac
+if [[ $(id -u) -ne 0 ]]; then
+  [[ -f "${BASH_SOURCE[0]:-}" ]] || die 'download the script to a file and run sudo bash <file> [--user NAME]'
+  exec sudo bash "${BASH_SOURCE[0]}" --user "$TARGET_USER"
 fi
-
-say() { printf '\033[1m==>\033[0m %s\n' "$1"; }
-die() { printf '\033[31merror:\033[0m %s\n' "$1" >&2; exit 1; }
-
-[[ "$(id -u)" -ne 0 ]] || die "run this as the ordinary user that will own the agent, not as root"
-
-TMP_DOWNLOAD_DIR=""
-cleanup() { [[ -z "${TMP_DOWNLOAD_DIR}" ]] || rm -rf "${TMP_DOWNLOAD_DIR}"; }
+umask 077
+exec 9>"/run/lock/lingxi1949-install-${TARGET_USER}.lock"
+flock -n 9 || die 'another installation is running for this user'
+STAGE="user"
+if ! getent passwd "$TARGET_USER" >/dev/null; then useradd --create-home --shell /bin/bash "$TARGET_USER"; CREATED_USER=1; fi
+PASSWD_ENTRY="$(getent passwd "$TARGET_USER")"
+IFS=: read -r _ _ TARGET_UID _ _ TARGET_HOME TARGET_SHELL <<< "$PASSWD_ENTRY"
+[[ "$TARGET_UID" -ne 0 && "$TARGET_UID" -ge 1000 ]] || die 'refusing a root or system account'
+[[ "$TARGET_HOME" == /* && "$TARGET_HOME" != / && -d "$TARGET_HOME" && ! -L "$TARGET_HOME" ]] || die 'home must be an existing non-symlink absolute directory'
+[[ "$(stat -c %u "$TARGET_HOME")" == "$TARGET_UID" ]] || die 'home ownership does not match the target user'
+[[ "$TARGET_SHELL" != */nologin && "$TARGET_SHELL" != */false ]] || die 'target account has no usable shell'
+BIN_DIR="${TARGET_HOME}/.local/bin"
+UNIT_DIR="${TARGET_HOME}/.config/systemd/user"
+UNIT_NAME="lingxi1949.service"
+TMP_INSTALL="$(mktemp -d)"
+as_user() { runuser -u "$TARGET_USER" -- env HOME="$TARGET_HOME" XDG_RUNTIME_DIR="/run/user/${TARGET_UID}" DBUS_SESSION_BUS_ADDRESS="unix:path=/run/user/${TARGET_UID}/bus" "$@"; }
+cleanup() {
+  result=$?
+  if (( result != 0 )); then
+    printf 'Failed at stage: %s\n' "$STAGE" >&2
+    if (( ACTIVATING )); then
+      as_user systemctl --user stop "$UNIT_NAME" 2>/dev/null || true
+      if (( HAD_BINARY )); then install -o "$TARGET_UID" -m 0755 "$TMP_INSTALL/previous-binary" "$BIN_DIR/lingxi1949"; else rm -f "$BIN_DIR/lingxi1949"; fi
+      if (( HAD_UNIT )); then install -o "$TARGET_UID" -m 0644 "$TMP_INSTALL/previous-unit" "$UNIT_DIR/$UNIT_NAME"; else rm -f "$UNIT_DIR/$UNIT_NAME"; fi
+      as_user systemctl --user daemon-reload || true
+      if (( WAS_ACTIVE )); then as_user systemctl --user start "$UNIT_NAME" || true; fi
+    fi
+    (( CREATED_USER == 0 )) || printf 'Created account %s remains. Retry with --user %s; do not delete its home without checking its contents.\n' "$TARGET_USER" "$TARGET_USER" >&2
+    printf 'Retry the same installer. Inspect: sudo -u %s XDG_RUNTIME_DIR=/run/user/%s systemctl --user status %s\n' "$TARGET_USER" "$TARGET_UID" "$UNIT_NAME" >&2
+  fi
+  [[ -z "$TMP_INSTALL" ]] || rm -rf -- "$TMP_INSTALL"
+}
 trap cleanup EXIT
-
-BINARY="${1:-}"
-if [[ -z "${BINARY}" && -n "${SOURCE_DIR}" ]]; then
-  for candidate in \
-    "${SOURCE_DIR}/../target/release/lingxi1949" \
-    "${SOURCE_DIR}/../target/debug/lingxi1949" \
-    "${SOURCE_DIR}/lingxi1949"; do
-    [[ -x "${candidate}" ]] && BINARY="${candidate}" && break
-  done
-fi
-
-if [[ -z "${BINARY}" ]]; then
-  command -v curl >/dev/null || die "no local lingxi1949 binary found and curl is not installed to fetch one; pass a binary path as the first argument"
-  ARCH="$(uname -m)"
-  [[ "${ARCH}" == "x86_64" ]] || die "no prebuilt agent for architecture '${ARCH}' (only x86_64 Linux builds are published); pass a local binary path as the first argument"
-
-  say "no local binary found; downloading the latest release from GitHub"
-  TMP_DOWNLOAD_DIR="$(mktemp -d)"
-  RELEASE_BASE="https://github.com/${RELEASE_REPO}/releases/latest/download"
-  curl -fsSL "${RELEASE_BASE}/${RELEASE_ASSET}" -o "${TMP_DOWNLOAD_DIR}/${RELEASE_ASSET}" \
-    || die "download failed: ${RELEASE_BASE}/${RELEASE_ASSET}"
-  curl -fsSL "${RELEASE_BASE}/${RELEASE_ASSET}.sha256" -o "${TMP_DOWNLOAD_DIR}/${RELEASE_ASSET}.sha256" \
-    || die "download failed: ${RELEASE_BASE}/${RELEASE_ASSET}.sha256"
-  (cd "${TMP_DOWNLOAD_DIR}" && sha256sum -c "${RELEASE_ASSET}.sha256") \
-    || die "checksum verification failed for the downloaded binary"
-  chmod +x "${TMP_DOWNLOAD_DIR}/${RELEASE_ASSET}"
-  BINARY="${TMP_DOWNLOAD_DIR}/${RELEASE_ASSET}"
-fi
-[[ -n "${BINARY}" && -x "${BINARY}" ]] || die "pass the path to the lingxi1949 binary as the first argument"
-
-say "installing the binary into ${BIN_DIR}"
-mkdir -p "${BIN_DIR}"
-install -m 0755 "${BINARY}" "${BIN_DIR}/lingxi1949"
-# v1.9 R-01: leftover pre-rename binary would otherwise keep shadowing PATH
-# lookups or confuse `command -v` in older shell hints; safe to remove now
-# that the new binary is in place.
-rm -f "${BIN_DIR}/termesh-agent"
-
-say "installing the user unit into ${UNIT_DIR}"
-mkdir -p "${UNIT_DIR}"
-if [[ -n "${SOURCE_DIR}" && -f "${SOURCE_DIR}/${UNIT_NAME}" ]]; then
-  install -m 0644 "${SOURCE_DIR}/${UNIT_NAME}" "${UNIT_DIR}/${UNIT_NAME}"
-else
-  # curl | bash has no checkout to read the unit file from - embed it so the
-  # installer stays a single self-contained script.
-  UNIT_TMP="$(mktemp)"
-  trap 'rm -f "${UNIT_TMP}"; cleanup' EXIT
-  cat > "${UNIT_TMP}" <<'UNIT'
+STAGE="download"
+BASE="https://github.com/${RELEASE_REPO}/releases/download/${AGENT_VERSION}"
+ASSET="lingxi1949-linux-x64"
+curl --proto '=https' --tlsv1.2 -fsSL --retry 2 "$BASE/$ASSET" -o "$TMP_INSTALL/$ASSET"
+curl --proto '=https' --tlsv1.2 -fsSL --retry 2 "$BASE/$ASSET.sha256" -o "$TMP_INSTALL/checksum"
+EXPECTED="$(awk 'NR==1 {print $1}' "$TMP_INSTALL/checksum")"
+[[ "$EXPECTED" =~ ^[0-9a-fA-F]{64}$ ]] || die 'invalid checksum file'
+ACTUAL="$(sha256sum "$TMP_INSTALL/$ASSET")"
+[[ "${ACTUAL%% *}" == "${EXPECTED,,}" ]] || die 'binary checksum mismatch'
+STAGE="stage"
+# Resolve directories as the target user; root must not follow user-controlled symlinks for writes.
+as_user mkdir -p "$BIN_DIR" "$UNIT_DIR"
+for target in "$TARGET_HOME/.local" "$BIN_DIR" "$TARGET_HOME/.config" "$TARGET_HOME/.config/systemd" "$UNIT_DIR"; do [[ ! -L "$target" ]] || die 'installation directories must not be symlinks'; done
+as_user test -w "$BIN_DIR" || die 'binary directory is not writable'
+# Give only the verified asset to the target account before activation.
+chmod 0755 "$TMP_INSTALL"
+chmod 0644 "$TMP_INSTALL/$ASSET"
+as_user install -m 0755 "$TMP_INSTALL/$ASSET" "$BIN_DIR/.lingxi1949-next"
+as_user "$BIN_DIR/.lingxi1949-next" --version >/dev/null
+STAGE="user-manager"
+loginctl enable-linger "$TARGET_USER"
+systemctl start "user@${TARGET_UID}.service"
+[[ -S "/run/user/${TARGET_UID}/bus" ]] || die 'systemd user bus unavailable'
+[[ ! -f "$BIN_DIR/lingxi1949" ]] || { cp "$BIN_DIR/lingxi1949" "$TMP_INSTALL/previous-binary"; HAD_BINARY=1; }
+[[ ! -f "$UNIT_DIR/$UNIT_NAME" ]] || { cp "$UNIT_DIR/$UNIT_NAME" "$TMP_INSTALL/previous-unit"; HAD_UNIT=1; }
+as_user systemctl --user is-active --quiet "$UNIT_NAME" && WAS_ACTIVE=1 || true
+STAGE="activate"
+ACTIVATING=1
+as_user systemctl --user stop "$UNIT_NAME" 2>/dev/null || true
+as_user systemctl --user disable --now termesh-agent.service 2>/dev/null || true
+as_user mv -f "$BIN_DIR/.lingxi1949-next" "$BIN_DIR/lingxi1949"
+cat > "$TMP_INSTALL/unit" <<'UNIT'
 [Unit]
 Description=LingXi1949 remote agent
-Documentation=https://github.com/Cyber-bike1949/LingXi1949
 After=network-online.target
 Wants=network-online.target
-
 [Service]
 Type=simple
 ExecStart=%h/.local/bin/lingxi1949 run
-Restart=always
+Restart=on-failure
 RestartSec=5
-Environment=RUST_LOG=lingxi1949=info
 NoNewPrivileges=true
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=lingxi1949
-
 [Install]
 WantedBy=default.target
 UNIT
-  install -m 0644 "${UNIT_TMP}" "${UNIT_DIR}/${UNIT_NAME}"
-fi
-
-say "enabling lingering so the agent survives logout"
-if loginctl show-user "$(id -un)" --property=Linger 2>/dev/null | grep -q 'Linger=yes'; then
-  echo "    already enabled"
-else
-  echo "    this is the one step that needs elevation (doc 7.4)"
-  sudo loginctl enable-linger "$(id -un)"
-fi
-
-USER_ID="$(id -u)"
-export XDG_RUNTIME_DIR="/run/user/${USER_ID}"
-export DBUS_SESSION_BUS_ADDRESS="unix:path=${XDG_RUNTIME_DIR}/bus"
-if [[ ! -S "${XDG_RUNTIME_DIR}/bus" ]]; then
-  say "starting the systemd user manager"
-  sudo systemctl start "user@${USER_ID}.service"
-fi
-[[ -S "${XDG_RUNTIME_DIR}/bus" ]] \
-  || die "the systemd user bus was not created at ${XDG_RUNTIME_DIR}/bus"
-
-# v1.9 R-01-3/§5.4: retire the pre-rename unit before the new one is ever
-# started, so the two can never run at once and race over the same
-# `receiveRoot` / identity file. This runs before the new unit is enabled,
-# not after, on purpose.
-if systemctl --user list-unit-files "${OLD_UNIT_NAME}" 2>/dev/null | grep -q "${OLD_UNIT_NAME}"; then
-  say "found the old ${OLD_UNIT_NAME} unit from a pre-rename install; retiring it"
-  systemctl --user stop "${OLD_UNIT_NAME}" 2>/dev/null || true
-  systemctl --user disable "${OLD_UNIT_NAME}" 2>/dev/null || true
-  rm -f "${UNIT_DIR}/${OLD_UNIT_NAME}"
-fi
-
-say "reloading the user manager"
-systemctl --user daemon-reload
-
-say "starting the service"
-systemctl --user enable --now "${UNIT_NAME}"
-
-say "waiting for the agent to publish a connection code"
-CODE_LINE=""
-for _ in $(seq 1 20); do
-  LINE="$("${BIN_DIR}/lingxi1949" status 2>/dev/null | grep '^code' || true)"
-  if [[ -n "${LINE}" && "${LINE}" != *"none"* && "${LINE}" != *"unavailable"* ]]; then
-    CODE_LINE="${LINE}"
-    break
-  fi
-  sleep 1
-done
-
-echo
-echo "Installed and running as $(id -un). Nothing here runs as root after installation."
-echo
-if [[ -n "${CODE_LINE}" ]]; then
-  echo "  ${CODE_LINE}"
-  echo
-  echo 'Paste that code into LingXi1949'"'"'s "添加设备" in Obsidian.'
-else
-  echo "Couldn't read the connection code yet (still reaching a relay). Check it with:"
-  echo
-  echo "  lingxi1949 status"
-fi
-echo
-echo "Useful commands:"
-echo "  lingxi1949 status                             show the connection code again"
-echo "  journalctl --user -u ${UNIT_NAME} -f        tail the agent's logs"
+chmod 0644 "$TMP_INSTALL/unit"
+as_user install -m 0644 "$TMP_INSTALL/unit" "$UNIT_DIR/$UNIT_NAME"
+as_user systemctl --user daemon-reload
+as_user systemctl --user enable --now "$UNIT_NAME"
+STAGE="verify"
+sleep 2
+as_user systemctl --user is-active --quiet "$UNIT_NAME" || die 'service did not remain active'
+PID="$(as_user systemctl --user show "$UNIT_NAME" --property MainPID --value)"
+[[ "$PID" =~ ^[1-9][0-9]*$ && "$(stat -c %u "/proc/$PID")" == "$TARGET_UID" ]] || die 'service identity verification failed'
+ACTIVATING=0
+say "Agent installed for $TARGET_USER at $BIN_DIR/lingxi1949. Service: $UNIT_NAME"
+as_user "$BIN_DIR/lingxi1949" status || say 'Service started; network connection is not ready. Run lingxi1949 status as the target user later.'

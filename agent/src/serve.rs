@@ -65,6 +65,7 @@ pub struct ServeOptions {
     /// names a `sessionId` with no known cwd, or none at all.
     pub receive_root: std::path::PathBuf,
     transfer_state: Arc<TransferCommitState>,
+    pub file_operations: Arc<lingxi_fs_operations::Engine>,
 }
 
 impl ServeOptions {
@@ -76,6 +77,7 @@ impl ServeOptions {
         Self {
             shell,
             max_concurrent_sessions,
+            file_operations: Arc::new(lingxi_fs_operations::Engine::for_user(vec![receive_root.clone()])),
             receive_root,
             transfer_state: Arc::new(TransferCommitState::new()),
         }
@@ -280,6 +282,13 @@ async fn serve_bi_stream(
         Ok(Ok(Some(Frame::Open(payload)))) => {
             serve_terminal_session(payload, send, recv, decoder, table, options).await;
         }
+        Ok(Ok(Some(Frame::FsOperation(payload)))) => {
+            let engine = options.file_operations.clone();
+            if let Ok(result) = tokio::task::spawn_blocking(move || engine.execute(payload)).await {
+                let _ = write_frame(&mut send, &Frame::FsOperationResult(result)).await;
+                let _ = send.finish();
+            }
+        }
         Ok(Ok(Some(Frame::FsList(payload)))) => {
             serve_fs_stream(payload, send, recv, decoder, options).await;
         }
@@ -467,6 +476,7 @@ async fn serve_fs_stream(
         match fs_browse::list_directory_with_metadata(&path, metadata_version.is_some()) {
             Ok(entries) => {
                 let frame = Frame::FsListResult(FsListResultPayload {
+                    mutation_version: Some(1),
                     entries: entries.clone(),
                     metadata_version,
                     snapshot_sequence: metadata_version

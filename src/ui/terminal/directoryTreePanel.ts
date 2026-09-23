@@ -1,3 +1,4 @@
+import { relativeOperationPath, type FileOperationResponse } from '../../services/terminal/fileOperations';
 /**
  * Directory tree panel (candidate doc "目录树与双向文件传输", phase 1 / local).
  *
@@ -40,6 +41,7 @@ import { t } from '../../i18n';
 export type DockSide = 'left' | 'right';
 
 export interface DirectoryTreePanelCallbacks {
+  confirmDelete?(path: string, type: string): Promise<boolean>;
   /** Double-click on a directory node: caller is expected to `cd` the terminal there. */
   onActivateDirectory(path: string): void;
   /**
@@ -81,6 +83,10 @@ export class DirectoryTreePanel {
   private readonly resizerEl: HTMLElement;
 
   private rootPath: string | null = null;
+  private writable = false;
+  private operationPending = false;
+  private dragSource: {path:string; token:string; root:string} | null = null;
+  private rootGeneration = 0;
   private dockSide: DockSide;
   private width = DEFAULT_WIDTH_PX;
 
@@ -305,7 +311,13 @@ export class DirectoryTreePanel {
 
   async setRootPath(rootPath: string, options: { keepExpanded?: boolean } = {}): Promise<void> {
     this.clearMtimeTooltip();
+    const generation = ++this.rootGeneration;
+    this.writable = false;
+    this.dragSource = null;
     this.rootPath = rootPath;
+    void this.source.operate?.({action:'capabilities',root:rootPath}).then(result => {
+      if (generation === this.rootGeneration && !this.destroyed) this.writable = result.status === 'success';
+    }).catch(() => { /* Unsupported peers remain read-only. */ });
     this.pathInputEl.value = rootPath;
     this.pathInputEl.setAttribute('title', rootPath);
 
@@ -420,6 +432,9 @@ export class DirectoryTreePanel {
     });
     row.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') this.clearMtimeTooltip();
+      if ((event.key === 'Delete' || process.platform === 'darwin' && event.key === 'Backspace') && event.target === row) {
+        event.preventDefault();event.stopPropagation();void this.deleteEntry(fullPath);
+      }
     });
 
     // Draggable out to Obsidian's file explorer (see this file's top doc
@@ -436,12 +451,18 @@ export class DirectoryTreePanel {
         nodeId: this.remoteNodeId,
       };
       event.dataTransfer.setData(DIRECTORY_TREE_DRAG_MIME, JSON.stringify(payload));
-      event.dataTransfer.effectAllowed = 'copy';
+      if (this.rootPath && this.writable) {
+        this.dragSource={path:fullPath,root:this.rootPath,token:crypto.randomUUID()};
+        event.dataTransfer.setData('application/x-lingxi-tree-move',this.dragSource.token);
+      }
+      event.dataTransfer.effectAllowed = 'copyMove';
       if (!entry.isDirectory && this.modificationStore) {
         const version = this.modificationStore.version(this.deviceKey, fullPath);
         if (version !== null) this.modificationStore.acknowledge(this.deviceKey, fullPath, version);
       }
     });
+
+    row.addEventListener('dragend', () => {this.dragSource=null;});
 
     row.addEventListener('click', () => {
       if (entry.isDirectory || !this.modificationStore) return;
@@ -453,13 +474,26 @@ export class DirectoryTreePanel {
       // A row we ourselves made draggable passing back over another row in
       // the same tree isn't a vault-drop. Let it remain a no-op instead of
       // flashing the row as a target.
-      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
+      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) {
+        event.preventDefault();event.stopPropagation();
+        if (this.dragSource && this.writable && !this.operationPending) {event.dataTransfer.dropEffect='move';row.addClass('is-drop-target');}
+        else event.dataTransfer.dropEffect='none';
+        return;
+      }
       event.preventDefault();
       row.addClass('is-drop-target');
     });
     row.addEventListener('dragleave', () => row.removeClass('is-drop-target'));
     row.addEventListener('drop', (event) => {
-      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) return;
+      if (event.dataTransfer?.types.includes(DIRECTORY_TREE_DRAG_MIME)) {
+        event.preventDefault();event.stopPropagation();row.removeClass('is-drop-target');
+        const drag=this.dragSource;
+        if (drag && event.dataTransfer.getData('application/x-lingxi-tree-move')===drag.token && drag.root===this.rootPath) {
+          void this.moveEntry(drag.path,resolveDirectoryTreeDropTarget(parentPath,fullPath,entry.isDirectory));
+        }
+        this.dragSource=null;
+        return;
+      }
       event.preventDefault();
       event.stopPropagation();
       row.removeClass('is-drop-target');
@@ -483,7 +517,52 @@ export class DirectoryTreePanel {
         .setIcon('download')
         .onClick(() => this.callbacks.onCopyToVault(path, isDirectory, name));
     });
+    menu.addItem(item => item.setTitle(t('common.delete')).setIcon('trash-2').setDisabled(!this.writable || this.operationPending).onClick(() => this.deleteEntry(path)));
+    if (!this.writable) menu.addItem(item => item.setTitle(t('release21.upgradeRequired')).setDisabled(true));
     menu.showAtMouseEvent(event);
+  }
+
+  private showOperationResult(result: FileOperationResponse): void {
+    if (result.status === 'success') return;
+    new Notice(result.status === 'partial' ? t('release21.partialDelete') : result.status === 'unknown' ? t('release21.unknownResult') : t('release21.operationFailed',{code:result.code ?? 'UNKNOWN'}));
+  }
+
+  private async deleteEntry(path: string): Promise<void> {
+    const root=this.rootPath;
+    if (!root || !this.source.operate || !this.writable || this.operationPending || !this.callbacks.confirmDelete) return;
+    this.operationPending=true;
+    const rows=Array.from(this.treeRootEl.querySelectorAll<HTMLElement>('.directory-tree-panel__row'));
+    const index=rows.findIndex(row=>row.dataset.path===path);
+    const parentPath=this.pathApi.dirname(path);
+    const siblings=rows.filter(row=>row.dataset.path && this.pathApi.dirname(row.dataset.path)===parentPath);
+    const siblingIndex=siblings.findIndex(row=>row.dataset.path===path);
+    const nextPath=siblings[siblingIndex+1]?.dataset.path ?? siblings[siblingIndex-1]?.dataset.path ?? parentPath;
+    try {
+      const relative=relativeOperationPath(root,path);
+      const inspected=await this.source.operate({action:'inspect',root,path:relative});
+      if(inspected.status!=='success'||!inspected.identity){this.showOperationResult(inspected);return;}
+      if(!await this.callbacks.confirmDelete(path,inspected.entryType ?? 'file')||root!==this.rootPath)return;
+      const result=await this.source.operate({action:'delete',root,path:relative,expectedIdentity:inspected.identity,operationId:crypto.randomUUID()});
+      this.showOperationResult(result);
+      if(this.rootPath===root){await this.setRootPath(root,{keepExpanded:true});const current=Array.from(this.treeRootEl.querySelectorAll<HTMLElement>('.directory-tree-panel__row'));(current.find(row=>row.dataset.path===nextPath) ?? current[Math.max(0,index-1)])?.focus();}
+    }catch{new Notice(t('release21.unknownResult'));}
+    finally{this.operationPending=false;}
+  }
+
+  private async moveEntry(path:string,target:string):Promise<void>{
+    const root=this.rootPath;
+    if(!root||!this.writable||!this.source.operate||this.operationPending)return;
+    this.operationPending=true;
+    try{
+      const relative=relativeOperationPath(root,path),destination=relativeOperationPath(root,target);
+      const inspected=await this.source.operate({action:'inspect',root,path:relative});
+      if(inspected.status!=='success'||!inspected.identity){this.showOperationResult(inspected);return;}
+      if(relative===destination||destination.startsWith(relative+'/')){new Notice(t('release21.operationFailed',{code:'INVALID_TARGET'}));return;}
+      const result=await this.source.operate({action:'move',root,path:relative,target:destination,expectedIdentity:inspected.identity,operationId:crypto.randomUUID()});
+      this.showOperationResult(result);
+      if(this.rootPath===root){await this.setRootPath(root,{keepExpanded:true});Array.from(this.treeRootEl.querySelectorAll<HTMLElement>('.directory-tree-panel__row')).find(row=>row.dataset.path===result.newPath)?.focus();}
+    }catch{new Notice(t('release21.unknownResult'));}
+    finally{this.operationPending=false;}
   }
 
   private scheduleMtimeTooltip(row: HTMLElement, path: string): void {

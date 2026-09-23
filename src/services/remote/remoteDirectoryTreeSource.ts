@@ -1,3 +1,4 @@
+import type { FileOperationRequest, FileOperationResponse } from '../terminal/fileOperations.ts';
 /**
  * v2.0 remote directory-tree data source (candidate doc "目录树与双向文件传输",
  * phase 2A): `DirectoryTreeSource` implemented over `fsList`/`fsListResult`/
@@ -70,6 +71,28 @@ export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
       throw new RangeError('requestTimeoutMs must be positive');
     }
     this.requestTimeoutMs = requestTimeoutMs;
+  }
+
+  async operate(request: FileOperationRequest): Promise<FileOperationResponse> {
+    const listing = await this.requestList({path:request.root});
+    if (listing.mutationVersion !== 1) return {status:'failed',code:'UNSUPPORTED',mutationVersion:1};
+    let stream: ByteStream | undefined;
+    let expired = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<FileOperationResponse>(resolve => {
+      timer = setTimeout(() => {expired=true;stream?.finishWrite();resolve({status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1});},this.requestTimeoutMs);
+    });
+    const execute = async (): Promise<FileOperationResponse> => {
+      stream = await this.openStream();
+      if (expired) {stream.finishWrite();return {status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1};}
+      await stream.write(encodeTerminalStreamFrame({kind:'fsOperation',payload:request}));
+      const result = await readOneFrame(stream,new TerminalStreamFrameDecoder());
+      if (result.kind !== 'fsOperationResult') throw new Error('INVALID_FILE_RESULT');
+      return result.payload;
+    };
+    try {return await Promise.race([execute(),timeout]);}
+    catch {return {status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1};}
+    finally {clearTimeout(timer);stream?.finishWrite();}
   }
 
   async list(path: string): Promise<DirectoryEntry[]> {

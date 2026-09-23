@@ -1,3 +1,4 @@
+import { parseFileOperationResponse, type FileOperationRequest, type FileOperationResponse } from '../terminal/fileOperations.ts';
 /**
  * `termy/terminal/1` stream frame codec (implementation doc §8.2).
  *
@@ -75,6 +76,7 @@ export interface FsListPayload {
 }
 
 export interface FsListResultPayload {
+  mutationVersion?: number;
   entries: FsEntry[];
   metadataVersion?: number;
   snapshotSequence?: number;
@@ -173,6 +175,8 @@ export interface TransferPullManifestPayload {
 }
 
 export type TerminalStreamFrame =
+  | { kind: 'fsOperation'; payload: FileOperationRequest }
+  | { kind: 'fsOperationResult'; payload: FileOperationResponse }
   | { kind: 'open'; payload: OpenPayload }
   | { kind: 'opened'; payload: OpenedPayload }
   | { kind: 'error'; payload: ErrorPayload }
@@ -248,6 +252,8 @@ function kindByte(frame: TerminalStreamFrame): number {
       return KIND_OPENED;
     case 'error':
       return KIND_ERROR;
+    case 'fsOperation': return 0x13;
+    case 'fsOperationResult': return 0x14;
     case 'fsList':
       return KIND_FS_LIST;
     case 'fsListResult':
@@ -548,6 +554,18 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
       const raw = decodeJson(payload);
       return { kind: 'error', payload: { message: requireString(raw, 'message') } };
     }
+    case 0x13: {
+      const raw = decodeJson(payload);
+      const action = requireString(raw, 'action');
+      if (!['capabilities','inspect','delete','move','status'].includes(action)) throw new TerminalStreamFrameError('invalid file operation');
+      return {kind:'fsOperation',payload:{action:action as FileOperationRequest['action'],root:requireString(raw,'root'),
+        ...(typeof raw.path === 'string' ? {path:raw.path} : {}),
+        ...(typeof raw.target === 'string' ? {target:raw.target} : {}),
+        ...(typeof raw.expectedIdentity === 'string' ? {expectedIdentity:raw.expectedIdentity} : {}),
+        ...(typeof raw.operationId === 'string' ? {operationId:raw.operationId} : {}),
+      }};
+    }
+    case 0x14: return {kind:'fsOperationResult',payload:parseFileOperationResponse(decodeJson(payload))};
     case KIND_FS_LIST: {
       const raw = decodeJson(payload);
       return { kind: 'fsList', payload: { path: requireString(raw, 'path'), ...decodeMetadataVersion(raw) } };
@@ -563,6 +581,7 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
         kind: 'fsListResult',
         payload: {
           entries: decodeFsEntries(raw),
+          ...(raw.mutationVersion === 1 ? {mutationVersion:1} : {}),
           ...decodeMetadataVersion(raw),
           ...(typeof snapshotSequence === 'number' ? { snapshotSequence } : {}),
           ...(typeof raw.epoch === 'string' ? { epoch: raw.epoch } : {}),

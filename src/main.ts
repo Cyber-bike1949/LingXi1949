@@ -1,3 +1,4 @@
+import { BuiltinShortcutModal } from './ui/terminal/builtinShortcutModal';
 import type { View, WorkspaceLeaf } from 'obsidian';
 import { addIcon, FileSystemAdapter, MarkdownView, Modal, Notice, Plugin, TFile, normalizePath, requestUrl, setIcon, setTooltip } from 'obsidian';
 import * as nodeFs from 'fs';
@@ -1178,19 +1179,8 @@ export default class TerminalPlugin extends Plugin {
     const terminalService = await this.getTerminalService();
     const terminal = await this.createRemoteTerminalInstance(nodeId, null, terminalService);
     const view = await this.openPreparedTerminal(terminal, terminalService);
-    const runId = await this.shortcutReplayController.start(
-      group,
-      {
-        sessionId: terminal.id,
-        deviceKey: nodeId,
-        write: (step) => this.writeShortcutStep(terminal, step),
-        outputCursor: () => terminal.outputCursor(),
-        waitForOutputMatch: (match, cursor, timeoutMs) => terminal.waitForOutputMatch(match, cursor, timeoutMs),
-        addShellEventListener: (listener) => terminal.addShellEventListener(listener),
-      },
-      { inspect: () => Promise.resolve(true), observeCompletion: (step, replayTerminal, outputCursor) => this.observeShortcutStepCompletion(step, replayTerminal, outputCursor) },
-    );
-    view.showShortcutReplay(runId);
+    const runId = await this.runShortcutGroupOnTerminal(terminal, group);
+    if (runId) view.showShortcutReplay(runId);
   }
 
   async runShortcutGroupOnLocalDevice(group: ShortcutGroup): Promise<void> {
@@ -1200,10 +1190,17 @@ export default class TerminalPlugin extends Plugin {
     terminal.setTitle(buildDeviceTerminalTitle(t('home.localDevice'), null, t('terminal.defaultTitle')));
     const view = await this.openPreparedTerminal(terminal, terminalService);
     const runId = await this.runShortcutGroupOnTerminal(terminal, group);
-    view.showShortcutReplay(runId);
+    if (runId) view.showShortcutReplay(runId);
   }
 
   async runShortcutGroupOnTerminal(terminal: TerminalInstance, group: ShortcutGroup): Promise<string> {
+    if (group.id.startsWith('builtin:')) {
+      const selected = await BuiltinShortcutModal.choose(this.app, group, async copy => {
+        await this.saveShortcutGroups([...this.settings.deviceShortcutGroups, copy]);
+      });
+      if (!selected) return '';
+      group = selected;
+    }
     const deviceKey = this.remoteTerminalNodeIds.get(terminal) ?? 'local';
     if (group.deviceKey !== deviceKey) throw new Error('DEVICE_MISMATCH');
     const sessionId = terminal.getSessionId();

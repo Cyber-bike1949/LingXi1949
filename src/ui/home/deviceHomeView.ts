@@ -1,8 +1,11 @@
+import { shell } from 'electron';
+import { feedbackLink } from '../../services/feedbackLink';
+import { availableShortcutGroups } from '../../services/terminal/builtinShortcutGroups';
 import type { WorkspaceLeaf } from 'obsidian';
 import { ItemView, Menu, Notice, setIcon, setTooltip } from 'obsidian';
 
 import type TerminalPlugin from '../../main';
-import { t } from '../../i18n';
+import { t, i18n } from '../../i18n';
 import { buildDeviceHomeCards, getRefreshNodeIds, type DeviceHomeCard } from '../../services/remote/deviceHomeModel';
 import { pairDevice, type PairDeviceResult } from '../../services/remote/devicePairing';
 import type { Disposable } from '../../services/remote/transport';
@@ -85,6 +88,20 @@ export class DeviceHomeView extends ItemView {
     const cards = buildDeviceHomeCards(this.plugin.getPairedDeviceStore().list(), connections);
     const grid = container.createDiv({ cls: 'termesh-device-grid' });
     for (const card of cards) this.renderCard(grid, card);
+    const feedback = container.createDiv('termesh-feedback-card');
+    feedback.createEl('h2', {text:t('release21.feedback')});
+    feedback.createEl('p', {text:t('release21.feedbackHint')});
+    const urlInput = feedback.createEl('input', {type:'url',attr:{placeholder:'HTTPS://…/feedback','aria-label':t('release21.feedbackUrl')}});
+    urlInput.value = this.plugin.settings.feedbackUrl;
+    const open = feedback.createEl('button', {text:t('release21.feedback')});
+    open.addEventListener('click', () => {
+      try {
+        const url = feedbackLink(urlInput.value.trim(),this.plugin.manifest.version,i18n.getLocale());
+        this.plugin.settings.feedbackUrl = urlInput.value.trim();
+        void this.plugin.saveSettings();
+        void shell.openExternal(url).catch(() => {urlInput.value=url;urlInput.select();new Notice(t('release21.copyUrl'));});
+      } catch {new Notice(t('release21.feedbackUrl'));}
+    });
   }
 
   private renderCard(grid: HTMLElement, card: DeviceHomeCard): void {
@@ -110,9 +127,7 @@ export class DeviceHomeView extends ItemView {
       const meta = identity.createDiv({ cls: 'termesh-device-meta' });
       meta.createEl('h2', { text: t('home.localDevice') });
       this.renderStatus(meta, 'connected', t('home.available'));
-      const groups = this.plugin.settings.deviceShortcutGroups
-        .filter((group) => group.deviceKey === 'local')
-        .sort((a, b) => b.creationOrder - a.creationOrder);
+      const groups = availableShortcutGroups(this.plugin.settings.deviceShortcutGroups, 'local', t('release21.install'));
       cardEl.createEl('p', { text: t('home.localDeviceDescription') });
       this.renderDeviceShortcuts(cardEl, groups, (group) => this.plugin.runShortcutGroupOnLocalDevice(group), true, 'local');
       return;
@@ -169,9 +184,7 @@ export class DeviceHomeView extends ItemView {
       menu.showAtMouseEvent(event);
     });
 
-    const groups = this.plugin.settings.deviceShortcutGroups
-      .filter((group) => group.deviceKey === device.nodeId)
-      .sort((a, b) => b.creationOrder - a.creationOrder);
+    const groups = availableShortcutGroups(this.plugin.settings.deviceShortcutGroups, device.nodeId, t('release21.install'));
     cardEl.createEl('p', {
       text: status.state === 'connected' ? t('home.openTerminalHint') : t('home.connectTerminalHint'),
     });

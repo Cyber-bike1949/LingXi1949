@@ -37,6 +37,27 @@ export interface TranslationKeys {
     unloadedMessage: string;
   };
 
+  release21: {
+    install: string;
+    copyGroup: string;
+    copy: string;
+    targetHint: string;
+    targetPlatform: string;
+    targetShell: string;
+    unsupportedTarget: string;
+    feedback: string;
+    feedbackHint: string;
+    feedbackUrl: string;
+    copyUrl: string;
+    deleteTitle: string;
+    deleteHint: string;
+    move: string;
+    operationFailed: string;
+    partialDelete: string;
+    unknownResult: string;
+    upgradeRequired: string;
+    deleteType: string;
+  };
   home: {
     controllerAlreadyConnected: string;
     title: string;

@@ -199,11 +199,17 @@ async fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             agent_state.connection_code = Some(code);
             let _ = state::write(&state::state_path(), &agent_state);
 
-            let options = ServeOptions::new(
+            let mut options = ServeOptions::new(
                 config.shell.clone(),
                 config.max_concurrent_sessions,
                 config.receive_root.clone(),
             );
+
+            let mut file_engine = lingxi_fs_operations::Engine::for_user(config.file_operation_roots.clone());
+            file_engine.allowed.push(config.receive_root.clone());
+            file_engine.protected.push(config.identity_key_path.clone());
+            file_engine.protected.push(config::config_dir());
+            options.file_operations = std::sync::Arc::new(file_engine);
 
             tokio::select! {
                 _ = serve::serve(endpoint.clone(), options) => {}

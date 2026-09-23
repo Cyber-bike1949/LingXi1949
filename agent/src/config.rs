@@ -33,6 +33,8 @@ pub struct Config {
     /// session cwd is unknown (doc 7.6 rule 2).
     #[serde(rename = "receiveRoot", default = "Config::default_receive_root")]
     pub receive_root: PathBuf,
+    #[serde(rename = "fileOperationRoots", default)]
+    pub file_operation_roots: Vec<PathBuf>,
     /// Soft cap on concurrent remote terminal sessions (doc 7.3). "Soft" as
     /// in: enforced when a session is opened (the request past the cap gets
     /// SESSION_LIMIT_REACHED, see `session_table`), never by killing
@@ -392,6 +394,7 @@ mod tests {
             device_name: "build-server".into(),
             identity_key_path: root.join("identity.json"),
             receive_root: root.join("TermyReceive"),
+            file_operation_roots: Vec::new(),
             max_concurrent_sessions: 8,
             shell: Config::default_shell(),
         }

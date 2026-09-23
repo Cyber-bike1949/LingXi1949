@@ -1,3 +1,4 @@
+import { parseFileOperationResponse, type FileOperationRequest, type FileOperationResponse } from '../terminal/fileOperations';
 /**
  * ServerManager - unified server manager
  * 
@@ -307,6 +308,29 @@ export class ServerManager {
   /**
    * Get the server port
    */
+  async operateFile(request: FileOperationRequest, vaultRoot?: string): Promise<FileOperationResponse> {
+    await this.ensureServer();
+    return new Promise(resolve => {
+      const child = this.spawn(this.getBinaryPath(), ['--fs-operation'], {
+        env: {...process.env, ...(vaultRoot ? {LINGXI_FILE_ROOT:vaultRoot} : {})},
+        stdio: ['pipe','pipe','pipe'], windowsHide: true,
+      });
+      let output = '';
+      let settled = false;
+      const finish = (result: FileOperationResponse): void => {
+        if (settled) return;
+        settled = true; window.clearTimeout(timer); resolve(result);
+      };
+      const timer = window.setTimeout(() => { finish({status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1}); child.kill(); },30000);
+      child.stdout?.on('data',(chunk: Buffer) => {output += chunk.toString('utf8');if(output.length > 65536){child.kill();finish({status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1});}});
+      child.stderr?.on('data', () => { /* Drain without retaining paths or file contents. */ });
+      child.on('error',()=>finish({status:'failed',code:'UNSUPPORTED',mutationVersion:1}));
+      child.on('close',()=>{try{finish(parseFileOperationResponse(JSON.parse(output)));}catch{finish({status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1});}});
+      child.stdin?.on('error',()=>finish({status:'unknown',code:'UNKNOWN_RESULT',mutationVersion:1}));
+      child.stdin?.end(JSON.stringify(request));
+    });
+  }
+
   getServerPort(): number | null {
     return this.port;
   }

@@ -16,6 +16,7 @@ path = "src/main.rs"
 # v2.0 has no relay account and no WSS control channel (doc 6.1). iroh
 # brings its own TLS internally.
 [dependencies]
+lingxi-fs-operations = { path = "../crates/fs-operations" }
 tokio = { version = "=1.49.0", features = ["rt-multi-thread", "net", "sync", "signal", "macros", "time", "fs", "io-util", "process"] }
 
 portable-pty = "=0.9.0"

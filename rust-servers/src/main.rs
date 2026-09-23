@@ -69,6 +69,17 @@ fn parse_args() -> u16 {
 
 #[tokio::main(flavor = "current_thread")]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if env::args().any(|arg| arg == "--fs-operation") {
+        use std::io::Read;
+        let mut body = String::new();
+        std::io::stdin().take(65537).read_to_string(&mut body)?;
+        if body.len() > 65536 { return Err("File operation request too large".into()); }
+        let request: lingxi_fs_operations::Request = serde_json::from_str(&body)?;
+        let extra = env::var_os("LINGXI_FILE_ROOT").map(std::path::PathBuf::from).into_iter().collect();
+        let result = lingxi_fs_operations::Engine::for_user(extra).execute(request);
+        println!("{}", serde_json::to_string(&result)?);
+        return Ok(());
+    }
     // Parse command-line arguments
     let port = parse_args();
     log_debug!("启动参数: port={}", port);

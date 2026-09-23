@@ -129,6 +129,8 @@ pub struct FsListPayload {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FsListResultPayload {
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "mutationVersion")]
+    pub mutation_version: Option<u32>,
     pub entries: Vec<FsEntry>,
     #[serde(
         default,
@@ -339,6 +341,8 @@ pub enum Frame {
     Close(ClosePayload),
     /// Handshake frame for a directory-tree stream, mutually exclusive with
     /// `Open` as the first frame on a bi-stream (see the module doc).
+    FsOperation(lingxi_fs_operations::Request),
+    FsOperationResult(lingxi_fs_operations::Response),
     FsList(FsListPayload),
     FsListResult(FsListResultPayload),
     /// Sent after `FsListResult`, zero or more times, until the stream
@@ -395,6 +399,8 @@ impl Frame {
             Frame::Close(_) => KIND_CLOSE,
             Frame::Opened(_) => KIND_OPENED,
             Frame::Error(_) => KIND_ERROR,
+            Frame::FsOperation(_) => 0x13,
+            Frame::FsOperationResult(_) => 0x14,
             Frame::FsList(_) => KIND_FS_LIST,
             Frame::FsListResult(_) => KIND_FS_LIST_RESULT,
             Frame::FsChanged(_) => KIND_FS_CHANGED,
@@ -419,6 +425,8 @@ impl Frame {
             Frame::Resize(p) => encode_json(p)?,
             Frame::ShellEvent(p) => encode_json(p)?,
             Frame::Close(p) => encode_json(p)?,
+            Frame::FsOperation(p) => encode_json(p)?,
+            Frame::FsOperationResult(p) => encode_json(p)?,
             Frame::FsList(p) => encode_json(p)?,
             Frame::FsListResult(p) => encode_json(p)?,
             Frame::FsChanged(p) => encode_json(p)?,
@@ -454,6 +462,8 @@ impl Frame {
             KIND_CLOSE => Frame::Close(decode_json(&payload)?),
             KIND_OPENED => Frame::Opened(decode_json(&payload)?),
             KIND_ERROR => Frame::Error(decode_json(&payload)?),
+            0x13 => Frame::FsOperation(decode_json(&payload)?),
+            0x14 => Frame::FsOperationResult(decode_json(&payload)?),
             KIND_FS_LIST => Frame::FsList(decode_json(&payload)?),
             KIND_FS_LIST_RESULT => Frame::FsListResult(decode_json(&payload)?),
             KIND_FS_CHANGED => Frame::FsChanged(decode_json(&payload)?),
@@ -627,6 +637,7 @@ mod tests {
             serde_json::json!({"entries":[{"name":"demo.txt","isDirectory":false}]})
         );
         roundtrip(Frame::FsListResult(FsListResultPayload {
+            mutation_version: None,
             metadata_version: Some(1),
             snapshot_sequence: Some(7),
             epoch: Some("epoch-1".into()),
@@ -683,6 +694,7 @@ mod tests {
             metadata_version: None,
         }));
         roundtrip(Frame::FsListResult(FsListResultPayload {
+            mutation_version: None,
             metadata_version: None,
             snapshot_sequence: None,
             epoch: None,
@@ -700,6 +712,7 @@ mod tests {
             ],
         }));
         roundtrip(Frame::FsListResult(FsListResultPayload {
+            mutation_version: None,
             entries: vec![],
             metadata_version: None,
             snapshot_sequence: None,
