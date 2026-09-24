@@ -10,9 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added built-in installation command groups for Claude Code, Codex, and OpenCode, with platform and shell selection and editable copies.
 - Added directory-tree deletion with confirmation and internal drag-to-move for compatible local helpers and remote agents, backed by shared file-operation validation and operation receipts.
-- Added a fixed feedback website shortcut in the device home header; opening it sends only the plugin version and language as URL parameters.
+- Added a fixed feedback website shortcut in the device home header; opening it sends only the plugin version, language, and local operating system as URL parameters.
 
 ### Fixed
+- Open the dedicated feedback form directly from the device home shortcut.
 - Resolve remote home aliases before file-operation validation so deletion and moves work from `~`.
 - Reveal moved files after loading the destination and retain capability failure codes in directory-tree hints.
 

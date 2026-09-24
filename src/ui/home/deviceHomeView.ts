@@ -1,4 +1,5 @@
 import { FEEDBACK_URL, feedbackLink } from '../../services/feedbackLink';
+import { getPlatform } from '../../utils/platform';
 import { availableShortcutGroups } from '../../services/terminal/builtinShortcutGroups';
 import type { WorkspaceLeaf } from 'obsidian';
 import { ItemView, Menu, Notice, setIcon, setTooltip } from 'obsidian';
@@ -77,7 +78,7 @@ export class DeviceHomeView extends ItemView {
     const feedbackButton = actions.createEl('a', {
       cls: 'clickable-icon termesh-home-feedback',
       attr: {
-        href: feedbackLink(FEEDBACK_URL, this.plugin.manifest.version, i18n.getLocale()),
+        href: feedbackLink(FEEDBACK_URL, this.plugin.manifest.version, i18n.getLocale(), getPlatform()),
         'aria-label': t('release21.feedback'),
         target: '_blank',
         rel: 'noopener noreferrer',
