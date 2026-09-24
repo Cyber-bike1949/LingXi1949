@@ -84,6 +84,7 @@ export class DirectoryTreePanel {
 
   private rootPath: string | null = null;
   private writable = false;
+  private capabilityCode = 'CHECKING';
   private operationPending = false;
   private dragSource: {path:string; token:string; root:string} | null = null;
   private rootGeneration = 0;
@@ -313,11 +314,17 @@ export class DirectoryTreePanel {
     this.clearMtimeTooltip();
     const generation = ++this.rootGeneration;
     this.writable = false;
+    this.capabilityCode = 'CHECKING';
     this.dragSource = null;
     this.rootPath = rootPath;
     void this.source.operate?.({action:'capabilities',root:rootPath}).then(result => {
-      if (generation === this.rootGeneration && !this.destroyed) this.writable = result.status === 'success';
-    }).catch(() => { /* Unsupported peers remain read-only. */ });
+      if (generation !== this.rootGeneration || this.destroyed) return;
+      this.writable = result.status === 'success';
+      this.capabilityCode = result.code ?? (this.writable ? '' : 'UNKNOWN_RESULT');
+    }).catch(() => {
+      if (generation === this.rootGeneration && !this.destroyed) this.capabilityCode = 'CONNECTION_ERROR';
+    });
+    if (!this.source.operate) this.capabilityCode = 'UNSUPPORTED';
     this.pathInputEl.value = rootPath;
     this.pathInputEl.setAttribute('title', rootPath);
 
@@ -332,6 +339,7 @@ export class DirectoryTreePanel {
 
   private async renderChildrenInto(dirPath: string, container: HTMLElement, depth: number): Promise<void> {
     if (this.destroyed) return;
+    const generation = this.rootGeneration;
     let entries: DirectoryEntry[];
     try {
       entries = await this.source.list(dirPath);
@@ -340,7 +348,7 @@ export class DirectoryTreePanel {
       container.createDiv({ cls: 'directory-tree-panel__error', text: message });
       return;
     }
-    if (this.destroyed) return;
+    if (this.destroyed || generation !== this.rootGeneration) return;
 
     container.empty();
     this.watchDirectory(dirPath, container, depth);
@@ -350,9 +358,7 @@ export class DirectoryTreePanel {
       return;
     }
 
-    for (const entry of entries) {
-      this.renderNode(entry, dirPath, container, depth);
-    }
+    await Promise.all(entries.map(entry => this.renderNode(entry, dirPath, container, depth)));
   }
 
   private watchDirectory(dirPath: string, container: HTMLElement, depth: number): void {
@@ -364,7 +370,7 @@ export class DirectoryTreePanel {
     this.watches.set(dirPath, disposable);
   }
 
-  private renderNode(entry: DirectoryEntry, parentPath: string, container: HTMLElement, depth: number): void {
+  private async renderNode(entry: DirectoryEntry, parentPath: string, container: HTMLElement, depth: number): Promise<void> {
     const fullPath = this.pathApi.join(parentPath, entry.name);
 
     const row = container.createDiv({ cls: 'directory-tree-panel__row' });
@@ -491,6 +497,7 @@ export class DirectoryTreePanel {
         if (drag && event.dataTransfer.getData('application/x-lingxi-tree-move')===drag.token && drag.root===this.rootPath) {
           void this.moveEntry(drag.path,resolveDirectoryTreeDropTarget(parentPath,fullPath,entry.isDirectory));
         }
+        if (!this.writable) new Notice(`${t('release21.upgradeRequired')} (${this.capabilityCode})`);
         this.dragSource=null;
         return;
       }
@@ -505,7 +512,7 @@ export class DirectoryTreePanel {
     });
 
     if (this.expandedPaths.has(fullPath) && entry.isDirectory) {
-      void toggle();
+      await toggle();
     }
   }
 
@@ -518,7 +525,7 @@ export class DirectoryTreePanel {
         .onClick(() => this.callbacks.onCopyToVault(path, isDirectory, name));
     });
     menu.addItem(item => item.setTitle(t('common.delete')).setIcon('trash-2').setDisabled(!this.writable || this.operationPending).onClick(() => this.deleteEntry(path)));
-    if (!this.writable) menu.addItem(item => item.setTitle(t('release21.upgradeRequired')).setDisabled(true));
+    if (!this.writable) menu.addItem(item => item.setTitle(`${t('release21.upgradeRequired')} (${this.capabilityCode})`).setDisabled(true));
     menu.showAtMouseEvent(event);
   }
 
@@ -560,7 +567,17 @@ export class DirectoryTreePanel {
       if(relative===destination||destination.startsWith(relative+'/')){new Notice(t('release21.operationFailed',{code:'INVALID_TARGET'}));return;}
       const result=await this.source.operate({action:'move',root,path:relative,target:destination,expectedIdentity:inspected.identity,operationId:crypto.randomUUID()});
       this.showOperationResult(result);
-      if(this.rootPath===root){await this.setRootPath(root,{keepExpanded:true});Array.from(this.treeRootEl.querySelectorAll<HTMLElement>('.directory-tree-panel__row')).find(row=>row.dataset.path===result.newPath)?.focus();}
+      if (this.rootPath === root) {
+        if (result.status === 'success') this.expandedPaths.add(target);
+        await this.setRootPath(root, {keepExpanded:true});
+        if (result.status === 'success' && this.rootPath === root) {
+          // Keep the tree's path spelling (including ~) rather than the canonical backend path.
+          const movedPath = this.pathApi.join(target, this.pathApi.basename(path));
+          const row = Array.from(this.treeRootEl.querySelectorAll<HTMLElement>('.directory-tree-panel__row')).find(row => row.dataset.path === movedPath);
+          row?.focus();
+          row?.scrollIntoView({block:'nearest'});
+        }
+      }
     }catch{new Notice(t('release21.unknownResult'));}
     finally{this.operationPending=false;}
   }

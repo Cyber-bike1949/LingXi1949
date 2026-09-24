@@ -46,6 +46,23 @@ pub(crate) fn expand_user_path(path: &Path) -> PathBuf {
     expand_tilde_path(path, resolve_home_dir().as_deref())
 }
 
+/// Resolve remote home aliases before applying the shared operation protections.
+pub(crate) fn execute_file_operation(
+    engine: &lingxi_fs_operations::Engine,
+    request: lingxi_fs_operations::Request,
+) -> lingxi_fs_operations::Response {
+    execute_file_operation_with_home(engine, request, resolve_home_dir().as_deref())
+}
+
+fn execute_file_operation_with_home(
+    engine: &lingxi_fs_operations::Engine,
+    mut request: lingxi_fs_operations::Request,
+    home: Option<&Path>,
+) -> lingxi_fs_operations::Response {
+    request.root = expand_tilde_path(Path::new(&request.root), home).to_string_lossy().into_owned();
+    engine.execute(request)
+}
+
 /// Lists the direct children of `path` (not recursive), directories
 /// before files, each group alphabetical - same ordering `directoryTreeSource.ts`
 /// applies on the local side, so the two data sources behave identically
@@ -387,6 +404,39 @@ mod tests {
             result.directories,
             vec!["outer".to_string(), "outer/inner".to_string()]
         );
+    }
+
+    #[test]
+    fn home_alias_operations_move_delete_and_preserve_boundaries() {
+        use lingxi_fs_operations::{Engine, Request};
+        let home = tempfile::tempdir().unwrap();
+        let engine = Engine {
+            allowed: vec![home.path().to_owned()],
+            protected: vec![home.path().join("protected")],
+            journal: home.path().join("journal"),
+        };
+        let execute = |root: &str, action: &str, path: &str, target: Option<&str>, identity: Option<String>| {
+            super::execute_file_operation_with_home(&engine, Request {
+                root: root.into(), action: action.into(), path: path.into(),
+                target: target.map(String::from), expected_identity: identity,
+                operation_id: Some(uuid::Uuid::new_v4().to_string()),
+            }, Some(home.path()))
+        };
+        fs::create_dir(home.path().join("destination")).unwrap();
+        fs::create_dir(home.path().join("protected")).unwrap();
+        fs::write(home.path().join("example.txt"), "example").unwrap();
+        assert_eq!(execute("~", "capabilities", "", None, None).status, "success");
+        let inspected = execute("~", "inspect", "example.txt", None, None);
+        let moved = execute("~", "move", "example.txt", Some("destination"), inspected.identity);
+        assert_eq!(moved.status, "success");
+        assert!(!home.path().join("example.txt").exists());
+        assert_eq!(fs::read_to_string(home.path().join("destination/example.txt")).unwrap(), "example");
+        let inspected = execute("~/destination", "inspect", "example.txt", None, None);
+        assert_eq!(execute("~/destination", "delete", "example.txt", None, inspected.identity).status, "success");
+        assert!(!home.path().join("destination/example.txt").exists());
+        assert_eq!(execute("~/..", "capabilities", "", None, None).code.as_deref(), Some("OUTSIDE_ROOT"));
+        assert_eq!(execute("~", "inspect", "../escape", None, None).code.as_deref(), Some("OUTSIDE_ROOT"));
+        assert_eq!(execute("~/protected", "capabilities", "", None, None).code.as_deref(), Some("PROTECTED_PATH"));
     }
 
     #[test]

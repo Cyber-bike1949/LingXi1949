@@ -1,5 +1,4 @@
-import { shell } from 'electron';
-import { feedbackLink } from '../../services/feedbackLink';
+import { FEEDBACK_URL, feedbackLink } from '../../services/feedbackLink';
 import { availableShortcutGroups } from '../../services/terminal/builtinShortcutGroups';
 import type { WorkspaceLeaf } from 'obsidian';
 import { ItemView, Menu, Notice, setIcon, setTooltip } from 'obsidian';
@@ -74,7 +73,20 @@ export class DeviceHomeView extends ItemView {
     heading.createEl('h1', { text: t('home.title') });
     heading.createEl('p', { text: t('home.description') });
 
-    const refreshButton = header.createEl('button', {
+    const actions = header.createDiv({ cls: 'termesh-home-actions' });
+    const feedbackButton = actions.createEl('a', {
+      cls: 'clickable-icon termesh-home-feedback',
+      attr: {
+        href: feedbackLink(FEEDBACK_URL, this.plugin.manifest.version, i18n.getLocale()),
+        'aria-label': t('release21.feedback'),
+        target: '_blank',
+        rel: 'noopener noreferrer',
+      },
+    });
+    setIcon(feedbackButton, 'message-circle');
+    setTooltip(feedbackButton, t('release21.feedback'));
+
+    const refreshButton = actions.createEl('button', {
       cls: 'clickable-icon termesh-home-refresh',
       attr: { 'aria-label': this.refreshing ? t('home.refreshing') : t('home.refresh') },
     });
@@ -88,20 +100,6 @@ export class DeviceHomeView extends ItemView {
     const cards = buildDeviceHomeCards(this.plugin.getPairedDeviceStore().list(), connections);
     const grid = container.createDiv({ cls: 'termesh-device-grid' });
     for (const card of cards) this.renderCard(grid, card);
-    const feedback = container.createDiv('termesh-feedback-card');
-    feedback.createEl('h2', {text:t('release21.feedback')});
-    feedback.createEl('p', {text:t('release21.feedbackHint')});
-    const urlInput = feedback.createEl('input', {type:'url',attr:{placeholder:'HTTPS://…/feedback','aria-label':t('release21.feedbackUrl')}});
-    urlInput.value = this.plugin.settings.feedbackUrl;
-    const open = feedback.createEl('button', {text:t('release21.feedback')});
-    open.addEventListener('click', () => {
-      try {
-        const url = feedbackLink(urlInput.value.trim(),this.plugin.manifest.version,i18n.getLocale());
-        this.plugin.settings.feedbackUrl = urlInput.value.trim();
-        void this.plugin.saveSettings();
-        void shell.openExternal(url).catch(() => {urlInput.value=url;urlInput.select();new Notice(t('release21.copyUrl'));});
-      } catch {new Notice(t('release21.feedbackUrl'));}
-    });
   }
 
   private renderCard(grid: HTMLElement, card: DeviceHomeCard): void {

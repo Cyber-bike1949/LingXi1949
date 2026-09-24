@@ -2606,6 +2606,27 @@
   line-height: 1.5;
 }
 
+.termesh-home-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.termesh-home-feedback {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  color: var(--text-muted);
+  background: var(--background-secondary);
+  text-decoration: none;
+}
+
+.termesh-home-feedback:hover {
+  color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
 .termesh-home-refresh {
   flex: 0 0 36px;
   width: 36px;

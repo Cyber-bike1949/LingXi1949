@@ -284,7 +284,7 @@ async fn serve_bi_stream(
         }
         Ok(Ok(Some(Frame::FsOperation(payload)))) => {
             let engine = options.file_operations.clone();
-            if let Ok(result) = tokio::task::spawn_blocking(move || engine.execute(payload)).await {
+            if let Ok(result) = tokio::task::spawn_blocking(move || fs_browse::execute_file_operation(&engine, payload)).await {
                 let _ = write_frame(&mut send, &Frame::FsOperationResult(result)).await;
                 let _ = send.finish();
             }
