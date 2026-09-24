@@ -28,6 +28,14 @@
 - **AI 工具随你选择：** 集中启动 Claude Code、Codex 或 OpenCode，开始前即可看到工具是否可用。
 - **私密内容不做数据生意：** 离线模式会关闭可选网络检查；不包含客户端遥测，不上传使用统计或错误报告。
 
+## 当前 2.1 源码新增功能
+
+以下功能已进入当前源码；社区市场和 BRAT 用户需等待对应版本发布后更新。
+
+- 内置 Claude Code、Codex 和 OpenCode 安装快捷组，可按平台和 Shell 预览命令，也可复制为可编辑的自定义组。
+- 连接的本机后端或远程 Agent 支持文件操作时，可在目录树确认删除文件，以及通过内部拖拽移动文件。
+- 从设备首页顶部打开“反馈与建议”。浏览器表单支持中英文，只需选择类型、填写内容，可选填联系方式和上传图片。链接携带插件版本、语言和本机系统，版本和系统随反馈保存，无需填写标题或勾选确认框。
+
 ## 安装
 
 LingXi1949 仅支持 Obsidian 桌面版。
@@ -48,13 +56,18 @@ LingXi1949 仅支持 Obsidian 桌面版。
 
 ### 连接远程 Linux Agent
 
-在 Linux x64 设备上，以将要使用远程 Shell 的普通用户身份运行：
+当前源码中的安装脚本面向使用 systemd 的 Linux x64（Ubuntu 22.04/24.04 或 Debian 12），下载固定的 `2.1.0` Agent。对应 Release 及校验文件发布后才能成功安装；安装已发布的旧版本时，请使用对应 Git tag 中的安装说明。
+
+先下载脚本，再指定运行远程 Shell 的普通账户：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh -o install-linux.sh
+sudo bash install-linux.sh --user agentuser
 ```
 
-脚本会下载并校验 Agent、启动用户服务并显示连接码。将连接码粘贴到插件的“添加设备”入口。若未看到连接码，可运行 `~/.local/bin/lingxi1949 status` 查询状态。
+将 `agentuser` 替换为目标账户。脚本会按需创建账户、校验下载文件、启动 systemd 用户服务，并打印供“添加设备”使用的连接码。不传 `--user` 时默认为 `monkey`；Agent 本身始终以选定的普通用户运行。对同一账户重复安装会保留设备身份。查询状态时，请以该账户运行 `~/.local/bin/lingxi1949 status`。
+
+本地编译 Agent 的运行方式见[开发指南](docs/development_ZH.md#33-rust-agentlingxi1949)。
 
 ### 连接远程 Windows Agent
 
@@ -71,5 +84,7 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 ```
 
 保持 Agent 运行，再使用其输出的连接码添加设备。首次使用时，请先核对 `hostname` 和 `pwd`（PowerShell 使用 `Get-Location`），并用不含个人信息的示例笔记验证传输。
+
+构建与测试说明见[开发指南](docs/development_ZH.md)。
 
 > 活得像水一样吧，朋友。—— 李小龙（Be water, my friend!）

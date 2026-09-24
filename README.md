@@ -28,6 +28,14 @@ English / [简体中文](./README_ZH.md)
 - **Use your preferred AI CLI:** launch Claude Code, Codex, or OpenCode from one place and see availability before starting.
 - **Keep private work private:** offline mode suppresses optional network checks, and LingXi1949 includes no client-side telemetry, usage analytics, or error-reporting beacon.
 
+## Current 2.1 source changes
+
+These features are in the current source tree; Community Plugins and BRAT receive them when a matching release is published.
+
+- Preview built-in Claude Code, Codex, and OpenCode installation command groups for the selected platform and shell, or copy them into an editable custom group.
+- Delete entries with confirmation and move entries by dragging within the directory tree when the connected local backend or remote Agent supports file operations.
+- Open **Feedback & suggestions** from the device home header. The browser form supports Chinese and English, with feedback type, content, optional contact details, and images. The link includes the plugin version, language, and local operating system; version and system are saved with submitted feedback. No title or confirmation checkbox is required.
+
 ## Installation
 
 LingXi1949 supports Obsidian Desktop only.
@@ -48,13 +56,18 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 
 ### Connect a remote Linux Agent
 
-On Linux x64, run the installer as the ordinary user who will own the remote shell:
+The installer in the current source tree targets Linux x64 with systemd (Ubuntu 22.04/24.04 or Debian 12) and downloads the pinned `2.1.0` Agent release. That release and its checksum assets must exist before this installer can succeed. For a published older version, use the installation instructions at its matching Git tag.
+
+Download the script to a file, then select the ordinary account that will own the remote shell:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh -o install-linux.sh
+sudo bash install-linux.sh --user agentuser
 ```
 
-The script downloads and verifies the Agent, starts its user service, and displays a connection code. Paste the code into the plugin's **Add device** entry. If no code appears, run `~/.local/bin/lingxi1949 status`.
+Replace `agentuser` with the intended account. The installer creates it if needed, verifies the download, starts a systemd user service, and prints a connection code for **Add device**. Omitting `--user` selects `monkey`; the Agent itself runs as the selected ordinary user. Re-running for the same account preserves its identity. Run `~/.local/bin/lingxi1949 status` as that account to inspect its status.
+
+For a locally compiled Agent, follow the [development guide](docs/development.md#33-rust-agent-lingxi1949).
 
 ### Connect a remote Windows Agent
 
@@ -71,5 +84,7 @@ if ($actualHash -ne $expectedHash) { throw 'SHA-256 verification failed' }
 ```
 
 Keep the Agent running, then add the device with its connection code. Before using real content, verify `hostname` and `pwd` (`Get-Location` in PowerShell) and transfer a sample note that contains no personal information.
+
+For build and test instructions, see the [development guide](docs/development.md).
 
 > Be water, my friend! — Bruce Lee（活得像水一样吧，朋友。）

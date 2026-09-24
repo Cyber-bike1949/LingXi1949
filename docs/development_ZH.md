@@ -11,6 +11,7 @@ LingXi1949 是一个给 Obsidian 内嵌真实终端的插件，还带一个可�
 | `src/` | TypeScript 插件本体。`src/services/` 放运行时/集成逻辑（`terminal/`、`server/`、`codexCli/`、`context/`、`remote/`），`src/ui/` 放视图和弹窗，`src/settings/` 放设置模型与渲染器，`src/i18n/` 放多语言，`src/utils/` 放共享工具函数。 |
 | `agent/` | Rust 编写的远程终端 Agent（`lingxi1949`）：设备身份、`iroh` Endpoint、连接码配对、多会话 PTY 服务。 |
 | `rust-servers/` | 插件通过本地 WebSocket 连接的本机 PTY 后端。 |
+| `crates/fs-operations/` | 本机后端和远程 Agent 共用的文件操作实现。 |
 | `relay/`、`protocol/` | V1（账号 + 云端 Relay）遗留实现——见[第 7 节](#7-v1-遗留代码)。 |
 | `docs/` | 本文档及其引用的截图/素材。 |
 | `scripts/` | 构建、打包、发布相关的 Node 脚本。 |
@@ -21,7 +22,7 @@ LingXi1949 是一个给 Obsidian 内嵌真实终端的插件，还带一个可�
 ## 2. 前置条件
 
 - **Rust 1.97.1**——版本由 `rust-toolchain.toml` 锁定，`rustup` 会自动选择，不要手动使用别的版本。
-- **Node.js 22**——插件测试套件依赖 `--experimental-strip-types`。手头只有 Node 18 时的退路见[第 4 节](#4-测试)。
+- **Node.js 22 或 24**——CI 使用 22，本轮构建、lint 和反馈测试也已在 24 上验证；测试命令使用 `--experimental-strip-types`。
 - **pnpm**——版本见 `package.json` 的 `packageManager` 字段。
 - **要在 Windows 上构建 Agent 的贡献者**：必须在 Windows 本机构建，见[第 3.3 节](#33-rust-agentlingxi1949)。
 
@@ -62,16 +63,16 @@ find plugin-package/node_modules -type l   # 应该没有任何输出
 
 **Linux：**
 
-在仓库根目录（即包含 `agent/` 目录的 `LingXi1949/` 目录）执行以下命令。若仓库位于 `~/LingXi1949`，请先运行 `cd ~/LingXi1949`；否则请将其替换为实际的仓库路径。
+在仓库根目录编译后，以普通用户运行本地产物：
 
 ```bash
-cargo build --manifest-path agent/Cargo.toml --release && \
-	./agent/packaging/install-linux.sh agent/target/release/lingxi1949
+cargo build --manifest-path agent/Cargo.toml --release
+./agent/target/release/lingxi1949 run
 ```
 
-这是一组连续操作：`cargo build` 只负责编译 Agent；`&&` 确保仅在编译成功后运行安装脚本；行末的 `\` 只是 Bash 续行符。安装脚本接收编译产物 `agent/target/release/lingxi1949` 的路径，并将其安装为 systemd 用户服务。
+保持进程运行，将输出的连接码粘贴到插件“添加设备”。本地 PTY 后端另用 `pnpm build:rust` 构建。
 
-安装脚本**拒绝以 root 身份运行**——要以将来实际使用它的那个普通用户身份安装。它会把二进制装到 `~/.local/bin`、把 systemd user unit 装到 `~/.config/systemd/user`，并执行 `loginctl enable-linger`（通常需要一次 root/polkit 认证的那一步）。装完之后不需要额外配对：启动服务，复制打印出来的连接码，粘贴进插件即可。
+`agent/packaging/install-linux.sh` 用于安装固定 Release，不接收本地二进制路径。它通过 root/sudo 为 `--user NAME` 指定的普通账户安装（默认 `monkey`），按需创建账户、启用 linger 并启动 systemd 用户服务；Agent 本身不以 root 运行。当前固定版本为 `2.1.0`，安装前需先发布该版本的二进制和 SHA-256 文件。脚本必须先下载到文件，具体用法见 [README](../README_ZH.md#连接远程-linux-agent)。
 
 **Windows：只能在 Windows 本机构建。** 这不是图省事的问题，是几条硬阻塞：
 
@@ -89,12 +90,32 @@ cargo build --manifest-path agent\Cargo.toml --release
 
 Windows 侧目前没有开机自启的安装脚本，用任务计划程序或注册为服务；要保持运行的命令是 `lingxi1949.exe run`。
 
+### 3.4 2.1 功能与反馈网站
+
+- `src/services/terminal/builtinShortcutGroups.ts` 组合内置安装快捷组；平台和 Shell 对应命令在执行前预览。
+- `src/ui/terminal/directoryTreePanel.ts` 和 `src/services/terminal/fileOperations.ts` 处理目录树删除、移动及操作结果；`crates/fs-operations/` 提供后端实现。写操作受能力探测控制，旧后端不支持时不可用。修改后需同步验证 Agent 和本机后端，检查删除确认、移动后刷新及远程 `~` 路径。
+- `src/services/feedbackLink.ts` 定义反馈网址并只允许 `pluginVersion`、`lang`、`os` 查询参数；`src/ui/home/deviceHomeView.ts` 在用户点击后通过浏览器打开页面。`os` 是本机的 Node 平台标识，如 `win32`、`darwin`、`linux`。
+
+反馈网站位于独立的 [statics 仓库](https://github.com/Cyber-bike1949/statics)，单独构建部署，不随插件打包。表单从 URL 读取版本和系统并随内容提交，中英文由 `lang` 优先选择、否则跟随浏览器；无需标题、确认框或隐私说明链接。后台列表标题由内容生成。插件不在后台提交反馈、上传笔记或发送遥测。
+
+网站维护时，`SITE_ORIGIN` 必须与浏览器访问地址的协议、主机和端口一致；否则有效 Cookie 和 CSRF token 仍会触发 `CSRF_INVALID`。当前反馈入口是 `http://cyber-bike.duckdns.org:3000/feedback`，对应来源是 `http://cyber-bike.duckdns.org:3000`。HTTP 页面生成 UUID 时需保留 `crypto.getRandomValues()` 兼容处理，不能只调用 `crypto.randomUUID()`。网站代码和检查命令见其 README。
+
+### 3.5 快捷组输出匹配
+
+`ShortcutStep.outputMatch?: string` 保存去除首尾空白后的字面量，属于组内步骤配置，不写回 `OperationRecord`。配置非空值时，`src/main.ts` 中的 `observeShortcutStepCompletion` 最多等待 15 秒：输出命中即完成，超时按状态未知暂停；此分支不会额外等待成功的 `command_end`。未配置匹配条件时，有 Shell 事件则以事件判断完成；交互式启动及没有 Shell 事件的终端使用定时回退逻辑。
+
+`TerminalInstance.waitForOutputMatch` 合并输出游标之后的数据块并规范化终端输出。回放控制器目前只接受 Shell 步骤，交互式 CLI 启动只允许放在最后一步。完成状态未知时暂停，不自动重发；用户可继续等待、手动确认或停止。实现和测试见 `shortcutReplayController.ts`、`terminalInstance.ts` 及其测试文件。
+
 ## 4. 测试
 
 ```bash
 cargo test --manifest-path agent/Cargo.toml     # Rust 单测 + 真实回环 QUIC 集成测试
-pnpm test:remote                                # 插件端远程模块，需要 Node 22
+pnpm test:remote                                # 插件端远程模块，Node 22/24
 pnpm test:terminal                              # 本地终端层回归测试
+cargo test --manifest-path rust-servers/Cargo.toml
+cargo test --manifest-path crates/fs-operations/Cargo.toml
+pnpm test:scripts
+node --experimental-strip-types --test src/services/feedbackLink.test.ts
 pnpm lint                                       # 通用 ESLint 配置，可选、起补充作用
 ```
 
@@ -115,7 +136,7 @@ cargo build --manifest-path agent/Cargo.toml
 ./e2e-run.sh
 ```
 
-**手头只有 Node 18？** `pnpm test:remote`/`pnpm test:terminal` 没法直接跑，因为依赖 `--experimental-strip-types`。可以先用仓库自带的 `tsc` 转译，再拿 Node 18 跑转译产物——转译后跑会有两个已知失败：`relayClient.test.ts`/`remoteService.test.ts`（V1 遗留测试），原因是这条路径下 `ws` 包解析不到，跟 v2.0 代码无关，属于预期内、可以忽略。
+Node 18 不适用于当前完整工具链；请切换到 Node 24 后执行检查。
 
 ## 5. 代码风格
 
@@ -159,21 +180,3 @@ cargo test --manifest-path relay/Cargo.toml
 ## 10. 想找更早的设计历史？
 
 原来放在 `docs/需求/` 和 `docs/开发/` 下的早期草案、分阶段实现方案，以及一次性的交接/验收清单，现在已经把仍然有用的部分并进了这份文档，其余随着代码落地已经过时的部分不再保留。需要那个细节层级时，`git log -- docs/` 里还在。
-
-
-需求约束：
-
-- 匹配超时进入暂停，不得显示为成功，也不得默认重发；用户可继续等待、手动确认或停止。
-- 普通 Shell 步骤配置匹配时，必须同时满足既有 `command_end`/退出码成功和输出命中；交互式 TUI 步骤以输出命中作为完成条件。
-- 空匹配条件继续使用现有完成逻辑；旧版快捷组缺少新字段时按空值读取。
-- 匹配只能消费步骤发送后的增量输出；需要过滤 ANSI 控制序列、支持跨输出块累积，并在停止、超时、断开和完成时清理监听器。
-
-数据模型在 `ShortcutStep` 上增加可选字段：
-
-```ts
-outputMatch?: string;
-```
-
-该字段保存去除首尾空白后的字面量。它属于快捷组步骤配置，不写回 `OperationRecord`，这样同一条历史操作加入不同快捷组时可以使用不同匹配条件。
-
-回放实现采用输出游标：步骤发送前记录当前输出序号，终端 PTY 数据到达时只把游标之后的数据交给匹配器，匹配成功后注销监听器并推进步骤。

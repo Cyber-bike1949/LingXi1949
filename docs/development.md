@@ -11,6 +11,7 @@ LingXi1949 is an Obsidian plugin that embeds a real terminal in a note-taking ap
 | `src/` | The TypeScript Obsidian plugin. `src/services/` for runtime/integration logic (`terminal/`, `server/`, `codexCli/`, `context/`, `remote/`), `src/ui/` for views and modals, `src/settings/` for settings models/renderers, `src/i18n/` for locales, `src/utils/` for shared helpers. |
 | `agent/` | The Rust remote-terminal agent (`lingxi1949`): device identity, `iroh` endpoint, connection-code pairing, multi-session PTY service. |
 | `rust-servers/` | The native local PTY backend the plugin talks to over a local WebSocket. |
+| `crates/fs-operations/` | File-operation implementation shared by the local backend and remote Agent. |
 | `relay/`, `protocol/` | V1 (account + cloud relay) legacy implementation — see [§7](#7-legacy-v1-code). |
 | `docs/` | This guide, plus screenshots/assets referenced from it. |
 | `scripts/` | Build, packaging, and release tooling (Node scripts). |
@@ -21,7 +22,7 @@ Generated build artifacts (`main.js`, `styles.css` at the repo root, `binaries/`
 ## 2. Prerequisites
 
 - **Rust 1.97.1** — the version is pinned by `rust-toolchain.toml`; `rustup` selects it automatically, so don't use a different version.
-- **Node.js 22** — the plugin's test suites need `--experimental-strip-types`. See the Node 18 fallback note in [§4](#4-testing) if that's all you have.
+- **Node.js 22 or 24** — CI uses 22; the current build, lint, and feedback tests have also been verified on 24. Test commands use `--experimental-strip-types`.
 - **pnpm** — version pinned in `package.json`'s `packageManager` field.
 - **Windows contributors building the agent**: you must build directly on Windows. See [§3.3](#33-rust-agent-lingxi1949).
 
@@ -62,16 +63,16 @@ find plugin-package/node_modules -type l   # should print nothing
 
 **Linux:**
 
-Run the following commands from the repository root (the `LingXi1949/` directory that contains `agent/`). If the repository is at `~/LingXi1949`, run `cd ~/LingXi1949` first; otherwise, replace it with the actual repository path.
+Build from the repository root, then run the local artifact as an ordinary user:
 
 ```bash
-cargo build --manifest-path agent/Cargo.toml --release && \
-	./agent/packaging/install-linux.sh agent/target/release/lingxi1949
+cargo build --manifest-path agent/Cargo.toml --release
+./agent/target/release/lingxi1949 run
 ```
 
-This is a chained operation: `cargo build` only compiles the agent; `&&` runs the install script only if the build succeeds; and the trailing `\` is only a Bash line continuation. The install script receives the compiled `agent/target/release/lingxi1949` binary path and installs it as a systemd user service.
+Keep the process running and paste its connection code into **Add device**. Build the separate local PTY backend with `pnpm build:rust`.
 
-The install script **refuses to run as root** — install it as the normal user that will run the agent. It installs the binary to `~/.local/bin`, installs a systemd user unit under `~/.config/systemd/user`, and runs `loginctl enable-linger` (the one step that typically needs a root/polkit prompt). No pairing step is needed afterward — start the service, copy the printed connection code, paste it into the plugin.
+`agent/packaging/install-linux.sh` installs a pinned Release; it does not accept a local binary path. It uses root/sudo to install for the ordinary account selected by `--user NAME` (default `monkey`), creates that account if needed, enables linger, and starts a systemd user service. The Agent itself does not run as root. The current pin is `2.1.0`; publish its binary and SHA-256 assets before using the installer. Download the script to a file first; see the [README](../README.md#connect-a-remote-linux-agent).
 
 **Windows: build on Windows only.** Cross-compiling from Linux is a hard blocker, not a convenience issue:
 
@@ -89,12 +90,32 @@ cargo build --manifest-path agent\Cargo.toml --release
 
 There's no autostart install script for Windows yet — register it with Task Scheduler or as a service; `lingxi1949.exe run` is the command to keep running.
 
+### 3.4 2.1 features and the feedback website
+
+- `src/services/terminal/builtinShortcutGroups.ts` composes built-in installation groups; platform and shell commands are previewed before execution.
+- `src/ui/terminal/directoryTreePanel.ts` and `src/services/terminal/fileOperations.ts` handle directory-tree deletion, moves, and results; `crates/fs-operations/` supplies the backend implementation. Writes depend on capability detection and are unavailable with unsupported older backends. Changes need Agent and local-backend validation, including deletion confirmation, refresh after moves, and remote `~` paths.
+- `src/services/feedbackLink.ts` defines the feedback URL and allows only `pluginVersion`, `lang`, and `os` query parameters. `src/ui/home/deviceHomeView.ts` opens it in the browser when the user clicks. `os` is the local Node platform identifier, such as `win32`, `darwin`, or `linux`.
+
+The feedback website lives in the separate [statics repository](https://github.com/Cyber-bike1949/statics), with its own build and deployment. It is not bundled with the plugin. The form reads version and OS from the URL and saves them with the submission. Chinese or English follows `lang`, falling back to the browser language. It requires no title, consent checkbox, or privacy link; the backend derives a list title from the content. The plugin does not submit feedback, upload notes, or send telemetry in the background.
+
+For website maintenance, `SITE_ORIGIN` must match the browser URL's scheme, host, and port; otherwise valid cookies and CSRF tokens still produce `CSRF_INVALID`. The current form URL is `http://cyber-bike.duckdns.org:3000/feedback`, with origin `http://cyber-bike.duckdns.org:3000`. Keep the `crypto.getRandomValues()` UUID fallback for HTTP pages rather than depending solely on `crypto.randomUUID()`. See the website README for its code and check commands.
+
+### 3.5 Shortcut output matching
+
+`ShortcutStep.outputMatch?: string` stores a trimmed literal for a group step, not in `OperationRecord`. With a non-empty value, `observeShortcutStepCompletion` in `src/main.ts` waits up to 15 seconds for an output match; a match completes the step and a timeout pauses it as unknown. This branch does not additionally wait for a successful `command_end`. Without a match condition, shell events determine completion when available, with timed fallbacks for interactive launches or terminals without shell events.
+
+`TerminalInstance.waitForOutputMatch` combines chunks after the recorded output cursor and normalizes terminal output. The replay controller currently accepts only shell steps, with an interactive CLI launch allowed only as the last step. It pauses on unknown completion without automatically resending; the user can keep waiting, confirm manually, or stop. See `shortcutReplayController.ts`, `terminalInstance.ts`, and their tests.
+
 ## 4. Testing
 
 ```bash
 cargo test --manifest-path agent/Cargo.toml     # Rust unit + real-loopback QUIC integration tests
-pnpm test:remote                                # plugin remote module, needs Node 22
+pnpm test:remote                                # plugin remote module, Node 22/24
 pnpm test:terminal                              # local terminal-layer regression
+cargo test --manifest-path rust-servers/Cargo.toml
+cargo test --manifest-path crates/fs-operations/Cargo.toml
+pnpm test:scripts
+node --experimental-strip-types --test src/services/feedbackLink.test.ts
 pnpm lint                                       # general ESLint config, optional/complementary
 ```
 
@@ -115,7 +136,7 @@ cargo build --manifest-path agent/Cargo.toml
 ./e2e-run.sh
 ```
 
-**Only have Node 18?** `pnpm test:remote`/`pnpm test:terminal` won't run directly since they need `--experimental-strip-types`. Transpile with the repo's `tsc` first and run the output under Node 18 — two pre-existing V1 test files (`relayClient.test.ts`, `remoteService.test.ts`) will fail there for unrelated `ws`-resolution reasons specific to that path; that's expected and unrelated to v2.0 code.
+Node 18 is not suitable for the current complete toolchain; switch to Node 24 before running these checks.
 
 ## 5. Coding style
 
