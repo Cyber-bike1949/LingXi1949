@@ -41,8 +41,10 @@ fn relative(path:&str,allow_empty:bool)->Result<PathBuf,&'static str>{
     if p.components().any(|c| !matches!(c,Component::Normal(_))){return Err("OUTSIDE_ROOT");}Ok(p.to_owned())
 }
 fn identity(metadata:&cap_std::fs::Metadata)->String{
-    #[cfg(unix)] {use cap_std::fs::MetadataExt;format!("{}:{}:{}",metadata.dev(),metadata.ino(),metadata.mode())}
-    #[cfg(windows)] {use cap_std::fs::MetadataExt;format!("{:?}:{:?}:{:?}",metadata.volume_serial_number(),metadata.file_index(),metadata.creation_time())}
+    #[cfg(any(unix,windows))] {
+        use cap_fs_ext::MetadataExt;
+        format!("{}:{}:{}",metadata.dev(),metadata.ino(),metadata.nlink())
+    }
     #[cfg(not(any(unix,windows)))] {format!("{:?}",metadata.modified())}
 }
 fn open_parent(root:&Dir,path:&Path)->io::Result<(Dir,std::ffi::OsString)>{

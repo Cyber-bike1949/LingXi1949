@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [2.1.0] - 2026-09-24
+
 ### Added
 - Added built-in installation command groups for Claude Code, Codex, and OpenCode, with platform and shell selection and editable copies.
 - Added directory-tree deletion with confirmation and internal drag-to-move for compatible local helpers and remote agents, backed by shared file-operation validation and operation receipts.

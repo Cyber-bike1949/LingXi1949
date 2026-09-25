@@ -28,9 +28,9 @@ English / [简体中文](./README_ZH.md)
 - **Use your preferred AI CLI:** launch Claude Code, Codex, or OpenCode from one place and see availability before starting.
 - **Keep private work private:** offline mode suppresses optional network checks, and LingXi1949 includes no client-side telemetry, usage analytics, or error-reporting beacon.
 
-## Current 2.1 source changes
+## New in 2.1
 
-These features are in the current source tree; Community Plugins and BRAT receive them when a matching release is published.
+Update the plugin and its local backend or remote Agent together to use the new file operations.
 
 - Preview built-in Claude Code, Codex, and OpenCode installation command groups for the selected platform and shell, or copy them into an editable custom group.
 - Delete entries with confirmation and move entries by dragging within the directory tree when the connected local backend or remote Agent supports file operations.
