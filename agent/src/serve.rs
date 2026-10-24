@@ -59,6 +59,7 @@ const FS_WATCH_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_se
 const OPEN_HANDSHAKE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub struct ServeOptions {
+    task_device_id: String,
     pub shell: ShellConfig,
     pub max_concurrent_sessions: usize,
     /// Fallback transfer destination (doc §7.6) when a `TransferManifest`
@@ -75,6 +76,7 @@ impl ServeOptions {
         receive_root: std::path::PathBuf,
     ) -> Self {
         Self {
+            task_device_id: String::new(),
             shell,
             max_concurrent_sessions,
             file_operations: Arc::new(lingxi_fs_operations::Engine::for_user(vec![receive_root.clone()])),
@@ -145,7 +147,8 @@ impl Drop for TransferPathGuard {
 }
 
 /// Serves control ends until the endpoint is closed.
-pub async fn serve(endpoint: Endpoint, options: ServeOptions) {
+pub async fn serve(endpoint: Endpoint, mut options: ServeOptions) {
+    options.task_device_id = endpoint.id().to_string();
     let options = Arc::new(options);
     let gate = ControllerGate::new();
 
@@ -218,14 +221,16 @@ async fn serve_controller(
     let table = Arc::new(Mutex::new(SessionTable::new(
         options.max_concurrent_sessions,
     )));
+    let tasks = Arc::new(crate::tasks::TaskService::new(options.task_device_id.clone()));
 
     loop {
         match connection.accept_bi().await {
             Ok((send, recv)) => {
                 let table = Arc::clone(&table);
                 let options = Arc::clone(&options);
+                let tasks = Arc::clone(&tasks);
                 tokio::spawn(async move {
-                    serve_bi_stream(send, recv, table, options).await;
+                    serve_bi_stream(send, recv, table, options, tasks).await;
                 });
             }
             Err(e) => {
@@ -273,12 +278,16 @@ async fn serve_bi_stream(
     mut recv: RecvStream,
     table: Arc<Mutex<SessionTable>>,
     options: Arc<ServeOptions>,
+    tasks: Arc<crate::tasks::TaskService>,
 ) {
     let mut decoder = FrameDecoder::new();
 
     let first =
         tokio::time::timeout(OPEN_HANDSHAKE_TIMEOUT, read_frame(&mut recv, &mut decoder)).await;
     match first {
+        Ok(Ok(Some(Frame::Task(payload)))) => {
+            crate::tasks::serve(tasks, payload, send, recv, decoder).await;
+        }
         Ok(Ok(Some(Frame::Open(payload)))) => {
             serve_terminal_session(payload, send, recv, decoder, table, options).await;
         }
@@ -1017,7 +1026,7 @@ fn drain_incoming_frames(
     Ok(true)
 }
 
-async fn read_frame(
+pub(crate) async fn read_frame(
     recv: &mut RecvStream,
     decoder: &mut FrameDecoder,
 ) -> Result<Option<Frame>, AgentError> {
@@ -1037,7 +1046,7 @@ async fn read_frame(
     }
 }
 
-async fn write_frame(send: &mut SendStream, frame: &Frame) -> Result<(), AgentError> {
+pub(crate) async fn write_frame(send: &mut SendStream, frame: &Frame) -> Result<(), AgentError> {
     let bytes = frame.encode()?;
     send.write_all(&bytes)
         .await
@@ -1123,6 +1132,57 @@ mod tests {
             program: "/bin/sh".into(),
             args: vec![],
         }
+    }
+
+    #[tokio::test]
+    async fn structured_tasks_over_real_quic() {
+        use serde_json::json;
+        let (agent, code, serve_task, _root) = start_agent(4).await;
+        let (controller, connection) = connect_controller(&code).await;
+        let dir = tempfile::tempdir().unwrap();
+        let base = json!({"deviceId":agent.id().to_string(),"requestId":"bind-1","action":"bind","workDir":dir.path(),"shell":"/bin/sh"});
+        let (send, recv) = connection.open_bi().await.unwrap();
+        let mut stream = TestStream::new(send, recv);
+        stream.send_frame(Frame::Task(base)).await;
+        let Frame::Task(bound) = stream.next_frame().await else { panic!("missing binding") };
+        assert_eq!(bound["status"], "SUCCESS");
+        let binding = &bound["binding"];
+        for (id, extra, expected) in [
+            ("write", json!({"action":"fs.write","path":"demo.txt","content":"remote"}), "SUCCESS"),
+            ("read", json!({"action":"fs.read","path":"demo.txt"}), "SUCCESS"),
+            ("escape", json!({"action":"fs.read","path":"../secret"}), "FAILED"),
+            ("exec", json!({"action":"command.run","command":"printf output; printf error >&2; exit 7"}), "FAILED"),
+            ("timeout", json!({"action":"command.run","command":"sleep 10","timeoutMs":20}), "TIMED_OUT"),
+            ("cancel", json!({"action":"command.run","command":"sleep 10"}), "CANCELLED"),
+            ("write", json!({"action":"fs.write","path":"demo.txt","content":"duplicate"}), "FAILED"),
+        ] {
+            let mut req = extra;
+            req["deviceId"] = json!(agent.id().to_string());
+            req["sessionId"] = binding["sessionId"].clone();
+            req["bindingVersion"] = binding["bindingVersion"].clone();
+            req["requestId"] = json!(id);
+            let (send, recv) = connection.open_bi().await.unwrap();
+            let mut stream = TestStream::new(send, recv);
+            stream.send_frame(Frame::Task(req)).await;
+            if id == "cancel" { stream.send_frame(Frame::Task(json!({"action":"command.cancel","requestId":id}))).await; }
+            let mut channels = Vec::new();
+            loop {
+                let Frame::Task(event) = stream.next_frame().await else { panic!("missing task event") };
+                assert_eq!(event["deviceId"], agent.id().to_string());
+                assert_eq!(event["sessionId"], binding["sessionId"]);
+                if event["event"] == "result" {
+                    assert_eq!(event["status"], expected, "{event}");
+                    if id == "exec" { assert_eq!(event["exitCode"], 7); assert!(channels.contains(&json!("stdout"))); assert!(channels.contains(&json!("stderr"))); }
+                    if id == "read" { assert_eq!(event["result"]["content"], "remote"); }
+                    break;
+                }
+                channels.push(event["channel"].clone());
+            }
+        }
+        assert_eq!(std::fs::read_to_string(dir.path().join("demo.txt")).unwrap(), "remote");
+        controller.close().await;
+        agent.close().await;
+        serve_task.abort();
     }
 
     #[test]

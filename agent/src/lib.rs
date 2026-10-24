@@ -17,6 +17,7 @@ pub mod session_table;
 pub mod state;
 pub mod termstream;
 pub mod transfer;
+pub mod tasks;
 
 #[derive(Debug, thiserror::Error)]
 pub enum AgentError {

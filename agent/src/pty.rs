@@ -278,7 +278,7 @@ mod unix_teardown {
 }
 
 #[cfg(windows)]
-mod windows_job {
+pub(crate) mod windows_job {
     //! Job Object teardown (doc 7.5).
     //!
     //! Untested on this build host - there is no Windows machine in the loop -

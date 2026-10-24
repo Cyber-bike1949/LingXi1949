@@ -175,6 +175,7 @@ export interface TransferPullManifestPayload {
 }
 
 export type TerminalStreamFrame =
+  | { kind: 'task'; payload: Record<string, unknown> }
   | { kind: 'fsOperation'; payload: FileOperationRequest }
   | { kind: 'fsOperationResult'; payload: FileOperationResponse }
   | { kind: 'open'; payload: OpenPayload }
@@ -253,6 +254,7 @@ function kindByte(frame: TerminalStreamFrame): number {
     case 'error':
       return KIND_ERROR;
     case 'fsOperation': return 0x13;
+    case 'task': return 0x20;
     case 'fsOperationResult': return 0x14;
     case 'fsList':
       return KIND_FS_LIST;
@@ -566,6 +568,7 @@ function decodeFrameParts(kind: number, payload: Uint8Array): TerminalStreamFram
       }};
     }
     case 0x14: return {kind:'fsOperationResult',payload:parseFileOperationResponse(decodeJson(payload))};
+    case 0x20: return { kind: 'task', payload: decodeJson(payload) };
     case KIND_FS_LIST: {
       const raw = decodeJson(payload);
       return { kind: 'fsList', payload: { path: requireString(raw, 'path'), ...decodeMetadataVersion(raw) } };

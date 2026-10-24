@@ -329,6 +329,7 @@ pub struct TransferPullManifestPayload {
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Frame {
+    Task(serde_json::Value),
     Open(OpenPayload),
     Opened(OpenedPayload),
     Error(ErrorPayload),
@@ -393,6 +394,7 @@ impl Frame {
     fn kind(&self) -> u8 {
         match self {
             Frame::Open(_) => KIND_OPEN,
+            Frame::Task(_) => 0x20,
             Frame::Data(_) => KIND_DATA,
             Frame::Resize(_) => KIND_RESIZE,
             Frame::ShellEvent(_) => KIND_SHELL_EVENT,
@@ -426,6 +428,7 @@ impl Frame {
             Frame::ShellEvent(p) => encode_json(p)?,
             Frame::Close(p) => encode_json(p)?,
             Frame::FsOperation(p) => encode_json(p)?,
+            Frame::Task(p) => encode_json(p)?,
             Frame::FsOperationResult(p) => encode_json(p)?,
             Frame::FsList(p) => encode_json(p)?,
             Frame::FsListResult(p) => encode_json(p)?,
@@ -456,6 +459,7 @@ impl Frame {
     fn from_kind_and_payload(kind: u8, payload: Vec<u8>) -> Result<Self, AgentError> {
         Ok(match kind {
             KIND_OPEN => Frame::Open(decode_json(&payload)?),
+            0x20 => Frame::Task(decode_json(&payload)?),
             KIND_DATA => Frame::Data(payload),
             KIND_RESIZE => Frame::Resize(decode_json(&payload)?),
             KIND_SHELL_EVENT => Frame::ShellEvent(decode_json(&payload)?),
