@@ -1,0 +1,8 @@
+{
+  "name": "@lingxi1949/remote-sdk",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "exports": "./dist/index.mjs",
+  "description": "Headless LingXi controller adapter sharing the plugin frame codec and pairing models"
+}

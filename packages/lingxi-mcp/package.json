@@ -1,0 +1,9 @@
+{
+  "name": "@lingxi1949/mcp",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=24" },
+  "bin": { "lingxi-mcp": "cli.mjs" },
+  "description": "Bound remote file and command tools for MCP stdio clients"
+}

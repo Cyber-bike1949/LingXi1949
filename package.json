@@ -6,6 +6,9 @@
   "main": "main.js",
   "packageManager": "pnpm@10.33.4",
   "scripts": {
+    "build:mcp": "node scripts/build-mcp.mjs",
+    "test:mcp": "node scripts/build-mcp.mjs && node --test packages/lingxi-mcp/*.test.mjs",
+    "lingxi-mcp": "node packages/lingxi-mcp/cli.mjs",
     "dev": "node esbuild.config.mjs",
     "lint": "eslint \"src/**/*.ts\"",
     "lint:obsidian": "eslint -c eslint.obsidian.config.js \"src/**/*.ts\"",
