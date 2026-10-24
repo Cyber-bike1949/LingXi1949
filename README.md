@@ -2,6 +2,9 @@
 
 # LingXi1949
 
+New in 4.0: bound remote file and command tools for Codex / Claude via MCP.
+See the [setup guide](REMOTE_TASKS.md) and [validation record](IMPLEMENTATION_4.0.md).
+
 English / [简体中文](./README_ZH.md)
 
 **Stop moving context by hand: send notes to your agent in one click.**

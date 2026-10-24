@@ -6,6 +6,8 @@ A 的 Obsidian 是操作窗口，B 运行 Codex/Claude 与 `lingxi-mcp`，C/D �
 
 B 需要 Node.js 24（使用内置 SQLite）、pnpm 和本仓库。C 需要本版本 Agent，不需要模型 CLI。
 
+也可下载 Release 中的 `lingxi-mcp-4.0.0.tar.gz`，解压后执行 `npm install --omit=dev`，再直接运行下方 `node packages/lingxi-mcp/cli.mjs ...` 命令。发行包已经包含 SDK 构建产物，无需 pnpm 或 Rust；目标 C 的 Agent 使用 Release 中对应平台的二进制。
+
 ```sh
 pnpm install --frozen-lockfile
 pnpm build:mcp

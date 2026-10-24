@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-10-24
+
+### Added
+- Added `lingxi-mcp` for fixed-device remote file and command tools, persistent SQLite task history, request deduplication, cancellation and explicit unknown outcomes on disconnect.
+- Added structured Agent task streams on the existing Iroh connection, with separate stdout/stderr, exit codes, bounded file access and atomic writes.
+- Added the remote model task command in Obsidian to inspect task snapshots from the model host through the existing file transfer connection.
+- Added a headless remote SDK, Codex and Claude configuration instructions, a standalone MCP archive, and two-Agent cross-language integration tests.
+
+### Limitations
+- The MCP host requires Node.js 24. Existing Agents must be upgraded; one controller connection and one active command per target are supported.
+- Windows runtime behavior, physical cross-network/relay sessions, the Obsidian desktop UI and authenticated model CLI workflows require user-environment acceptance testing; see `IMPLEMENTATION_4.0.md`.
+
 ## [2.1.0] - 2026-09-24
 
 ### Added

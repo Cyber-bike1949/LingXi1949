@@ -338,6 +338,7 @@ jobs:
         run: |
           pnpm install --frozen-lockfile
           pnpm build
+          pnpm package:mcp
 
       - name: Generate release notes
         run: |
@@ -378,6 +379,7 @@ jobs:
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
+            release-assets/lingxi-mcp-*.tar.gz
             main.js
             manifest.json
             styles.css
@@ -396,6 +398,8 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           files: |
+            release-assets/lingxi-mcp-*.tar.gz
+            release-assets/lingxi-mcp-*.tar.gz.sha256
             main.js
             manifest.json
             styles.css

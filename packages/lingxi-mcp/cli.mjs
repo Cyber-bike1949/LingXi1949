@@ -69,6 +69,10 @@ function lock(id) {
 }
 
 async function main() {
+  if (!command || command === 'help' || command === '--help') {
+    process.stdout.write('lingxi-mcp (Node.js 24+)\nCommands: init, pair --name NAME --ticket-file FILE, devices [--probe true], select --device ID --workdir PATH --shell PATH, serve --session ID, tasks [--session ID], config --session ID\nAll commands accept --home PATH. See REMOTE_TASKS.md for setup and limits.\n');
+    return;
+  }
   if (command === 'init') {
     try { read(profilePath); throw new Error('PROFILE_ALREADY_EXISTS'); } catch (e) { if (e.code !== 'ENOENT') throw e; }
     save(profilePath, { seed: iroh.SecretKey.generate().toBytes(), devices: [] });

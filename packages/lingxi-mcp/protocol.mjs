@@ -53,6 +53,10 @@ export function serveStdio(service, input = process.stdin, output = process.stdo
       send({ id: message?.id ?? null, error: { code: -32600, message: 'Invalid Request' } }); return;
     }
     const { id, method, params = {} } = message;
+    if (params === null || typeof params !== 'object' || Array.isArray(params)) {
+      if (id !== undefined) send({ id, error: { code: -32602, message: 'Invalid params' } });
+      return;
+    }
     if (method === 'notifications/cancelled') { cancellations.get(params.requestId)?.abort(); return; }
     if (id === undefined) return;
     try {
@@ -94,8 +98,12 @@ export function serveStdio(service, input = process.stdin, output = process.stdo
       if (!line.trim()) continue;
       let message;
       try { message = JSON.parse(line); } catch { send({ id: null, error: { code: -32700, message: 'Parse error' } }); continue; }
-      if (pending.size >= 128) { send({ id: message.id ?? null, error: { code: -32000, message: 'Too many requests' } }); continue; }
-      const task = handle(message); pending.add(task); void task.finally(() => pending.delete(task));
+      if (pending.size >= 128) { send({ id: message?.id ?? null, error: { code: -32000, message: 'Too many requests' } }); continue; }
+      const task = handle(message); pending.add(task);
+      void task.then(() => pending.delete(task), error => {
+        pending.delete(task);
+        send({ id: message?.id ?? null, error: { code: -32603, message: String(error.message ?? error) } });
+      });
     }
   });
   return new Promise(resolve => {

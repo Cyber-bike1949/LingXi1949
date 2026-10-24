@@ -4,7 +4,7 @@ import { TaskStore } from './store.mjs';
 import { TaskService } from './service.mjs';
 import { callTool, serveStdio } from './protocol.mjs';
 import { PassThrough } from 'node:stream';
-import { LingxiTransportAdapter } from '../remote-sdk/dist/index.mjs';
+import { LingxiTransportAdapter, encodeTerminalStreamFrame } from '../remote-sdk/dist/index.mjs';
 
 const binding = { deviceId: 'device-c', agentFingerprint: 'device-c', sessionId: 'session-1', bindingVersion: 'v1', workDir: '/workspace/demo', shell: '/bin/sh' };
 function setup(request) {
@@ -74,13 +74,52 @@ test('stdio negotiates, lists tools and handles malformed input without pollutin
   input.write('bad json\n');
   input.write(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25' } }) + '\n');
   input.write(JSON.stringify({ jsonrpc: '2.0', id: 2, method: 'tools/list' }) + '\n');
+  input.write(JSON.stringify({ jsonrpc: '2.0', id: 3, method: 'tools/call', params: null }) + '\n');
   input.end(); await ended;
   const messages = bytes.trim().split('\n').map(JSON.parse);
   assert.equal(messages[0].error.code, -32700);
   assert.equal(messages[1].result.protocolVersion, '2025-11-25');
-  assert.equal(messages[2].result.tools.length, 8); store.close();
+  assert.equal(messages[2].result.tools.length, 8);
+  assert.equal(messages[3].error.code, -32602); store.close();
 });
 
 test('SDK checks authenticated peer before any request', () => {
   assert.throws(() => new LingxiTransportAdapter({ remoteId: () => ({ toString: () => 'wrong-device' }) }, 'device-c'), /DEVICE_ID_MISMATCH/);
+});
+
+test('SDK rejects forged device, fingerprint, session and request in responses', async () => {
+  for (const field of ['deviceId', 'agentFingerprint', 'sessionId', 'bindingVersion', 'requestId']) {
+    let closed = false;
+    const reply = { ...binding, requestId: 'request-1', event: 'result', status: 'SUCCESS', [field]: 'forged' };
+    const connection = {
+      remoteId: () => ({ toString: () => binding.deviceId }), closed: () => new Promise(() => {}),
+      close: () => { closed = true; },
+      openBi: async () => ({ send: { writeAll: async () => {}, finish: async () => {} }, recv: { read: async () => Array.from(encodeTerminalStreamFrame({ kind: 'task', payload: reply })) } }),
+    };
+    const adapter = new LingxiTransportAdapter(connection, binding.deviceId);
+    await assert.rejects(adapter.request({ action: 'fs.read', requestId: 'request-1', sessionId: binding.sessionId, bindingVersion: binding.bindingVersion, path: 'file' }), /RESPONSE_IDENTITY_MISMATCH/);
+    assert.equal(closed, true);
+  }
+});
+
+test('MCP cancellation notification cancels the corresponding remote request', async () => {
+  const { store, service } = setup((_, { signal }) => new Promise(resolve => signal.addEventListener('abort', () => resolve({ status: 'CANCELLED' }))));
+  const input = new PassThrough(); const output = new PassThrough(); let bytes = '';
+  output.on('data', chunk => { bytes += chunk; });
+  const stopped = serveStdio(service, input, output);
+  const send = message => input.write(JSON.stringify({ jsonrpc: '2.0', ...message }) + '\n');
+  send({ id: 1, method: 'initialize', params: { protocolVersion: '2025-11-25' } });
+  send({ id: 2, method: 'tools/call', params: { name: 'remote_exec', arguments: { requestId: 'cancel-via-client', command: 'sleep 10' } } });
+  send({ method: 'notifications/cancelled', params: { requestId: 2 } });
+  input.end(); await stopped;
+  const result = bytes.trim().split('\n').map(JSON.parse).find(m => m.id === 2).result;
+  assert.equal(JSON.parse(result.content[0].text).status, 'CANCELLED'); store.close();
+});
+
+test('argument ordering does not change request identity', async () => {
+  let calls = 0;
+  const { store, service } = setup(async () => { calls++; return { status: 'SUCCESS' }; });
+  await service.run({ requestId: 'order', action: 'fs.read', path: 'test.txt' });
+  await service.run({ path: 'test.txt', action: 'fs.read', requestId: 'order' });
+  assert.equal(calls, 1); store.close();
 });

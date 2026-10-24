@@ -1,12 +1,14 @@
 {
   "name": "lingxi-bridge",
-  "version": "2.1.0",
+  "version": "4.0.0",
   "type": "module",
   "description": "Bridge your Obsidian notes to AI CLI agents. Rich markdown and note links replace the flat prompt box, backed by local and remote terminal sessions with a bundled Rust PTY backend.",
   "main": "main.js",
   "packageManager": "pnpm@10.33.4",
   "scripts": {
     "build:mcp": "node scripts/build-mcp.mjs",
+    "package:mcp": "node scripts/package-mcp.mjs",
+    "test:mcp:e2e": "node scripts/build-mcp.mjs && cargo build --locked --manifest-path agent/Cargo.toml && node packages/lingxi-mcp/e2e.mjs",
     "test:mcp": "node scripts/build-mcp.mjs && node --test packages/lingxi-mcp/*.test.mjs",
     "lingxi-mcp": "node packages/lingxi-mcp/cli.mjs",
     "dev": "node esbuild.config.mjs",

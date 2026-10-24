@@ -1,4 +1,5 @@
 import { BuiltinShortcutModal } from './ui/terminal/builtinShortcutModal';
+import { RemoteTasksModal } from './ui/terminal/remoteTasksModal';
 import type { View, WorkspaceLeaf } from 'obsidian';
 import { addIcon, FileSystemAdapter, MarkdownView, Modal, Notice, Plugin, TFile, normalizePath, requestUrl, setIcon, setTooltip } from 'obsidian';
 import * as nodeFs from 'fs';
@@ -1779,6 +1780,11 @@ export default class TerminalPlugin extends Plugin {
    * Register all commands
    */
   private registerCommands(): void {
+    this.addCommand({
+      id: 'remote-model-tasks',
+      name: '远程模型任务',
+      callback: () => { new RemoteTasksModal(this).open(); },
+    });
     // Open terminal
     this.addCommand({
       id: 'open-terminal',

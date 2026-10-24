@@ -1,6 +1,7 @@
 # Node modules
 node_modules/
 packages/remote-sdk/dist/
+release-assets/
 
 # Rust
 target/

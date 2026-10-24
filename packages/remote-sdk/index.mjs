@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { encodeTerminalStreamFrame, TerminalStreamFrameDecoder } from '../../src/services/remote/terminalStreamFrame.ts';
+export { encodeTerminalStreamFrame, TerminalStreamFrameDecoder };
 export { PairedDeviceStore } from '../../src/services/remote/pairedDeviceStore.ts';
 export { pairDevice } from '../../src/services/remote/devicePairing.ts';
 export { normalizeControllerIdentitySeed } from '../../src/services/remote/controllerIdentity.ts';
