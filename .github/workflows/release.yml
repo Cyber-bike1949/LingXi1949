@@ -1,31 +1,50 @@
 name: Release
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to build and publish
+        required: true
+        type: string
+        default: '4.0.0'
   push:
     tags:
       - '*.*.*'
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-${{ inputs.tag || github.ref_name }}
   cancel-in-progress: true
+
+env:
+  RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
 
 jobs:
   validate-release:
     name: Validate release version
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.RELEASE_VERSION }}
+
+      - name: Pin source commit
+        id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Check tag and release metadata
-        env:
-          RELEASE_VERSION: ${{ github.ref_name }}
         run: |
           node --input-type=module <<'NODE'
           import fs from 'node:fs';
 
           const version = process.env.RELEASE_VERSION;
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) {
+            throw new Error('Expected a semantic version tag');
+          }
           const manifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
           const packageJson = JSON.parse(fs.readFileSync('package.json', 'utf8'));
           const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
@@ -80,6 +99,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate-release.outputs.commit }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
@@ -106,7 +127,7 @@ jobs:
       - name: Build
         working-directory: rust-servers
         env:
-          TERMINAL_SERVER_VERSION: ${{ github.ref_name }}
+          TERMINAL_SERVER_VERSION: ${{ env.RELEASE_VERSION }}
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Prepare binary
@@ -199,6 +220,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate-release.outputs.commit }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
@@ -243,6 +266,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate-release.outputs.commit }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
@@ -274,7 +299,7 @@ jobs:
 
   release:
     name: Release
-    needs: [build-rust, build-agent, build-relay]
+    needs: [validate-release, build-rust, build-agent, build-relay]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -284,6 +309,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate-release.outputs.commit }}
 
       - uses: pnpm/action-setup@v5
 
@@ -343,7 +370,7 @@ jobs:
       - name: Generate release notes
         run: |
           node scripts/release-notes.js \
-            --version "${{ github.ref_name }}" \
+            --version "$RELEASE_VERSION" \
             --repository "${{ github.repository }}" \
             --output release-body.md
 
@@ -372,7 +399,7 @@ jobs:
             test -f "${package_dir}/styles.css"
             test -f "${package_dir}/node_modules/@number0/iroh/package.json"
             find "${package_dir}/node_modules/@number0" -mindepth 2 -maxdepth 2 -type f -name '*.node' -print -quit | grep -q .
-            (cd "${package_dir}" && zip -r "../../lingxi1949-${{ github.ref_name }}-${platform}.zip" .)
+            (cd "${package_dir}" && zip -r "../../lingxi1949-${RELEASE_VERSION}-${platform}.zip" .)
           done
 
       - name: Attest build provenance
@@ -383,7 +410,7 @@ jobs:
             main.js
             manifest.json
             styles.css
-            lingxi1949-${{ github.ref_name }}-*.zip
+            lingxi1949-${{ env.RELEASE_VERSION }}-*.zip
             release-assets/iroh-runtime-*.node
             binaries/termy-server-win32-x64.exe
             binaries/termy-server-darwin-arm64
@@ -397,13 +424,14 @@ jobs:
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
+          tag_name: ${{ env.RELEASE_VERSION }}
           files: |
             release-assets/lingxi-mcp-*.tar.gz
             release-assets/lingxi-mcp-*.tar.gz.sha256
             main.js
             manifest.json
             styles.css
-            lingxi1949-${{ github.ref_name }}-*.zip
+            lingxi1949-${{ env.RELEASE_VERSION }}-*.zip
             release-assets/iroh-runtime-*.node
             release-assets/iroh-runtime-*.node.sha256
             binaries/termy-server-win32-x64.exe
