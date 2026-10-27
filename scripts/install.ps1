@@ -19,7 +19,8 @@ $Npm = $null
 if ($Role -eq 'b') {
     $Node = (Get-Command node.exe -ErrorAction Stop).Source
     $Npm = (Get-Command npm.cmd -ErrorAction Stop).Source
-    & $Node -e 'if (Number(process.versions.node.split(".")[0]) < 24) process.exit(1)'
+    # Avoid embedded quotes: Windows PowerShell 5.1 strips them for native argv.
+    & $Node -e 'if (parseInt(process.versions.node) < 24) process.exit(1)'
     if ($LASTEXITCODE -ne 0) { throw 'B requires Node.js 24+ and npm; install Node.js and rerun. Existing Node was not modified.' }
 }
 $null = Get-Command tar.exe -ErrorAction Stop
