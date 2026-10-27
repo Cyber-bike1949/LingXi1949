@@ -1,97 +1,53 @@
-# 远程模型任务：A、B、C 三端首次使用指南
+# 远程模型任务首次使用指南（A / B / C）
 
-适用版本：LingXi1949 **4.0.0**。目标：在 A 的 Obsidian 中操作 B 上的 Codex 或 Claude，让模型读取、修改 C 的项目并在 C 执行命令。
-
-第一次请按本文顺序操作，每一步确认成功后再继续。首次跑通后，日常只需执行第 7 节。
-
-## 1. 先分清每台设备负责什么
-
-| 设备 | 作用 | 必须准备 | 保存什么 |
-| --- | --- | --- | --- |
-| **A：操作端** | 显示 B 的终端、输入任务、查看记录 | Obsidian 桌面版、LingXi1949 插件 | 插件自己的设备列表 |
-| **B：模型中心** | 运行模型、向 C 发出操作请求 | Node.js 24、lingxi-mcp、Codex 或 Claude Code；从 A 远程操作时还要运行 LingXi Agent | 模型登录信息、B 的配对列表、任务记录 |
-| **C：执行端** | 实际读写文件、运行测试和构建 | **4.0.0 Agent**、项目文件、项目所需运行环境 | 项目代码和执行结果 |
-
-C 不需要安装模型 CLI，也不需要 Node.js 来运行已编译的 Agent；项目本身需要 Node.js 时另算。A 不必安装模型 CLI。若直接坐在 B 前使用，可以跳过 A 和 B 上供 A 连接的 Agent。
+本文只讲第一次跑通一条完整链路：
 
 ```text
-A：Obsidian ──远程终端──> B：Agent → Codex / Claude → lingxi-mcp
-                                                       │
-                                                   直接连接
-                                                       ↓
-                                                  C：Agent → 项目
+A：Obsidian  ──连接──>  B：模型 CLI + MCP  ──连接──>  C：Agent + 项目
 ```
 
-有两份不同的连接码：**B 的码交给 A；C 的码交给 B**。A 以前连过 C，不代表 B 已经配对 C。
+请严格按顺序执行。每一步的“完成标志”出现后再继续。
 
-**连接限制：**每台 Agent 同时只接受一个控制端连接。B 连接 C 前，在 A 的设备列表中断开对 C 的连接；仅关闭一个终端标签不一定释放设备连接。A→B 可以保持连接。
+适用版本：**4.0.0**。B、C 不要求必须是 Linux，当前提供 Linux x64 和 Windows x64 一键安装包。
 
-### 下载还是源码安装？
+## 第 1 步：确认三台设备的职责
 
-**[4.0.0 Release](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/4.0.0) 已于 2026-10-27 发布**，可直接下载对应附件。不要用旧版 Agent 代替 4.0.0。
+| 设备 | 做什么 | 是否必须 |
+| --- | --- | --- |
+| A 操作端 | 运行 Obsidian，查看 B 的终端和任务记录 | 使用 Obsidian 时必须；可以不参与首次配对 |
+| B 模型端 | 运行 Codex/Claude、MCP，并连接 C | 必须 |
+| C 执行端 | 运行项目命令、读写项目文件 | 必须 |
 
-- 有附件：A 使用对应平台插件包；B 使用 `lingxi-mcp-4.0.0.tar.gz`；B/C 使用各自平台的 Agent。
-- 平台附件范围：完整插件包提供 Windows x64、Linux x64/arm64、macOS arm64；Agent 提供 Windows x64、Linux x64；MCP 提供通用源码运行包，需要 Node.js 24+。macOS x64 仅提供终端后端，不提供完整插件包。
-- 没有对应平台附件：下面的源码方式可用于自行构建，但不代表该平台已经验收。
-- 旧版 `agent/packaging/install-linux.sh` 固定下载 2.1.0，**不要直接用它安装本功能所需的 C 端 Agent**。
+连接码也有两份：**B 的连接码交给 A，C 的连接码交给 B**。不要混用。
 
-下面以 **B、C 为 Linux，终端为 Bash/sh** 演示；Windows 差异见第 8 节。所有路径中的 `~` 都属于“当前执行命令的那台机器、当前登录用户”。
+如果只想在 B 本机运行模型并控制 C，可以跳过 A；如果还要从 Obsidian 操作 B，就继续完成第 5 步。
 
-### 推荐：一条命令安装 B / C
+## 第 2 步：安装 C（执行端）
 
-支持 **Linux x64、Windows x64**，固定安装已发布的 **4.0.0**，无需 Rust、Git 或 pnpm。B 安装 Agent + MCP；C 只安装 Agent。**B 需先有 Node.js 24+ 和 npm**，安装器会检查，但不会替换系统 Node；C 不需要 Node。Linux 需有 Bash、curl、tar、sha256sum，Windows 需有 PowerShell 和系统自带的 tar.exe。
+以下命令必须在 **C** 执行。使用实际运行 Agent 的普通用户，不要使用 `sudo`。安装器不会启动服务，也不会删除已有身份。
 
-在对应机器上，以实际运行程序的普通用户执行，不要使用 sudo。以下命令会下载并运行本项目 main 分支的安装器；请只在信任该仓库时执行，也可先下载审阅脚本再运行。下载会在当前目录保存 `lingxi-install.sh` / `lingxi-install.ps1`，请勿覆盖自己的同名文件。
-
-**Linux：在 B 执行**（C 把末尾的 `b` 改为 `c`）：
+### Linux x64
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh && bash ./lingxi-install.sh --role b
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh
+bash ./lingxi-install.sh --role c
 ```
 
-**Windows：在 B 的 PowerShell 执行**（C 把末尾的 `b` 改为 `c`）：
+### Windows x64（PowerShell）
 
 ```powershell
-$ErrorActionPreference = 'Stop'; Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.ps1 -OutFile .\lingxi-install.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\lingxi-install.ps1 -Role b
+$ErrorActionPreference = 'Stop'
+Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.ps1 -OutFile .\lingxi-install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\lingxi-install.ps1 -Role c
 ```
 
-Windows 的 `Bypass` 仅用于该进程，不修改系统执行策略；受组织策略限制的机器需遵守管理员要求。
+完成标志：看到 `Installed LingXi 4.0.0, role c.`。安装器会下载 Release 附件并校验 SHA-256。
 
-安装器校验 Release 附件的 SHA-256，在临时版本目录检查 Agent/MCP 能否运行，成功后才切换入口。重复安装不会删除旧版本、重置设备身份、清空配对记录或任务数据库；失败时旧安装仍可用。不会安装模型 CLI、自动登录、配对、授权目录或启动后台服务。
+### 在 C 启动 Agent
 
-注意：4.0.0 已发布 Agent 的 `--version` 仍输出 Rust crate 内部版本 `0.1.0`；安装器按 **4.0.0 Release URL 和 SHA-256** 确认下载来源，最终显示 `Installed LingXi 4.0.0`。不要把内部版本号误认为下载了 0.1.0 Release。
+先准备一个测试目录，并记下**绝对路径**和 Shell 路径。
 
-默认目录为 Linux 的 `~/.local/share/lingxi1949-install`、Windows 的 `%LOCALAPPDATA%\LingXi1949-install`；可通过 `--prefix /绝对路径` 或 `-Prefix 'D:\tools\LingXi'` 指定独立目录。不要手动删除其中的 `bundles`：已有 MCP 配置可能仍引用旧版本目录。重装后如需使用新安装，重新执行 `config` 并更新模型工具中的配置。
-
-**安装完成后启动 Agent**（B 和 C 各执行一次；需先停止同用户的旧 Agent）：
-
-```sh
-~/.local/share/lingxi1949-install/bin/lingxi1949 run
-```
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi1949.ps1" run
-```
-
-保持前台运行，复制 C 的连接码用于第 4 节。B 另外打开终端，后续文档中的 `node packages/lingxi-mcp/cli.mjs` 可替换为：
-
-```sh
-~/.local/share/lingxi1949-install/bin/lingxi-mcp
-```
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi-mcp.ps1"
-```
-
-在以上命令末尾追加 `init`、`pair ...`、`config ...` 等参数即可，不需要切换目录。新安装按第 4 节初始化；已有身份不要重复 `init`。若此前通过旧脚本安装到专用用户，必须继续使用该用户，否则默认身份目录不同。一键安装不会接管旧 systemd 服务，也不会修改 PATH；仍需按第 3.1 节完成 B 的模型工具安装与登录。
-
-## 2. 在 C 准备项目和 Agent
-
-**操作位置：C 的本机终端或已有 SSH 终端。**
-
-### 2.1 准备项目目录
-
-首次建议用一个空目录验证，成功后再选择真实项目：
+Linux：
 
 ```sh
 mkdir -p ~/lingxi-demo
@@ -100,285 +56,214 @@ pwd
 command -v bash
 ```
 
-记下这两项，后面在 B 输入：
+Windows：
 
-- C 的工作目录绝对路径，例如 `/home/example/lingxi-demo`。
-- C 的 Shell 绝对路径，例如 `/bin/bash` 或 `/usr/bin/bash`，以实际输出为准。
-
-### 2.2 启动 4.0.0 Agent
-
-**方式一：已取得 4.0.0 的 Linux x64 二进制。**在其所在目录执行（其他架构不能使用 x64 文件）：
-
-```sh
-chmod +x ./lingxi1949-linux-x64
-./lingxi1949-linux-x64 run
+```powershell
+New-Item -ItemType Directory -Force "$env:USERPROFILE\lingxi-demo"
+Set-Location "$env:USERPROFILE\lingxi-demo"
+Get-Location
+(Get-Command powershell.exe).Source
 ```
 
-**方式二：从源码构建。**先准备 Git 和 Rust；Rust 版本以仓库的 `rust-toolchain.toml` 为准。首次下载源码：
+保持 Agent 前台运行。Linux：
 
 ```sh
-mkdir -p ~/tools
-git clone --branch 4.0.0 https://github.com/Cyber-bike1949/LingXi1949.git ~/tools/LingXi1949
-cd ~/tools/LingXi1949
-cargo build --release --locked --manifest-path agent/Cargo.toml
-./agent/target/release/lingxi1949 run
+~/.local/share/lingxi1949-install/bin/lingxi1949 run
 ```
 
-如果目录已经存在，使用已有的 4.0.0 checkout，不要再次 clone 到同一目录。源码构建 Agent 不需要安装 pnpm 或插件依赖。
+Windows：
 
-**成功标志：**终端打印 `connection code`，下面有一整段以 `endpoint` 开头的连接码，并显示等待控制端连接。复制这一整段码，这是 **C 的连接码**，稍后交给 B。
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi1949.ps1" run
+```
 
-保持这个终端运行。首次先以前台方式跑通；退出窗口会停止前台 Agent。若已有旧 Agent 服务，先停止旧进程再启动新版本，使用同一普通用户以沿用设备身份；遇到 `another lingxi1949 instance already holds ...` 表示旧进程仍在占用，不能同时再启动一份。不要为了升级执行 `rotate-identity`。
+完成标志：终端打印一整段包含 `endpoint` 的连接码，并显示等待连接。把它暂存好，它是 **C 的连接码**，下一步交给 B。
 
-## 3. 在 B 安装模型工具，并让 A 能连接 B
+## 第 3 步：安装 B（模型端）
 
-**操作位置：B 的本机终端或已有 SSH 终端。**
+以下命令必须在 **B** 执行。B 需要 Node.js 24+ 和 npm，还需要至少安装并登录 Codex 或 Claude Code。安装器不会替换 Node，也不会替你登录模型。
 
-### 3.1 准备模型 CLI 和 Node.js
-
-安装 Node.js 24，以及 Codex、Claude Code 中至少一个。在 B 完成模型 CLI 自己的登录，先确认能正常启动并回答一个普通问题。这里的登录与 LingXi 配对是两件事。
+### Linux x64
 
 ```sh
-node --version
+node --version   # 应为 v24.x
 npm --version
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh
+bash ./lingxi-install.sh --role b
 ```
 
-`node` 应显示 `v24.x`。再按所用工具检查 `codex --version` 或 `claude --version`；只有其中一个也可以继续。不要把在 A 上完成的登录当成 B 已登录。
+### Windows x64（PowerShell）
 
-### 3.2 安装 lingxi-mcp
+```powershell
+$ErrorActionPreference = 'Stop'
+node --version       # 应为 v24.x
+npm --version
+Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.ps1 -OutFile .\lingxi-install.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\lingxi-install.ps1 -Role b
+```
 
-**已有发行包：**把 MCP 包解压到 B 的固定目录，进入解压后含有 `package.json` 的目录，执行：
+完成标志：看到 `Installed LingXi 4.0.0, role b.`。B 安装后有两个入口：
+
+| 系统 | Agent | MCP |
+| --- | --- | --- |
+| Linux | `~/.local/share/lingxi1949-install/bin/lingxi1949` | `~/.local/share/lingxi1949-install/bin/lingxi-mcp` |
+| Windows | `%LOCALAPPDATA%\LingXi1949-install\bin\lingxi1949.ps1` | `%LOCALAPPDATA%\LingXi1949-install\bin\lingxi-mcp.ps1` |
+
+## 第 4 步：启动 B 的 Agent（需要从 A 操作 B 时才执行）
+
+另开一个 B 终端启动 Agent，不要在这个窗口里运行模型 CLI。
+
+Linux：
 
 ```sh
-npm install --omit=dev
-node packages/lingxi-mcp/cli.mjs --help
+~/.local/share/lingxi1949-install/bin/lingxi1949 run
 ```
 
-**使用源码：**准备 pnpm（版本见 `package.json` 的 `packageManager`），在 B 获取源码并构建 SDK：
+Windows：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi1949.ps1" run
+```
+
+把 B Agent 打印的连接码暂存好，它是 **B 的连接码**，下一步交给 A。
+
+## 第 5 步：在 A 连接 B（可选）
+
+1. 在 A 的 Obsidian 安装并启用 LingXi1949 4.0.0。
+2. 打开命令面板，选择 LingXi1949 的“添加设备”。
+3. 粘贴 **B 的连接码**，命名为“模型中心 B”。
+4. 连接 B，打开终端，执行 `hostname` 和 `pwd`（Windows 执行 `hostname` 和 `Get-Location`）。
+
+完成标志：A 的终端显示的是 B 的主机和目录。之后文档写“在 B 执行”时，可以直接在这个终端执行。如果不使用 A，本节跳过，后续命令直接在 B 本机执行。
+
+## 第 6 步：在 B 初始化 MCP，并配对 C
+
+以下命令在 **B** 执行。Linux 先设置：
 
 ```sh
-mkdir -p ~/tools
-git clone --branch 4.0.0 https://github.com/Cyber-bike1949/LingXi1949.git ~/tools/LingXi1949
-cd ~/tools/LingXi1949
-pnpm install --frozen-lockfile
-pnpm build:mcp
-node packages/lingxi-mcp/cli.mjs --help
+MCP="$HOME/.local/share/lingxi1949-install/bin/lingxi-mcp"
 ```
 
-**成功标志：**帮助中列出 `init`、`pair`、`devices`、`select`、`serve`、`tasks`、`config`。
+Windows 先设置：
 
-下文的 `node packages/lingxi-mcp/cli.mjs ...` 都要在 **B 的 MCP 安装根目录**执行。配置成功后不要随意移动安装目录，因为模型配置会记录脚本绝对路径。
+```powershell
+$Mcp = "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi-mcp.ps1"
+```
 
-### 3.3 在 B 启动 Agent，供 A 使用
+### 6.1 初始化一次
 
-需要从 A 操作时，在 B **另开一个终端**，按第 2.2 节的方法安装/构建并启动 Agent。它与 B 上的 MCP 是两个程序：Agent 接受 A 的终端连接，MCP 负责连接 C。
+Linux：`"$MCP" init`
 
-复制 B 的 Agent 打印的连接码，交给 A。保持 B 的 Agent 运行，不要在这个前台 Agent 窗口中输入模型命令。
+Windows：`& $Mcp init`
 
-## 4. 在 A 打开 B 的终端
+成功会返回 `initialized: true` 和 `home`。记下 `home`，后续始终使用同一个 B 用户和同一个 MCP 数据目录。若返回 `PROFILE_ALREADY_EXISTS`，不要删除 profile，直接继续。
 
-**操作位置：A 的 Obsidian。**
+### 6.2 保存 C 的连接码并配对
 
-1. 安装并启用 LingXi1949 桌面插件。要使用“远程模型任务”窗口，插件需要 4.0.0。
-2. 若没有 4.0.0 插件附件，在 A 准备 Node.js、pnpm、Rust 和 4.0.0 源码，在源码根目录执行 `pnpm install --frozen-lockfile`，再执行 `pnpm install:dev "你的 Vault 绝对路径"`。此命令会构建并安装到指定 Vault；已有插件用户应先保留当前安装的备份。更多说明见[开发指南](development_ZH.md)。
-3. 在命令面板打开 LingXi1949 终端入口，选择“添加设备”，粘贴 **B 的连接码**，命名为“模型中心 B”。
-4. 连接 B，为它新建一个终端。在这个终端运行 `hostname`、`pwd`，确认显示的是 B。
-5. 如果 A 的设备列表中仍连接着 C，先断开 **C 的设备连接**，保留 B。
+在 B 创建 `c-ticket.txt`，只粘贴 C 的完整连接码，不要加入标题、引号或 Markdown 围栏。
 
-**成功标志：**能在 A 的窗口中操作 B 的 Shell。此后所有标注“在 B 执行”的命令，都可以在这个远程终端里输入。
-
-当前插件中的“远程模型任务”窗口用于**查看记录**，不是选择 C 和工作目录的表单。选择步骤在下一节的 B 终端完成。
-
-## 5. 在 B 初始化、配对 C、固定本轮目标
-
-**操作位置：B 的终端；当前目录为 B 的 MCP 安装根目录。**
-
-### 5.1 初始化一次
+Linux：
 
 ```sh
-node packages/lingxi-mcp/cli.mjs init
+"$MCP" pair --name C --ticket-file ./c-ticket.txt
+"$MCP" devices --probe true
 ```
 
-成功返回 `initialized: true` 和 `home`。记下 `home`，这是 **B 的 MCP 数据目录**，默认是 B 当前用户的 `~/.lingxi-mcp`。
+Windows：
 
-若返回 `PROFILE_ALREADY_EXISTS`，说明这个用户已初始化，继续即可；不需要删除数据重来。后续操作始终使用同一个 B 用户。若自定义了 `--home`，后续每条 MCP 命令都要带同一值。
+```powershell
+& $Mcp pair --name C --ticket-file .\c-ticket.txt
+& $Mcp devices --probe true
+```
 
-### 5.2 把 C 的连接码保存到 B，再配对
+完成标志：`pair` 返回 `deviceId`，`devices --probe true` 中 C 的状态为 `online`。记下完整 `deviceId`，后面不能用名称 `C` 代替它。
 
-用 B 的文本编辑器创建 `c-ticket.txt`，只粘贴 C 的完整连接码，不带引号、标题或 Markdown 围栏。例如文件就放在 B 的 MCP 安装根目录，然后执行：
+### 6.3 固定 C 的项目目录和 Shell
+
+使用第 2 步记下的 C 路径。Linux 示例：
 
 ```sh
-node packages/lingxi-mcp/cli.mjs pair --name C --ticket-file ./c-ticket.txt
-node packages/lingxi-mcp/cli.mjs devices --probe true
+"$MCP" select --device "C的完整deviceId" --workdir "/home/example/lingxi-demo" --shell "/bin/bash"
 ```
 
-**成功标志：**配对返回 `deviceId`，探测列表中 C 的 `status` 为 `online`。保存完整 `deviceId`；后面不能用显示名称 `C` 代替它。
+Windows 示例：
 
-连接码文件在 B；它指向 C。它不需要写进 C 的项目，也不用复制 A 的插件配置。连接码按现有 LingXi 规则授予访问能力，请勿提交到项目仓库。
-
-### 5.3 选择 C 的工作目录和 Shell
-
-将下列三个示例值替换成前面取得的实际值：
-
-```sh
-node packages/lingxi-mcp/cli.mjs select --device "C的完整deviceId" --workdir "/home/example/lingxi-demo" --shell "/bin/bash"
+```powershell
+& $Mcp select --device "C的完整deviceId" --workdir 'C:\Users\example\lingxi-demo' --shell 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
 ```
 
-`--workdir` 和 `--shell` 都属于 **C**，不是 B。目录必须已经存在；使用绝对路径，不要在这里填写 B 展开后的 `~` 路径。
+`--workdir` 和 `--shell` 属于 C，不属于 B；必须使用绝对路径。输出中有两个容易混淆的字段：保存 `session`，不要把临时的 `sessionId` 用于后续配置。
 
-成功输出会同时包含：
+## 第 7 步：把 MCP 接入 Codex 或 Claude
 
-```json
-{
-  "session": "持久选择标识，后续配置使用这个值",
-  "sessionId": "本次远程连接的临时会话标识",
-  "bindingVersion": "本次绑定版本",
-  "deviceId": "C的设备身份",
-  "workDir": "/home/example/lingxi-demo",
-  "shell": "/bin/bash"
-}
-```
+### 7.1 生成配置
 
-**一定保存 `session`，不要保存错成 `sessionId`。**后文的 `SESSION_ID` 占位符一律替换为 `session` 的实际值。`select` 是预检和保存选择，结束后会断开此次临时连接；模型 CLI 启动 MCP 时会重新建立远程会话。
+把第 6.3 步输出的 `session` 替换为 `SESSION`。
 
-## 6. 在 B 接入模型，并完成第一个任务
+Linux：`"$MCP" config --session "SESSION"`
 
-### 6.1 生成正确的启动配置
+Windows：`& $Mcp config --session 'SESSION'`
 
-仍在 B 的 MCP 安装根目录执行：
+这条命令只打印配置，不会自动修改模型 CLI 配置。输出包含 B 的 Node 绝对路径、MCP 脚本路径、数据目录和 session。
 
-```sh
-node packages/lingxi-mcp/cli.mjs config --session "SESSION_ID"
-```
+### 7.2 配置一个模型 CLI
 
-这条命令**只打印配置，不会自动修改 Codex 或 Claude 的配置文件**。输出中的 `command` 是 B 的 Node 绝对路径，`args` 包含 B 的脚本路径、数据目录与刚选定的 `session`。
+第一次只选择 Codex 或 Claude 其中一个测试。
 
-不要另外手动运行 `serve` 再去启动模型。`serve` 会等待 MCP 输入，正常情况下由模型 CLI 自动启动；手动运行一份可能占用同一个选择或 C 的连接。
+- Codex：把输出中的 `codex.mcp_servers.lingxi` 合并到 **B 的** `~/.codex/config.toml`。已有同名表时修改它，不要重复添加。
+- Claude Code：把输出中的 `mcpServers.lingxi` 合并到 **B 的** `.mcp.json`。已有其他服务时只增加 `lingxi`，不要覆盖整个文件。
 
-### 6.2 选择一种 CLI 配置方式
+修改后重启模型 CLI，在模型 CLI 中执行 `/mcp`，确认 `lingxi` 已连接。
 
-**Codex：**编辑 **B 的** `~/.codex/config.toml`，增加或更新下面一段。用上一步 `codex.mcp_servers.lingxi` 中的实际值填写 `command` 和完整 `args`，保留已有的其他配置：
+## 第 8 步：完成第一次安全测试
 
-```toml
-[mcp_servers.lingxi]
-command = "/B上的Node绝对路径"
-args = ["/B上的MCP安装目录/packages/lingxi-mcp/cli.mjs", "serve", "--home", "/B上的MCP数据目录", "--session", "SESSION_ID"]
-startup_timeout_sec = 180
-tool_timeout_sec = 3660
-```
+先发送：
 
-不要把 `config` 输出的整份 JSON 直接粘进 TOML。若已有 `[mcp_servers.lingxi]`，修改它，不能重复添加同名表。
+> 只调用 lingxi 的 remote_target，告诉我当前 deviceId、workDir、shell 和 connected。不要修改文件，不要运行命令。
 
-**Claude Code：**在 B 选择一个用于启动 Claude 的本地目录，在其 `.mcp.json` 中合并上一步输出的 **`mcpServers` 对象**。文件形状如下，实际字符串直接复制生成结果：
+确认返回的是 C 的 `deviceId`、第 6.3 步的 `workDir`，且 `connected` 为 `true`。然后发送：
 
-```json
-{
-  "mcpServers": {
-    "lingxi": {
-      "command": "/B上的Node绝对路径",
-      "args": ["/B上的MCP安装目录/packages/lingxi-mcp/cli.mjs", "serve", "--home", "/B上的MCP数据目录", "--session", "SESSION_ID"]
-    }
-  }
-}
-```
+> 只使用 lingxi 的 remote_* 工具。在绑定目录创建 `.lingxi-first-run.txt`，内容为 `hello from remote task`；读取并核对内容；最后通过 remote_exec 执行 `pwd` 和 `hostname`。汇报 taskId、文件内容、实际目录、主机名和退出码。
 
-之后从这个目录启动 `claude`，按 CLI 提示批准项目 MCP 配置。若已有 `.mcp.json`，只合并 `lingxi` 条目，不覆盖其他服务。也可采用根目录[工具说明](../REMOTE_TASKS.md#接入模型-cli)中的 `claude mcp add` 注册方式。
+到 C 检查文件：
 
-首次请选择 Codex 或 Claude **其中一个**测试，不要让两者同时使用同一个选择连接 C。B 的模型启动目录可以与 MCP 安装目录不同，也不需要拥有 C 的项目副本。
+Linux：`cat ~/lingxi-demo/.lingxi-first-run.txt`
 
-### 6.3 确认模型已经连接
+Windows：`Get-Content "$env:USERPROFILE\lingxi-demo\.lingxi-first-run.txt"`
 
-在 B 启动 `codex` 或 `claude`，输入 `/mcp` 查看 `lingxi` 状态。修改配置后重新启动对应 CLI。
+完成标志：文件在 C 出现，目录和主机名也属于 C。模型不会自动把本地工具变成远程工具，必须明确要求使用 `remote_*`。
 
-然后发送：
+## 第 9 步：查看任务记录
 
-> 请先调用 lingxi 的 remote_target，告诉我当前 deviceId、workDir、shell 和 connected。暂时不要修改文件，也不要运行本地命令。
+任务记录保存在 B。MCP 启动并产生任务后执行：
 
-**成功标志：**模型实际调用工具，返回 C 的设备身份、刚选定的目录和 Shell，且 `connected` 为 `true`。只看模型自然语言说“已连接”不够，要核对工具返回值。
+Linux：`"$MCP" tasks --session "SESSION"`
 
-### 6.4 做一次可检查的读写与执行
+Windows：`& $Mcp tasks --session 'SESSION'`
 
-确认 C 的测试目录中没有下面这个同名文件，再发送：
+A 的 Obsidian 命令面板 →“远程模型任务”→ 选择 **B** → 填写 B 的 MCP `home` 目录下的任务快照路径。不要选择 C，也不要填写 A 的本地路径。
 
-> 本轮只使用 lingxi 的 remote_* 工具，禁止用 B 的本地文件或 Shell 工具代替。请在绑定目录创建 `.lingxi-first-run.txt`，内容为 `hello from remote task`；再读取并核对内容；最后通过 remote_exec 执行 `pwd` 和 `hostname`。每次操作使用不同的 requestId，汇报 taskId、文件内容、实际目录、主机名和退出码。
+## 第 10 步：以后每次使用
 
-到 C 的终端验证：
+1. 启动 C Agent。
+2. 如果要从 A 操作 B，启动 B Agent，并在 A 连接 B。
+3. 在 B 启动已经配置好的 Codex 或 Claude。
+4. 不要重复 `init`、`pair`、`select`；只有切换设备、目录或 Shell 时才重新 `select` 并更新 MCP 配置。
+5. 结束时退出模型 CLI；Agent 可以继续运行。不要同时启动两份同一用户的 Agent。
 
-```sh
-cd ~/lingxi-demo
-cat .lingxi-first-run.txt
-```
+## 常见问题
 
-应能看到指定内容，命令结果中的目录和主机名应属于 C。实际项目任务也需要明确让模型使用 `remote_*`：MCP 不会把 CLI 自带的本地工具自动改成远程执行。
-
-### 6.5 查看记录
-
-**B 端：**另开 B 终端，进入 MCP 安装根目录后执行：
-
-```sh
-node packages/lingxi-mcp/cli.mjs tasks --session "SESSION_ID"
-```
-
-**A 端：**Obsidian 命令面板 →“远程模型任务”→ 选择 **B** → 填写 `init` 返回的 B 数据目录加上 `/tasks.json` →“刷新任务”。例如 `/home/example/.lingxi-mcp/tasks.json`。不要选 C，也不要填写 A 的本地路径。
-
-`tasks.json` 在 MCP 服务启动并记录状态后生成。窗口展示最近保存的快照和时间；它不是实时进程监控。完整记录保存在 B 的 `tasks.sqlite`。
-
-## 7. 以后每次怎样启动、切换和结束
-
-| 场景 | 操作顺序 |
+| 现象 | 处理 |
 | --- | --- |
-| 继续使用同一台 C、同一目录 | 启动 C Agent → 启动 B Agent（需要 A 时）→ A 连接 B → 在 B 启动已配置的模型 CLI。通常不用再 `init`、`pair`、`select`。 |
-| 换 C 的项目目录或 Shell | 先退出旧模型会话，释放连接 → 在 B 再执行 `select` → 用新的 `session` 生成并更新 MCP 配置 → 重启模型。 |
-| 换成另一台 D | 在 D 启动 Agent → 在 B 用 D 的连接码 `pair` → `select` D → 更新配置。不能只修改模型提示中的设备名称。 |
-| 同时操作 C、D | 为两台目标分别建立选择，在独立模型配置/会话中使用。不要在仍运行的会话下覆盖选择。 |
-| 取消正在运行的命令 | 在支持并行工具操作的客户端调用 `remote_cancel(taskId)`，或使用模型 CLI 的取消功能；以远端返回 `CANCELLED` 为确认。必要时结束该 MCP 会话。 |
-| 网络中断 | 查看已有输出和 `UNKNOWN` 状态，先核对 C 的实际文件/进程，再恢复连接；不会自动重放写入或命令。确认需要重试时使用新的 requestId。 |
-| 结束使用 | 先退出 B 的模型 CLI，释放 MCP→C 连接。Agent 可以继续运行，方便下次连接；停止前台 Agent 使用其终端的 Ctrl+C。 |
+| `PROFILE_ALREADY_EXISTS` | 已初始化，继续使用原 profile，不要删除。 |
+| `TICKET_INVALID` | 重新复制 C 的完整连接码，去掉标题、引号和多余内容。 |
+| `devices` 是 `not-probed` | 加上 `--probe true`；这是未探测，不是配对失败。 |
+| `CONNECT_TIMEOUT` | 确认目标 Agent 正在运行、网络可达，并使用同一设备身份；跨设备不要使用 `--loopback true`。 |
+| `CONTROLLER_ALREADY_CONNECTED` | A 还连接着 C，或已有 MCP 会话占用 C。断开 A→C，退出占用会话。 |
+| `SESSION_ALREADY_RUNNING` | 同一 session 已被另一份 MCP 使用；退出旧模型，不要删除活跃锁文件。 |
+| `DEVICE_NOT_PAIRED` | `--device` 必须是完整 `deviceId`，且命令使用了正确的 B MCP 数据目录。 |
+| `/mcp` 没有 `lingxi` | 检查配置是否写在 B，重启 Codex/Claude；Claude 还要从含 `.mcp.json` 的目录启动。 |
+| 模型修改了 B 的文件 | 模型使用了本地工具；重新要求只使用 `remote_*`，先核对 `remote_target`。 |
+| 旧 Agent 报未知帧或协议错误 | B、C 都升级到 4.0.0；旧 Agent 能连通不代表支持远程任务协议。 |
 
-## 8. Windows 上哪里不同
-
-- **A 为 Windows：**按第 4 节使用 Obsidian，B 的远程终端里仍输入 B 所用 Shell 的命令。
-- **B/C 为 Windows：**使用 4.0.0 的 `lingxi1949-win32-x64.exe`，在 PowerShell 中执行 `./lingxi1949-win32-x64.exe run`。源码构建后文件位于 `agent/target/release/lingxi1949.exe`。
-- **B 为 Windows：**安装 Windows Node.js 24，在 MCP 根目录运行相同的 `node packages/lingxi-mcp/cli.mjs ...` 命令；`init` 会返回实际数据目录。连接码文件保存为不带 BOM 的 UTF-8 文本，避免把标题一起保存。
-- **C 为 Windows：**在 C 上用 `Get-Location` 获取工作目录，用 `(Get-Command powershell.exe).Source` 获取 Shell 路径。在 B 的 `select` 参数中使用 C 的这些值，例如 `--workdir 'C:\work\demo' --shell 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'`。
-- **配置文件：**直接使用 `config` 生成的 JSON 字符串处理 Windows 路径转义。Codex 的 `command` 与 `args` 可按生成值填入 TOML；不要手工把 JSON 中的双反斜杠变成未转义的单反斜杠。
-- **第一次测试：**C 为 PowerShell 时，将远程测试命令的 `pwd` 改成 `Get-Location`；本机读取验证使用 `Get-Content .lingxi-first-run.txt`。
-
-当前自动化验收主要覆盖 Linux loopback 环境。Windows 进程清理、桌面交互和跨公网环境仍需实际验证，见[验收记录](../IMPLEMENTATION_4.0.md)。
-
-## 9. 卡在哪一步，就查对应问题
-
-| 现象 | 检查与处理 |
-| --- | --- |
-| `PROFILE_ALREADY_EXISTS` | 已初始化。继续配对/选择，不删除已有 profile。 |
-| `Cannot find module ...remote-sdk/dist...` | 源码安装缺少 `pnpm build:mcp`，或安装目录不完整。 |
-| SQLite 模块无法加载 | B 正在用旧 Node；检查 `node --version`，模型配置中也必须使用 Node 24 的绝对路径。 |
-| `TICKET_INVALID` | B 的文本文件必须是 C 的完整连接码；检查复制是否截断、是否有标题/引号。 |
-| `devices` 显示 `not-probed` | 只读取了本地配对列表；尚未运行 `devices --probe true`。 |
-| `CONTROLLER_ALREADY_CONNECTED` / `unavailable` | A 可能仍连着 C，或另一份 MCP 占用 C。断开设备连接/退出占用会话；已在工作的 MCP 也会使另一次独立探测无法接管连接。 |
-| `CONNECT_TIMEOUT` | 检查目标 Agent 是否运行、身份是否变更、网络是否可达；正常跨设备使用不要加 `--loopback true`。 |
-| `SESSION_ALREADY_RUNNING` | 同一个 `session` 已被使用，常见于手动启动了 `serve` 又启动模型。退出占用进程，不要直接删除活跃锁文件。 |
-| `session-...json` 不存在 | 把 `sessionId` 错当 `session`，或换了 B 用户/`--home`。回看 `select` 的顶层 `session`。 |
-| `DEVICE_NOT_PAIRED` | 在 B 配对的是哪个数据目录？`--device` 必须是完整 deviceId，不能填 `C`。 |
-| `NOT_A_DIRECTORY` / `SHELL_REQUIRES_EXISTING_ABSOLUTE_PATH` | `select` 用的是 C 的实际目录和 Shell 绝对路径吗？先去 C 验证。 |
-| 旧 Agent 报协议/未知帧错误 | C 必须升级到 4.0.0；旧终端能连通不代表支持远程任务协议。 |
-| `/mcp` 没有 lingxi | 配置是否写在 B？Claude 是否从含 `.mcp.json` 的目录启动？是否已重启并批准项目配置？ |
-| 模型改了 B 的文件 | 它使用了 CLI 自带的本地工具。先核对 `remote_target`，重新明确只使用 `remote_*`。 |
-| A 无法读取任务记录 | 选择 B，填写 B 的绝对路径，确认 B 的 Agent 运行、MCP 曾经启动，且文件对 B 的 Agent 用户可读。 |
-| 任务 `UNKNOWN` | 结果未确认，不代表“未执行”。先查目标实际状态，再决定是否用新 requestId 重试。 |
-
-单文件 UTF-8 内容上限 128 KiB，单命令输出上限 1 MiB，默认命令超时 120 秒；更多工具参数与限制见[远程任务工具说明](../REMOTE_TASKS.md)。
-
-## 10. 完成首次配置的检查表
-
-- [ ] C 的 4.0.0 Agent 持续运行，项目目录和 Shell 已确认。
-- [ ] B 的 Node.js 为 24，模型 CLI 已在 B 登录。
-- [ ] 使用 A 时，B 的 Agent 运行，A 的终端确认连接到 B。
-- [ ] B 已用 C 的码配对，A 已断开对 C 的直接连接。
-- [ ] 保存了 `select` 的 `session`，没有误用 `sessionId`。
-- [ ] MCP 配置写在 B，使用 B 的 Node/脚本路径和 C 的已选绑定。
-- [ ] 模型实际调用 `remote_target` 并返回 C 的身份。
-- [ ] C 出现测试文件，读回内容正确，命令返回 C 的目录和主机名。
-- [ ] B 能查询任务记录；需要时 A 能刷新 B 的任务快照。
-
-CLI 配置参考：[Codex 官方 MCP 文档](https://developers.openai.com/codex/mcp)、[Claude Code 官方 MCP 文档](https://code.claude.com/docs/en/mcp)。本文的 LingXi 命令、输出字段与入口按本仓库 4.0.0 实现核对。
+更多工具参数和限制见[远程任务工具说明](../REMOTE_TASKS.md)。安装器和平台范围见 [4.0.0 Release](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/4.0.0)。
