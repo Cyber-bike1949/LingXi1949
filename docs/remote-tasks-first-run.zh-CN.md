@@ -28,10 +28,11 @@ A：Obsidian ──远程终端──> B：Agent → Codex / Claude → lingxi-m
 
 ### 下载还是源码安装？
 
-先检查 [项目 Releases](https://github.com/Cyber-bike1949/LingXi1949/releases) 中是否有 **4.0.0 的对应附件**。Git tag 存在不等于安装包已发布；不要用 `latest` 下载的旧 Agent 代替 4.0.0。
+**[4.0.0 Release](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/4.0.0) 已于 2026-10-27 发布**，可直接下载对应附件。不要用旧版 Agent 代替 4.0.0。
 
 - 有附件：A 使用对应平台插件包；B 使用 `lingxi-mcp-4.0.0.tar.gz`；B/C 使用各自平台的 Agent。
-- 没有附件：使用下面的源码方式。本文整理时（2026-10-27），4.0.0 Release 查询返回 404，因此源码方式是可执行的备用路径。
+- 平台附件范围：完整插件包提供 Windows x64、Linux x64/arm64、macOS arm64；Agent 提供 Windows x64、Linux x64；MCP 提供通用源码运行包，需要 Node.js 24+。macOS x64 仅提供终端后端，不提供完整插件包。
+- 没有对应平台附件：下面的源码方式可用于自行构建，但不代表该平台已经验收。
 - 旧版 `agent/packaging/install-linux.sh` 固定下载 2.1.0，**不要直接用它安装本功能所需的 C 端 Agent**。
 
 下面以 **B、C 为 Linux，终端为 Bash/sh** 演示；Windows 差异见第 8 节。所有路径中的 `~` 都属于“当前执行命令的那台机器、当前登录用户”。
