@@ -5,6 +5,8 @@
 New in 4.0: bound remote file and command tools for Codex / Claude via MCP.
 See the [setup guide](REMOTE_TASKS.md) and [validation record](IMPLEMENTATION_4.0.md).
 
+First-time setup: [step-by-step instructions for the A, B and C devices (Chinese)](docs/remote-tasks-first-run.zh-CN.md).
+
 English / [简体中文](./README_ZH.md)
 
 **Stop moving context by hand: send notes to your agent in one click.**

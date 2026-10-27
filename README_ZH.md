@@ -4,7 +4,7 @@
 
 简体中文 / [English](./README.md)
 
-4.0 新增：让 B 上的 Codex / Claude 通过 MCP 在已选远程设备上读写文件和执行命令。[安装与使用远程模型任务](REMOTE_TASKS.md) · [验收记录与限制](IMPLEMENTATION_4.0.md)。
+4.0 新增：让 B 上的 Codex / Claude 通过 MCP 在已选远程设备上读写文件和执行命令。[A、B、C 三端首次使用指南](docs/remote-tasks-first-run.zh-CN.md) · [工具参数与限制](REMOTE_TASKS.md) · [验收记录](IMPLEMENTATION_4.0.md)。
 
 **告别上下文搬运：笔记一键交给 Agent。**
 

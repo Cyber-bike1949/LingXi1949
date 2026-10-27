@@ -55,6 +55,7 @@ coverage/
 docs/*
 !docs/development.md
 !docs/development_ZH.md
+!docs/remote-tasks-first-run.zh-CN.md
 
 # Personal scratch notes (not part of the plugin)
 t.md

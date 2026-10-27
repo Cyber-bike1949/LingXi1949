@@ -1,5 +1,7 @@
 # 远程模型任务（4.0）
 
+首次配置请先阅读 [A、B、C 三端首次使用指南](https://github.com/Cyber-bike1949/LingXi1949/blob/main/docs/remote-tasks-first-run.zh-CN.md)，按设备和顺序完成安装、配对、模型配置与验证。本文保留工具参数、限制和开发验证说明。
+
 A 的 Obsidian 是操作窗口，B 运行 Codex/Claude 与 `lingxi-mcp`，C/D 运行升级后的 LingXi Agent。B 直接连接目标设备；文件不自动同步到 B。
 
 ## 安装与首次使用
