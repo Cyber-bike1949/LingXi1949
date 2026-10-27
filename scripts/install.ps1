@@ -17,8 +17,11 @@ if ($Prefix.TrimEnd('\') -eq [IO.Path]::GetPathRoot($Prefix).TrimEnd('\') -or $P
 $Node = $null
 $Npm = $null
 if ($Role -eq 'b') {
-    $Node = (Get-Command node.exe -ErrorAction Stop).Source
-    $Npm = (Get-Command npm.cmd -ErrorAction Stop).Source
+    $NodeCommand = Get-Command node.exe -ErrorAction SilentlyContinue
+    $NpmCommand = Get-Command npm.cmd -ErrorAction SilentlyContinue
+    if (-not $NodeCommand -or -not $NpmCommand) { throw 'B requires Node.js 24+ and npm; install Node.js and rerun.' }
+    $Node = $NodeCommand.Source
+    $Npm = $NpmCommand.Source
     # Avoid embedded quotes: Windows PowerShell 5.1 strips them for native argv.
     & $Node -e 'if (parseInt(process.versions.node) < 24) process.exit(1)'
     if ($LASTEXITCODE -ne 0) { throw 'B requires Node.js 24+ and npm; install Node.js and rerun. Existing Node was not modified.' }
@@ -100,7 +103,8 @@ exit $LASTEXITCODE
     $Pointer = Join-Path $Prefix 'current.txt'
     if (Test-Path -LiteralPath $Pointer) {
         if (((Get-Item -LiteralPath $Pointer).Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) { throw 'Refusing reparse point current.txt' }
-        [IO.File]::Replace($PointerTemp, $Pointer, $null)
+        # PS 5.1 converts null string arguments to empty paths; use a real backup.
+        [IO.File]::Replace($PointerTemp, $Pointer, (Join-Path $Stage 'previous-pointer.txt'))
     } else { [IO.File]::Move($PointerTemp, $Pointer) }
     $Activated = $true
     Write-Host "Installed LingXi $Version, role $Role. Identity/configuration unchanged."

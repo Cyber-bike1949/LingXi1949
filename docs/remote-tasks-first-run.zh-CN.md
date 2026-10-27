@@ -59,6 +59,8 @@ Windows 的 `Bypass` 仅用于该进程，不修改系统执行策略；受组�
 
 安装器校验 Release 附件的 SHA-256，在临时版本目录检查 Agent/MCP 能否运行，成功后才切换入口。重复安装不会删除旧版本、重置设备身份、清空配对记录或任务数据库；失败时旧安装仍可用。不会安装模型 CLI、自动登录、配对、授权目录或启动后台服务。
 
+注意：4.0.0 已发布 Agent 的 `--version` 仍输出 Rust crate 内部版本 `0.1.0`；安装器按 **4.0.0 Release URL 和 SHA-256** 确认下载来源，最终显示 `Installed LingXi 4.0.0`。不要把内部版本号误认为下载了 0.1.0 Release。
+
 默认目录为 Linux 的 `~/.local/share/lingxi1949-install`、Windows 的 `%LOCALAPPDATA%\LingXi1949-install`；可通过 `--prefix /绝对路径` 或 `-Prefix 'D:\tools\LingXi'` 指定独立目录。不要手动删除其中的 `bundles`：已有 MCP 配置可能仍引用旧版本目录。重装后如需使用新安装，重新执行 `config` 并更新模型工具中的配置。
 
 **安装完成后启动 Agent**（B 和 C 各执行一次；需先停止同用户的旧 Agent）：
