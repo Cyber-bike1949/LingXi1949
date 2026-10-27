@@ -58,16 +58,13 @@ LingXi1949 仅支持 Obsidian 桌面版。
 
 ### 连接远程 Linux Agent
 
-当前源码中的安装脚本面向使用 systemd 的 Linux x64（Ubuntu 22.04/24.04 或 Debian 12），下载固定的 `2.1.0` Agent。对应 Release 及校验文件发布后才能成功安装；安装已发布的旧版本时，请使用对应 Git tag 中的安装说明。
-
-先下载脚本，再指定运行远程 Shell 的普通账户：
+Linux x64 一键安装已发布的 **4.0.0** Agent（C 端），以当前普通用户执行，无需 sudo：
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh -o install-linux.sh
-sudo bash install-linux.sh --user agentuser
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh && bash ./lingxi-install.sh --role c
 ```
 
-将 `agentuser` 替换为目标账户。脚本会按需创建账户、校验下载文件、启动 systemd 用户服务，并打印供“添加设备”使用的连接码。不传 `--user` 时默认为 `monkey`；Agent 本身始终以选定的普通用户运行。对同一账户重复安装会保留设备身份。查询状态时，请以该账户运行 `~/.local/bin/lingxi1949 status`。
+随后运行 `~/.local/share/lingxi1949-install/bin/lingxi1949 run`，将连接码用于“添加设备”。安装器校验 SHA-256、保留已有身份，不自动启动服务。B 端将 `--role c` 改为 `--role b`，同时安装 MCP（需预装 Node.js 24+ 和 npm）。完整步骤、Windows 一键命令和旧服务迁移注意事项见[首次使用指南](docs/remote-tasks-first-run.zh-CN.md)。旧 `agent/packaging/install-linux.sh` 仍固定为 2.1.0，请勿用于 4.0 功能。
 
 本地编译 Agent 的运行方式见[开发指南](docs/development_ZH.md#33-rust-agentlingxi1949)。
 

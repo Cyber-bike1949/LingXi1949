@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Added current-user Linux x64 and Windows x64 installers for B (Agent + MCP) and C (Agent), pinned to the published 4.0.0 assets, with SHA-256 checks, staged activation, stable launchers, and no automatic identity or service changes.
+- Added cross-platform installer smoke checks and first-run one-command installation instructions. B requires an existing Node.js 24+ installation with npm.
+
 ## [4.0.0] - 2026-10-24
 
 ### Added

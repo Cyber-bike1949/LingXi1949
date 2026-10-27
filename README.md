@@ -61,16 +61,13 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 
 ### Connect a remote Linux Agent
 
-The installer in the current source tree targets Linux x64 with systemd (Ubuntu 22.04/24.04 or Debian 12) and downloads the pinned `2.1.0` Agent release. That release and its checksum assets must exist before this installer can succeed. For a published older version, use the installation instructions at its matching Git tag.
-
-Download the script to a file, then select the ordinary account that will own the remote shell:
+Install the published **4.0.0** Linux x64 Agent (role C) as the current ordinary user, without sudo:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/agent/packaging/install-linux.sh -o install-linux.sh
-sudo bash install-linux.sh --user agentuser
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh && bash ./lingxi-install.sh --role c
 ```
 
-Replace `agentuser` with the intended account. The installer creates it if needed, verifies the download, starts a systemd user service, and prints a connection code for **Add device**. Omitting `--user` selects `monkey`; the Agent itself runs as the selected ordinary user. Re-running for the same account preserves its identity. Run `~/.local/bin/lingxi1949 status` as that account to inspect its status.
+Then run `~/.local/share/lingxi1949-install/bin/lingxi1949 run` and use its connection code for **Add device**. The installer verifies SHA-256, preserves identity, and does not start services automatically. Use `--role b` for Agent + MCP (requires Node.js 24+ and npm). See the [first-run guide](docs/remote-tasks-first-run.zh-CN.md) for Windows one-command installation and existing-service precautions. The legacy `agent/packaging/install-linux.sh` remains pinned to 2.1.0 and must not be used for 4.0 features.
 
 For a locally compiled Agent, follow the [development guide](docs/development.md#33-rust-agent-lingxi1949).
 

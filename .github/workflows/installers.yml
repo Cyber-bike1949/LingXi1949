@@ -1,0 +1,70 @@
+name: Installers
+on:
+  push:
+    branches: [main]
+    paths: ['scripts/install.sh', 'scripts/install.ps1', 'scripts/installers.test.js', '.github/workflows/installers.yml']
+  pull_request:
+    paths: ['scripts/install.sh', 'scripts/install.ps1', 'scripts/installers.test.js', '.github/workflows/installers.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  install:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - name: Installer regression tests
+        run: node --test scripts/installers.test.js
+      - name: Linux real release install, C to B, repeat and preserve identity
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$RUNNER_TEMP/lingxi install"
+          profile="$RUNNER_TEMP/lingxi profile"
+          bash scripts/install.sh --role c --prefix "$prefix"
+          "$prefix/bin/lingxi1949" --version
+          bash scripts/install.sh --role b --prefix "$prefix"
+          "$prefix/bin/lingxi-mcp" init --home "$profile"
+          before="$(sha256sum "$profile/profile.json")"
+          bash scripts/install.sh --role b --prefix "$prefix"
+          test "$before" = "$(sha256sum "$profile/profile.json")"
+          "$prefix/bin/lingxi-mcp" devices --home "$profile"
+      - name: Windows real release install, C to B, repeat and preserve identity
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $prefix = Join-Path $env:RUNNER_TEMP 'lingxi install'
+          $profileDir = Join-Path $env:RUNNER_TEMP 'lingxi profile'
+          & ./scripts/install.ps1 -Role c -Prefix $prefix
+          & "$prefix/bin/lingxi1949.ps1" --version
+          if ($LASTEXITCODE -ne 0) { throw 'Agent check failed' }
+          & ./scripts/install.ps1 -Role b -Prefix $prefix
+          & "$prefix/bin/lingxi-mcp.ps1" init --home $profileDir
+          if ($LASTEXITCODE -ne 0) { throw 'MCP init failed' }
+          $before = (Get-FileHash "$profileDir/profile.json").Hash
+          & ./scripts/install.ps1 -Role b -Prefix $prefix
+          if ($before -ne (Get-FileHash "$profileDir/profile.json").Hash) { throw 'Identity changed' }
+          & "$prefix/bin/lingxi-mcp.ps1" devices --home $profileDir
+          if ($LASTEXITCODE -ne 0) { throw 'MCP devices failed' }
+          $pointer = [IO.File]::ReadAllText("$prefix/current.txt")
+          $cachedAgent = Join-Path $pointer 'lingxi1949.exe'
+          function Invoke-WebRequest {
+            param([switch]$UseBasicParsing, [int]$TimeoutSec, [string]$Uri, [string]$OutFile)
+            if ($Uri.EndsWith('.sha256')) { [IO.File]::WriteAllText($OutFile, ('0' * 64) + '  asset') }
+            else { Copy-Item -LiteralPath $cachedAgent -Destination $OutFile }
+          }
+          $rejected = $false
+          try { & ./scripts/install.ps1 -Role c -Prefix $prefix }
+          catch { if ($_.Exception.Message -notmatch 'Checksum mismatch') { throw }; $rejected = $true }
+          if (-not $rejected) { throw 'Invalid checksum accepted' }
+          if ($pointer -ne [IO.File]::ReadAllText("$prefix/current.txt")) { throw 'Failed install changed active bundle' }

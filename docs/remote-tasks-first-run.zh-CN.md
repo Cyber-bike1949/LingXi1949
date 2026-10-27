@@ -37,6 +37,52 @@ A：Obsidian ──远程终端──> B：Agent → Codex / Claude → lingxi-m
 
 下面以 **B、C 为 Linux，终端为 Bash/sh** 演示；Windows 差异见第 8 节。所有路径中的 `~` 都属于“当前执行命令的那台机器、当前登录用户”。
 
+### 推荐：一条命令安装 B / C
+
+支持 **Linux x64、Windows x64**，固定安装已发布的 **4.0.0**，无需 Rust、Git 或 pnpm。B 安装 Agent + MCP；C 只安装 Agent。**B 需先有 Node.js 24+ 和 npm**，安装器会检查，但不会替换系统 Node；C 不需要 Node。Linux 需有 Bash、curl、tar、sha256sum，Windows 需有 PowerShell 和系统自带的 tar.exe。
+
+在对应机器上，以实际运行程序的普通用户执行，不要使用 sudo。以下命令会下载并运行本项目 main 分支的安装器；请只在信任该仓库时执行，也可先下载审阅脚本再运行。下载会在当前目录保存 `lingxi-install.sh` / `lingxi-install.ps1`，请勿覆盖自己的同名文件。
+
+**Linux：在 B 执行**（C 把末尾的 `b` 改为 `c`）：
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh && bash ./lingxi-install.sh --role b
+```
+
+**Windows：在 B 的 PowerShell 执行**（C 把末尾的 `b` 改为 `c`）：
+
+```powershell
+$ErrorActionPreference = 'Stop'; Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.ps1 -OutFile .\lingxi-install.ps1; powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\lingxi-install.ps1 -Role b
+```
+
+Windows 的 `Bypass` 仅用于该进程，不修改系统执行策略；受组织策略限制的机器需遵守管理员要求。
+
+安装器校验 Release 附件的 SHA-256，在临时版本目录检查 Agent/MCP 能否运行，成功后才切换入口。重复安装不会删除旧版本、重置设备身份、清空配对记录或任务数据库；失败时旧安装仍可用。不会安装模型 CLI、自动登录、配对、授权目录或启动后台服务。
+
+默认目录为 Linux 的 `~/.local/share/lingxi1949-install`、Windows 的 `%LOCALAPPDATA%\LingXi1949-install`；可通过 `--prefix /绝对路径` 或 `-Prefix 'D:\tools\LingXi'` 指定独立目录。不要手动删除其中的 `bundles`：已有 MCP 配置可能仍引用旧版本目录。重装后如需使用新安装，重新执行 `config` 并更新模型工具中的配置。
+
+**安装完成后启动 Agent**（B 和 C 各执行一次；需先停止同用户的旧 Agent）：
+
+```sh
+~/.local/share/lingxi1949-install/bin/lingxi1949 run
+```
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi1949.ps1" run
+```
+
+保持前台运行，复制 C 的连接码用于第 4 节。B 另外打开终端，后续文档中的 `node packages/lingxi-mcp/cli.mjs` 可替换为：
+
+```sh
+~/.local/share/lingxi1949-install/bin/lingxi-mcp
+```
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$env:LOCALAPPDATA\LingXi1949-install\bin\lingxi-mcp.ps1"
+```
+
+在以上命令末尾追加 `init`、`pair ...`、`config ...` 等参数即可，不需要切换目录。新安装按第 4 节初始化；已有身份不要重复 `init`。若此前通过旧脚本安装到专用用户，必须继续使用该用户，否则默认身份目录不同。一键安装不会接管旧 systemd 服务，也不会修改 PATH；仍需按第 3.1 节完成 B 的模型工具安装与登录。
+
 ## 2. 在 C 准备项目和 Agent
 
 **操作位置：C 的本机终端或已有 SSH 终端。**
