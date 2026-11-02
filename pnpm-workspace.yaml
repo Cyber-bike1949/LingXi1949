@@ -1,0 +1,4 @@
+packages:
+  - packages/obsidian-plugin
+  - packages/remote
+  - packages/core

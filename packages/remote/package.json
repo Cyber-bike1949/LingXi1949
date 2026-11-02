@@ -1,0 +1,26 @@
+{
+  "name": "@lingxi1949/remote",
+  "version": "5.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
+  "bin": {
+    "lingxi": "packages/lingxi-mcp/cli.mjs",
+    "lingxi-mcp": "packages/lingxi-mcp/cli.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/build-mcp.mjs",
+    "test": "node --test packages/lingxi-mcp/*.test.mjs",
+    "test:e2e": "node packages/lingxi-mcp/e2e.mjs",
+    "package": "node scripts/package-remote.mjs"
+  },
+  "dependencies": {
+    "@number0/iroh": "1.1.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0"
+  },
+  "packageManager": "pnpm@10.33.4"
+}

@@ -1,0 +1,73 @@
+name: Remote Product Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Semantic version tag matching packages/remote/package.json
+        required: true
+        type: string
+        default: 'remote-5.0.0'
+  push:
+    tags: ['remote-*']
+
+permissions:
+  contents: write
+
+env:
+  RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  package:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            binary: agent/target/release/lingxi1949
+          - os: windows-latest
+            binary: agent/target/release/lingxi1949.exe
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: packages/remote
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.RELEASE_VERSION }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.4
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      - run: cargo test --locked --manifest-path agent/Cargo.toml
+      - run: cargo build --release --locked --manifest-path agent/Cargo.toml
+      - run: pnpm build
+      - run: pnpm package
+        env:
+          LINGXI_AGENT_BINARY: ${{ matrix.binary }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: remote-${{ runner.os }}
+          path: packages/remote/release-assets/lingxi-remote-*
+          if-no-files-found: error
+
+  publish:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: remote-*
+          path: assets
+          merge-multiple: true
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          draft: true
+          files: assets/*

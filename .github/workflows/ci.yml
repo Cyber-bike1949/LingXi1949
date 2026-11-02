@@ -1,69 +1,59 @@
-name: CI
+name: Monorepo CI
 
 on:
   push:
-    branches: [main, develop]
-    paths-ignore:
-      - 'docs/**'
-      - 'assets/**'
-      - 'README.md'
-      - 'README_ZH.md'
-      - 'CHANGELOG.md'
+    branches: [main, 'feat/**']
   pull_request:
-    branches: [main, develop]
-    paths-ignore:
-      - 'docs/**'
-      - 'assets/**'
-      - 'README.md'
-      - 'README_ZH.md'
-      - 'CHANGELOG.md'
   workflow_dispatch:
 
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   plugin:
-    name: Build and test plugin
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
-
+    name: Obsidian plugin
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/obsidian-plugin
     steps:
       - uses: actions/checkout@v5
-
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
       - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.4
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      - run: pnpm build
+      - run: pnpm lint:obsidian
+      - run: pnpm test:terminal
+      - run: pnpm test:remote
+      - run: pnpm test:scripts
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
+  remote:
+    name: Remote product
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/remote
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
-          cache: 'pnpm'
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Lint Obsidian
-        run: pnpm lint:obsidian
-
-      - name: Build plugin
-        run: pnpm build
-
-      - name: Check the generated protocol types are current
-        run: node scripts/sync-protocol.js --check
-
-      - name: Run terminal tests
-        run: pnpm test:terminal
-
-      - name: Run remote module tests
-        run: pnpm test:remote
-
-      - name: Run script tests
-        run: pnpm test:scripts
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.4
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      - run: pnpm build
+      - run: pnpm test
+      - run: cargo fmt --manifest-path agent/Cargo.toml --check
+      - run: cargo test --locked --manifest-path agent/Cargo.toml
+      - run: pnpm test:e2e

@@ -1,0 +1,148 @@
+name: Obsidian Plugin Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Semantic version tag matching packages/obsidian-plugin/manifest.json
+        required: true
+        type: string
+        default: '5.0.0'
+  push:
+    tags: ['5.*.*']
+
+concurrency:
+  group: obsidian-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: true
+
+env:
+  RELEASE_VERSION: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      commit: ${{ steps.source.outputs.commit }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refs/tags/${{ env.RELEASE_VERSION }}
+      - id: source
+        run: echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Validate Obsidian release metadata
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+          const version = process.env.RELEASE_VERSION;
+          const manifest = JSON.parse(fs.readFileSync('packages/obsidian-plugin/manifest.json', 'utf8'));
+          const packageJson = JSON.parse(fs.readFileSync('packages/obsidian-plugin/package.json', 'utf8'));
+          const changelog = fs.readFileSync('packages/obsidian-plugin/CHANGELOG.md', 'utf8');
+          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Invalid semantic version tag');
+          if (manifest.version !== version || packageJson.version !== version) throw new Error(`Version mismatch: tag=${version}, manifest=${manifest.version}, package=${packageJson.version}`);
+          const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          if (!new RegExp(`^## \\[${escaped}\\]`, 'm').test(changelog)) throw new Error('CHANGELOG.md is missing the release section');
+          NODE
+
+  build:
+    needs: validate
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            arch: x64
+            target: x86_64-unknown-linux-gnu
+            ext: ''
+          - os: windows-latest
+            platform: win32
+            arch: x64
+            target: x86_64-pc-windows-msvc
+            ext: .exe
+          - os: macos-latest
+            platform: darwin
+            arch: arm64
+            target: aarch64-apple-darwin
+            ext: ''
+          - os: macos-latest
+            platform: darwin
+            arch: x64
+            target: x86_64-apple-darwin
+            ext: ''
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: packages/obsidian-plugin
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.4
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+          targets: ${{ matrix.target }}
+      - run: pnpm install --frozen-lockfile --ignore-workspace
+      - run: cargo build --release --target ${{ matrix.target }} --manifest-path rust-servers/Cargo.toml
+      - name: Stage native PTY binary
+        shell: bash
+        run: |
+          mkdir -p binaries
+          cp "rust-servers/target/${{ matrix.target }}/release/termy-server${{ matrix.ext }}" "binaries/termy-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
+      - run: pnpm build
+      - run: pnpm package
+      - uses: actions/upload-artifact@v7
+        with:
+          name: obsidian-plugin-${{ matrix.platform }}-${{ matrix.arch }}
+          path: packages/obsidian-plugin/plugin-package
+          if-no-files-found: error
+
+  release:
+    needs: [validate, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.validate.outputs.commit }}
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: obsidian-plugin-*
+          path: complete-packages
+      - name: Validate and prepare Obsidian assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          first=''
+          for package_dir in complete-packages/obsidian-plugin-*; do
+            test -f "$package_dir/main.js"
+            test -f "$package_dir/manifest.json"
+            test -f "$package_dir/styles.css"
+            test "$(node -p "require('./$package_dir/manifest.json').version")" = "$RELEASE_VERSION"
+            platform=${package_dir##*/obsidian-plugin-}
+            (cd "$package_dir" && zip -qr "../../lingxi1949-${RELEASE_VERSION}-${platform}.zip" .)
+            if [ -z "$first" ]; then first="$package_dir"; fi
+            find "$package_dir/binaries" -maxdepth 1 -type f -name 'termy-server-*' -exec cp {} . \;
+          done
+          # Obsidian and BRAT direct-install assets must be at the release root.
+          cp "$first/main.js" main.js
+          cp "$first/manifest.json" manifest.json
+          cp "$first/styles.css" styles.css
+          test -s main.js && test -s manifest.json && test -s styles.css
+      - uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ env.RELEASE_VERSION }}
+          draft: false
+          prerelease: false
+          files: |
+            main.js
+            manifest.json
+            styles.css
+            lingxi1949-${{ env.RELEASE_VERSION }}-*.zip
+            termy-server-*

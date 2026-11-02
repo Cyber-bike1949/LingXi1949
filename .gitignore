@@ -1,66 +1,13 @@
-# Node modules
 node_modules/
-packages/remote-sdk/dist/
-release-assets/
-
-# Rust
-target/
-
-# Binaries (excluded in development, included in release)
-binaries/
-
-# Build output
-main.css
-main.js
-*.js.map
-
-# Plugin package (release artifacts)
-plugin-package/
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-
-# OS files
+**/node_modules/
+**/target/
+**/dist/
+packages/obsidian-plugin/main.js
+packages/obsidian-plugin/main.js.map
+packages/obsidian-plugin/binaries/
+packages/obsidian-plugin/plugin-package/
+packages/obsidian-plugin/release-assets/
+packages/remote/release-assets/
+*.log
 .DS_Store
-Thumbs.db
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Test
-coverage/
-
-# Misc
 .env
-.env.local
-.dev-install-config.json
-
-# ACE Tool Mcp
-.ace-tool/
-
-# oh-my-codex
-.omx/
-.kiro/
-# Upstream keeps docs/ out of the tree as a personal scratch area.
-# development.md/development_ZH.md under docs/ are deliverable documentation
-# and must be tracked, so exclude the contents rather than the directory -
-# git cannot re-include a path whose parent directory is itself excluded.
-docs/*
-!docs/development.md
-!docs/development_ZH.md
-!docs/remote-tasks-first-run.zh-CN.md
-
-# Personal scratch notes (not part of the plugin)
-t.md
-new_t.md
-
-test-results/
-
-test-remote/
