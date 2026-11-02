@@ -96,10 +96,25 @@ jobs:
           cp "rust-servers/target/${{ matrix.target }}/release/termy-server${{ matrix.ext }}" "binaries/termy-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
       - run: pnpm build
       - run: pnpm package
+      - name: Stage Iroh runtime asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p iroh-assets
+          native_paths=(plugin-package/node_modules/@number0/iroh-*/*.node)
+          test "${#native_paths[@]}" -eq 1
+          asset="iroh-runtime-${{ matrix.platform }}-${{ matrix.arch }}.node"
+          cp "${native_paths[0]}" "iroh-assets/$asset"
+          sha256sum "iroh-assets/$asset" > "iroh-assets/$asset.sha256"
       - uses: actions/upload-artifact@v7
         with:
           name: obsidian-plugin-${{ matrix.platform }}-${{ matrix.arch }}
           path: packages/obsidian-plugin/plugin-package
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v7
+        with:
+          name: iroh-${{ matrix.platform }}-${{ matrix.arch }}
+          path: packages/obsidian-plugin/iroh-assets
           if-no-files-found: error
 
   release:
@@ -115,6 +130,11 @@ jobs:
         with:
           pattern: obsidian-plugin-*
           path: complete-packages
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: iroh-*
+          path: release-assets
+          merge-multiple: true
       - name: Validate and prepare Obsidian assets
         shell: bash
         run: |
@@ -146,3 +166,5 @@ jobs:
             styles.css
             lingxi1949-${{ env.RELEASE_VERSION }}-*.zip
             termy-server-*
+            release-assets/iroh-runtime-*.node
+            release-assets/iroh-runtime-*.node.sha256
