@@ -1,7 +1,0 @@
-{
-  "name": "@lingxi1949/core",
-  "version": "5.0.0",
-  "private": true,
-  "type": "module",
-  "description": "Shared protocol, pairing models and Rust filesystem operations"
-}
