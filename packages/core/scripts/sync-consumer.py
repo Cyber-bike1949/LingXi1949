@@ -2,7 +2,7 @@
 """Validate the in-repository Core package wiring."""
 from pathlib import Path
 import sys
-root = Path(__file__).resolve().parents[2]
+root = Path(__file__).resolve().parents[3]
 for product in [root / 'obsidian-plugin', root / 'remote']:
     if not product.is_dir():
         raise SystemExit(f'Missing product package: {product}')
