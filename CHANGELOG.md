@@ -1,3 +1,10 @@
+## 5.0.0（待正式发布）
+
+- 将主控端、Agent、MCP 和远程发布移至独立 LingXiRemote 项目。
+- 将帧协议、配对身份模型及 Rust 文件操作抽离至 LingXiCore，插件采用固定来源快照。
+- 增加 Linux/Windows 真实 Obsidian 界面自动化脚本、逐项报告与失败截图。
+- 保留插件标识、配置和已有设备记录；正式标签与发布待确认。
+
 # Changelog
 
 All notable changes to LingXi1949 will be documented in this file.

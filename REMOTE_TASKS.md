@@ -1,3 +1,5 @@
+> 5.0 提示：本文保留 4.0 接口与历史使用说明。远程组件已移至 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)，新版安装请使用该项目 README 中的 setup 脚本。
+
 # 远程模型任务（4.0）
 
 首次配置请先阅读 [A、B、C 三端首次使用指南](https://github.com/Cyber-bike1949/LingXi1949/blob/main/docs/remote-tasks-first-run.zh-CN.md)，按设备和顺序完成安装、配对、模型配置与验证。本文保留工具参数、限制和开发验证说明。

@@ -1,0 +1,17 @@
+{
+  "repository": "https://github.com/Cyber-bike1949/LingXiCore",
+  "commit": "8b0f0a49d7d76e0aee2c4c1116a118f713dac523",
+  "files": {
+    "src/services/remote/terminalStreamFrame.ts": "09e1f33d51256d0a8703dc01309bdc1626a95684229077beeced57d68cfed55a",
+    "src/services/remote/devicePairing.ts": "5a0556277a61ba7b23386e9b48c8d0d105dfee1b1bd55a4e4bab77d38aa0bc35",
+    "src/services/remote/pairedDeviceStore.ts": "9a404058a26d1490598c97392a41fab8528f5068c95b92dce147a6b69580b822",
+    "src/services/remote/connectionCode.ts": "31e94891a90a312a93ff9571d892a7a6509163fe2861ff706d45fee13e3178ed",
+    "src/services/remote/controllerIdentity.ts": "97d9013a91e422d5e66f9f939a8c11816c34efae9f33a2de2bfa0df19abb172a",
+    "src/services/terminal/fileOperations.ts": "b66e11a57a0885698f8c8ffee462914dec0f2a589de628ea234319c1f2017c28",
+    "crates/fs-operations/Cargo.lock": "51f05233044c7d9774654f10cb369eb6438a3dbca663ef77afe383656fed3bca",
+    "crates/fs-operations/Cargo.toml": "49c98aaf74f9464113560e7e51aafcd7ca47137a66044952faa65ad8336afed6",
+    "crates/fs-operations/src/lib.rs": "525f261174e2712a18eb63f50449a6a8504f64e62cda035eb84668abd4b465d2",
+    "LICENSE": "3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986",
+    "package.json": "2267dab4e92bc7a0e828c22d473c75d28bbc9fb9fdaea65a7d7e4c4e3da6c915"
+  }
+}

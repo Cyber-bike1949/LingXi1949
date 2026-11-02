@@ -197,109 +197,9 @@ jobs:
             binaries/termy-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}
             binaries/termy-server-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}.sha256
 
-  build-agent:
-    name: Build Agent ${{ matrix.platform }}-${{ matrix.arch }}
-    needs: validate-release
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 45
-
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-latest
-            platform: win32
-            arch: x64
-            target: x86_64-pc-windows-msvc
-            ext: .exe
-          - os: ubuntu-latest
-            platform: linux
-            arch: x64
-            target: x86_64-unknown-linux-gnu
-            ext: ''
-
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.validate-release.outputs.commit }}
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
-        with:
-          toolchain: 1.97.1
-          targets: ${{ matrix.target }}
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: agent
-          key: release-agent-${{ matrix.target }}
-
-      - name: Build
-        run: cargo build --release --locked --manifest-path agent/Cargo.toml --target ${{ matrix.target }}
-
-      - name: Prepare binary
-        shell: bash
-        run: |
-          mkdir -p release-assets
-          ASSET_NAME="lingxi1949-${{ matrix.platform }}-${{ matrix.arch }}${{ matrix.ext }}"
-          cp "agent/target/${{ matrix.target }}/release/lingxi1949${{ matrix.ext }}" "release-assets/${ASSET_NAME}"
-
-          cd release-assets
-          if command -v sha256sum &> /dev/null; then
-            sha256sum "${ASSET_NAME}" > "${ASSET_NAME}.sha256"
-          else
-            shasum -a 256 "${ASSET_NAME}" > "${ASSET_NAME}.sha256"
-          fi
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: agent-${{ matrix.platform }}-${{ matrix.arch }}
-          path: release-assets/lingxi1949-*
-
-  build-relay:
-    name: Build Relay linux-x64
-    needs: validate-release
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: ${{ needs.validate-release.outputs.commit }}
-
-      - name: Setup Rust
-        uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
-        with:
-          toolchain: 1.97.1
-          targets: x86_64-unknown-linux-gnu
-
-      - name: Cache Rust
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: relay
-          key: release-relay-x86_64-unknown-linux-gnu
-
-      - name: Build
-        run: cargo build --release --locked --manifest-path relay/Cargo.toml --target x86_64-unknown-linux-gnu
-
-      - name: Prepare binary
-        run: |
-          mkdir -p release-assets
-          cp relay/target/x86_64-unknown-linux-gnu/release/termy-relay release-assets/termy-relay-linux-x64
-          cd release-assets
-          sha256sum termy-relay-linux-x64 > termy-relay-linux-x64.sha256
-
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: relay-linux-x64
-          path: release-assets/termy-relay-linux-x64*
-
   release:
     name: Release
-    needs: [validate-release, build-rust, build-agent, build-relay]
+    needs: [validate-release, build-rust]
     runs-on: ubuntu-latest
     timeout-minutes: 30
     permissions:
@@ -327,20 +227,6 @@ jobs:
           path: binaries
           merge-multiple: true
 
-      - name: Download agent binaries
-        uses: actions/download-artifact@v7
-        with:
-          pattern: 'agent-*'
-          path: release-assets
-          merge-multiple: true
-
-      - name: Download relay binaries
-        uses: actions/download-artifact@v7
-        with:
-          pattern: 'relay-*'
-          path: release-assets
-          merge-multiple: true
-
       - name: Download complete plugin packages
         uses: actions/download-artifact@v7
         with:
@@ -358,14 +244,11 @@ jobs:
         run: |
           chmod +x binaries/termy-server-darwin-* || true
           chmod +x binaries/termy-server-linux-* || true
-          chmod +x release-assets/lingxi1949-linux-* || true
-          chmod +x release-assets/termy-relay-linux-* || true
 
       - name: Install and build
         run: |
           pnpm install --frozen-lockfile
           pnpm build
-          pnpm package:mcp
 
       - name: Generate release notes
         run: |
@@ -406,7 +289,6 @@ jobs:
         uses: actions/attest-build-provenance@v4
         with:
           subject-path: |
-            release-assets/lingxi-mcp-*.tar.gz
             main.js
             manifest.json
             styles.css
@@ -417,17 +299,12 @@ jobs:
             binaries/termy-server-darwin-x64
             binaries/termy-server-linux-x64
             binaries/termy-server-linux-arm64
-            release-assets/lingxi1949-win32-x64.exe
-            release-assets/lingxi1949-linux-x64
-            release-assets/termy-relay-linux-x64
 
       - name: Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
           files: |
-            release-assets/lingxi-mcp-*.tar.gz
-            release-assets/lingxi-mcp-*.tar.gz.sha256
             main.js
             manifest.json
             styles.css
@@ -444,12 +321,6 @@ jobs:
             binaries/termy-server-linux-x64.sha256
             binaries/termy-server-linux-arm64
             binaries/termy-server-linux-arm64.sha256
-            release-assets/lingxi1949-win32-x64.exe
-            release-assets/lingxi1949-win32-x64.exe.sha256
-            release-assets/lingxi1949-linux-x64
-            release-assets/lingxi1949-linux-x64.sha256
-            release-assets/termy-relay-linux-x64
-            release-assets/termy-relay-linux-x64.sha256
           body_path: release-body.md
           draft: false
           prerelease: false

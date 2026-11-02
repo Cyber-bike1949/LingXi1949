@@ -1,0 +1,65 @@
+name: Real Obsidian UI
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  ui:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/checkout@v5
+        with:
+          repository: Cyber-bike1949/LingXiRemote
+          path: test-remote
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v5
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rust-servers
+            test-remote/agent
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - run: pnpm build:rust
+      - run: pnpm package
+      - run: cargo build --locked --manifest-path test-remote/agent/Cargo.toml
+      - run: npm ci --prefix e2e/obsidian --ignore-scripts --no-audit --no-fund
+      - name: Linux real application
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb libgtk-3-0 libasound2t64
+          curl -fL https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.5/Obsidian-1.14.5.AppImage -o /tmp/Obsidian.AppImage
+          chmod +x /tmp/Obsidian.AppImage
+          cd /tmp
+          ./Obsidian.AppImage --appimage-extract > /dev/null
+          cd "$GITHUB_WORKSPACE"
+          xvfb-run -a node e2e/obsidian/run.mjs --obsidian /tmp/squashfs-root/obsidian --agent test-remote/agent/target/debug/lingxi1949
+      - name: Windows real application
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'Obsidian.exe'
+          $app = Join-Path $env:RUNNER_TEMP 'ObsidianUI'
+          Invoke-WebRequest https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.5/Obsidian-1.14.5.exe -OutFile $installer
+          Start-Process $installer -ArgumentList '/S',"/D=$app" -Wait
+          node e2e/obsidian/run.mjs --obsidian "$app/Obsidian.exe" --agent test-remote/agent/target/debug/lingxi1949.exe
+          if ($LASTEXITCODE -ne 0) { throw 'UI test failed' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: obsidian-ui-${{ runner.os }}
+          path: test-results/obsidian
+          if-no-files-found: error

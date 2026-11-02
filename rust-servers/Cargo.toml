@@ -10,7 +10,7 @@ name = "termy-server"
 path = "src/main.rs"
 
 [dependencies]
-lingxi-fs-operations = { path = "../crates/fs-operations" }
+lingxi-fs-operations = { path = "../vendor/lingxi-core/crates/fs-operations" }
 # PTY support
 portable-pty = "0.9"
 which = "6.0"

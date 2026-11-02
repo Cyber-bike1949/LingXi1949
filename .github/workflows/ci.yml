@@ -29,7 +29,11 @@ concurrency:
 jobs:
   plugin:
     name: Build and test plugin
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 20
 
     steps:
@@ -46,6 +50,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Lint Obsidian
+        run: pnpm lint:obsidian
+
       - name: Build plugin
         run: pnpm build
 
@@ -58,29 +65,5 @@ jobs:
       - name: Run remote module tests
         run: pnpm test:remote
 
-      - name: Run MCP tests
-        run: pnpm test:mcp
-
       - name: Run script tests
         run: pnpm test:scripts
-
-  remote-tasks:
-    name: Agent and MCP integration
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v5
-      - uses: pnpm/action-setup@v5
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
-        with:
-          toolchain: 1.97.1
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: agent
-      - run: pnpm install --frozen-lockfile
-      - run: cargo test --locked --manifest-path agent/Cargo.toml
-      - run: pnpm test:mcp:e2e

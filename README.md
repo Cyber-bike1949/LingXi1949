@@ -1,3 +1,5 @@
+> **5.0 项目拆分：** 本仓库交付 Obsidian 插件与终端后端；主控终端、Agent 和 AI CLI 接入已迁至 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。共用代码由 [LingXiCore](https://github.com/Cyber-bike1949/LingXiCore) 维护。新版说明见 [5.0 使用与测试](docs/5.0-usage-and-testing.zh-CN.md)。下方旧安装段落属于 4.0 历史信息，以新版说明为准。
+
 <img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
 # LingXi1949
