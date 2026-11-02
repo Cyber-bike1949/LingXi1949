@@ -105,7 +105,11 @@ jobs:
           test "${#native_paths[@]}" -eq 1
           asset="iroh-runtime-${{ matrix.platform }}-${{ matrix.arch }}.node"
           cp "${native_paths[0]}" "iroh-assets/$asset"
-          sha256sum "iroh-assets/$asset" > "iroh-assets/$asset.sha256"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "iroh-assets/$asset" > "iroh-assets/$asset.sha256"
+          else
+            shasum -a 256 "iroh-assets/$asset" > "iroh-assets/$asset.sha256"
+          fi
       - uses: actions/upload-artifact@v7
         with:
           name: obsidian-plugin-${{ matrix.platform }}-${{ matrix.arch }}
