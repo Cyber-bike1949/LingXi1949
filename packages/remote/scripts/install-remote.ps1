@@ -41,15 +41,29 @@ try {
     } elseif (-not (Test-Path (Join-Path $Destination '.lingxi-installed')) -or -not (Test-Path (Join-Path $Destination 'scripts/setup.ps1')) -or -not (Test-Path (Join-Path $Destination 'scripts/setup.mjs')) -or -not (Test-Path (Join-Path $Destination 'bin/lingxi1949.exe'))) {
         throw "Existing directory is not managed by this installer: $Destination. Choose another LINGXI_REMOTE_HOME."
     }
-    # Repair the quoting bug in the published 5.0.0 setup script, including reused installs.
-    # Windows PowerShell 5.1 strips embedded double quotes from native arguments.
-    $SetupPath = Join-Path $Destination 'scripts/setup.ps1'
-    $SetupSource = [IO.File]::ReadAllText($SetupPath)
-    $FixedSetup = $SetupSource.Replace('if(+process.versions.node.split(".")[0]<24)process.exit(1)', 'if(parseInt(process.versions.node,10)<24)process.exit(1)')
-    if ($FixedSetup -cne $SetupSource) {
-        [IO.File]::WriteAllText($SetupPath, $FixedSetup, (New-Object System.Text.UTF8Encoding($false)))
+    # Repair only the published 5.0.0 startup files; preserve identity and configuration.
+    if ($Version -eq '5.0.0') {
+        $FixUrl = 'https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/407e322f2e90757ff7fa38259d56c2fb95bdb89a/packages/remote'
+        $Fixes = [ordered]@{
+            'package-lock.json' = 'eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a'
+            'scripts/setup.ps1' = 'ba7b45dd6e431e3b692853b0c94aa1d3f6c338e32035c82f434563e2f291db0e'
+            'control.cmd' = '24d9b49d0345e078354ff659c350e95c88875f53ff2046faa5ad428f614eeb1e'
+        }
+        foreach ($File in $Fixes.Keys) {
+            $Target = Join-Path $Destination $File
+            if ((Test-Path -LiteralPath $Target) -and (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash -eq $Fixes[$File]) { continue }
+            if (-not $Stage) {
+                $Stage = Join-Path $Base ('.repair.' + [guid]::NewGuid().ToString())
+                New-Item -ItemType Directory -Path $Stage | Out-Null
+            }
+            $Patch = Join-Path $Stage ((Split-Path $File -Leaf) + '.fixed')
+            Invoke-WebRequest -UseBasicParsing -Uri "$FixUrl/$File" -OutFile $Patch
+            if ((Get-FileHash -LiteralPath $Patch -Algorithm SHA256).Hash -ne $Fixes[$File]) { throw "Repair checksum mismatch: $File" }
+            Move-Item -LiteralPath $Patch -Destination $Target -Force
+        }
     }
     Write-Host "Installed at: $Destination"
+    Write-Host "Manual control: double-click $Destination\control.cmd"
     & (Join-Path $Destination 'scripts/setup.ps1') @SetupArgs
 } finally {
     if ($Stage -and (Test-Path $Stage)) { Remove-Item -Recurse -Force $Stage }

@@ -30,7 +30,7 @@ test('manual launcher finds bundled Node and passes paths with spaces from any d
     const cli = join(root, 'packages/lingxi-mcp');
     await mkdir(cli, { recursive: true });
     await writeFile(join(cli, 'cli.mjs'), 'console.log(JSON.stringify({args:process.argv.slice(2),node:process.execPath,cwd:process.cwd()}));');
-    const run = () => exec(windows ? process.env.ComSpec : 'bash', windows ? ['/d', '/s', '/c', `""${launcher}" --home "profile with spaces""`] : [launcher, '--home', 'profile with spaces'], { cwd: tmpdir(), timeout: 10000 });
+    const run = () => exec(windows ? process.env.ComSpec : 'bash', windows ? ['/d', '/s', '/c', `""${launcher}" --home "profile with spaces""`] : [launcher, '--home', 'profile with spaces'], { cwd: tmpdir(), timeout: 10000, windowsVerbatimArguments: windows });
     const fallback = JSON.parse((await run()).stdout);
     assert.deepEqual(fallback.args, ['shell', '--home', 'profile with spaces']);
     const runtime = join(root, '.runtime', windows ? 'node-v24.22.1-win-x64' : 'node-v24.22.1-linux-x64/bin');

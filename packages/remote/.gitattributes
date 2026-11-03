@@ -1,0 +1,5 @@
+# Keep repair payloads byte-identical to GitHub raw downloads on all platforms.
+*.sh text eol=lf
+*.ps1 text eol=lf
+*.cmd text eol=lf
+package-lock.json text eol=lf

@@ -16,7 +16,11 @@ test('bootstrap verifies downloads, reuses installs, preserves config and fails 
   try {
     const fixture = join(root, 'fixture'); const pack = join(root, 'pack'); const bin = join(root, 'mock-bin');
     for (const dir of [fixture, bin, join(pack, 'scripts'), join(pack, 'bin')]) await mkdir(dir, { recursive: true });
-    await writeFile(join(pack, 'scripts/setup.mjs'), '');
+    await writeFile(join(pack, 'scripts/setup.mjs'), "import { writeFileSync } from 'node:fs'; writeFileSync(process.env.TEST_OUTPUT, process.argv.slice(2).join('\\n'));");
+    await writeFile(join(pack, 'package.json'), await readFile('package.json'));
+    for (const file of ['package-lock.json', `scripts/setup.${windows ? 'ps1' : 'sh'}`, windows ? 'control.cmd' : 'control.sh']) {
+      await writeFile(join(fixture, file.split('/').at(-1)), await readFile(file));
+    }
     await writeFile(join(pack, 'bin', windows ? 'lingxi1949.exe' : 'lingxi1949'), 'fixture');
     await writeFile(join(pack, 'scripts/setup.sh'), '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$TEST_OUTPUT"\n');
     const legacySetup = `param([Parameter(ValueFromRemainingArguments=$true)][string[]]$SetupArgs)
@@ -52,8 +56,10 @@ function Invoke-WebRequest {
     const base = join(root, 'install with spaces');
     const output = join(root, 'args');
     const env = { ...process.env, LINGXI_REMOTE_HOME: base, LINGXI_REMOTE_VERSION: version, TEST_FIXTURE: fixture, TEST_OUTPUT: output, TEST_INSTALLER: installer, PATH: `${bin}${delimiter}${process.env.PATH}` };
-    const run = (overrides = {}) => exec(windows ? 'powershell.exe' : 'bash', windows ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', harness] : [installer, '--role', 'target', '--name', 'test device'], { env: { ...env, ...overrides }, timeout: 30000 });
+    const run = (overrides = {}) => exec(windows ? 'powershell.exe' : 'bash', windows ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', harness] : [installer, '--role', 'target', '--name', 'test device'], { env: { ...env, ...overrides }, timeout: 180000 });
     await run({ LINGXI_REMOTE_VERSION: '' });
+    const control = windows ? 'control.cmd' : 'control.sh';
+    assert.equal(await readFile(join(base, version, control), 'utf8'), await readFile(control, 'utf8'));
     if (windows) {
       const setupPath = join(base, version, 'scripts/setup.ps1');
       assert.match(await readFile(setupPath, 'utf8'), /parseInt\(process\.versions\.node,10\)/);
@@ -62,10 +68,20 @@ function Invoke-WebRequest {
     }
     assert.match(await readFile(output, 'utf8'), /--role\r?\ntarget\r?\n--name\r?\ntest device/);
     const preserved = join(base, version, 'user-config'); await writeFile(preserved, 'preserved');
+    // An existing but incomplete dependency directory must not bypass repair.
+    const dependency = join(base, version, 'node_modules/@number0/iroh');
+    await rm(dependency, { recursive: true, force: true });
+    await mkdir(dependency, { recursive: true });
     await rm(join(fixture, asset));
     await run();
     if (windows) assert.match(await readFile(join(base, version, 'scripts/setup.ps1'), 'utf8'), /parseInt\(process\.versions\.node,10\)/);
     assert.equal(await readFile(preserved, 'utf8'), 'preserved');
+    await rm(join(base, version, control));
+    await writeFile(join(fixture, control), 'corrupted repair');
+    await assert.rejects(run(), /checksum|FAILED/i);
+    assert.equal(await readFile(preserved, 'utf8'), 'preserved');
+    await writeFile(join(fixture, control), await readFile(control));
+    await run();
     await assert.rejects(run({ LINGXI_REMOTE_HOME: join(root, 'no-release') }), /Download failed|下载失败/);
     await exec(windows ? 'tar.exe' : 'tar', ['-czf', join(fixture, asset), '-C', pack, '.']);
     await writeFile(checksumPath, `${'0'.repeat(64)}  ${asset}\n`);
