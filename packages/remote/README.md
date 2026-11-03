@@ -6,7 +6,7 @@
 
 在控制端和被控制端各复制执行一次下面的命令。`install-remote` 自动下载对应平台包、校验 SHA-256、解压并启动初始化；无需手动下载解压，也无需先安装 Node.js、pnpm 或 Rust。
 
-> 发布状态：Remote 5.0.0 平台包尚未公开发布。以下命令已接入安装流程，需发布 `remote-5.0.0` 后才能完成下载；当前不会改用旧版插件包。可在 [Release 页面](https://github.com/Cyber-bike1949/LingXi1949/releases) 查看发布状态。
+> 安装版本：[Remote 5.0.0](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/remote-5.0.0)，支持 Linux x64 和 Windows x64。下方命令从该版本的公开 Release 下载对应平台包，不会下载旧版插件包。
 
 **Linux x64**，在终端粘贴执行整个代码块（需要系统自带或预先安装 `curl`、`tar`、`sha256sum`、`xz`）：
 
@@ -36,7 +36,7 @@
 
 脚本名称是 `install-remote.sh` / `install-remote.ps1`。下载脚本后再执行，保留终端输入给初始化向导。Linux 安装到 `~/.local/share/lingxi-remote/5.0.0`，Windows 安装到 `%LOCALAPPDATA%\LingXiRemote\5.0.0`；请保留这个目录。重复执行复用完整安装，并重新进入配置，不删除身份和配置。可通过环境变量 `LINGXI_REMOTE_HOME` 更换安装根目录，`LINGXI_REMOTE_VERSION` 指定已发布的版本（例如 `5.0.0`）。
 
-如需手动下载，使用 [Release 页面](https://github.com/Cyber-bike1949/LingXi1949/releases)。`remote-5.0.0` 发布后的直达链接：[Linux x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.0/lingxi-remote-5.0.0-linux-x64.tar.gz) · [Windows x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.0/lingxi-remote-5.0.0-win32-x64.tar.gz)。手动解压后，Windows 双击 `install.cmd`；Linux 执行 `bash install.sh`。
+如需手动下载，使用 [Release 页面](https://github.com/Cyber-bike1949/LingXi1949/releases)。Remote 5.0.0 直达链接：[Linux x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.0/lingxi-remote-5.0.0-linux-x64.tar.gz) · [Windows x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.0/lingxi-remote-5.0.0-win32-x64.tar.gz)。手动解压后，Windows 双击 `install.cmd`；Linux 执行 `bash install.sh`。
 
 两台设备使用同一个安装入口，脚本自动补齐 Node.js 24 与生产依赖：
 

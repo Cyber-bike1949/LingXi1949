@@ -2,7 +2,7 @@
 
 ## 安装与首次使用
 
-推荐复制执行 [首次使用](README.md#首次使用) 中的 **install-remote 一键安装命令**，自动下载、校验、解压平台包并进入初始化。需要对应的 Remote Release 已公开发布（当前发布状态见 README）。也可手动下载完整平台包，Windows x64 双击 `install.cmd`；Linux x64 执行 `bash install.sh`。脚本自动安装运行环境、启动 Agent、配对并配置模型工具，无需手工执行下面的高级命令。
+推荐复制执行 [首次使用](README.md#首次使用) 中的 **install-remote 一键安装命令**，自动下载、校验、解压平台包并进入初始化。安装命令从对应版本的公开 Remote Release 下载平台包。也可手动下载完整平台包，Windows x64 双击 `install.cmd`；Linux x64 执行 `bash install.sh`。脚本自动安装运行环境、启动 Agent、配对并配置模型工具，无需手工执行下面的高级命令。
 
 - **被控制端**：存放项目并执行命令，选择默认角色 `1`，把连接码复制给控制端。
 - **控制端**：运行 Codex/Claude 与 `lingxi-mcp`，选择角色 `2`，粘贴连接码。工作目录和 Shell 采用被控制端实际检测出的默认值，回车确认即可，也可以更换。
