@@ -29,10 +29,17 @@ if (-not $ValidNode) {
 }
 Push-Location $Root
 try {
-  if (-not (Test-Path 'node_modules/@number0/iroh')) {
+  $DependenciesReady = $false
+  try {
+    & node -e "require('@number0/iroh')" 2>$null
+    $DependenciesReady = $LASTEXITCODE -eq 0
+  } catch { $DependenciesReady = $false }
+  if (-not $DependenciesReady) {
     & npm.cmd ci --omit=dev --ignore-scripts --no-audit --no-fund
     if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed' }
   }
+  & node -e "require('@number0/iroh')"
+  if ($LASTEXITCODE -ne 0) { throw 'Runtime dependency is unavailable. Please rerun the online installer.' }
   & node scripts/setup.mjs @SetupArgs
   if ($LASTEXITCODE -ne 0) { throw 'Setup did not complete' }
 } finally { Pop-Location }

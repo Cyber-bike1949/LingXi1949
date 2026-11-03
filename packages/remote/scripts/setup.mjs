@@ -117,7 +117,11 @@ try {
       tools[kind] = await configureAI(kind, selected.session, `lingxi-${selected.session.slice(0, 8)}`);
     }
     save('setup-result.json', { status: 'configured', session: selected.session, deviceId: paired.deviceId, tools, transport: 'ready', accountLogin: ai === 'none' ? 'not-requested' : 'manual' });
-    console.log(`设备连接与工具配置已完成。手动入口：\n${JSON.stringify([process.execPath, cli, 'shell', '--home', home, '--session', selected.session])}`);
+    const launcher = join(root, process.platform === 'win32' ? 'control.cmd' : 'control.sh');
+    const quote = value => "'" + value.replaceAll("'", "'\\''") + "'";
+    console.log('设备连接与工具配置已完成。');
+    console.log(process.platform === 'win32' ? `日常手动控制：双击 ${launcher}` : `日常手动控制：bash ${quote(launcher)}`);
+    if (options.home) console.log(`使用自定义配置目录时，请在启动命令后添加 --home 参数：${JSON.stringify(home)}`);
     if (ai !== 'none') console.log('模型账号登录仍需你在相应 CLI 中完成；本脚本未验证模型调用。AI 工具启动信息保存在 setup-result.json。');
   }
 } catch (error) {

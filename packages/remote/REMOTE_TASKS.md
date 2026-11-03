@@ -89,6 +89,29 @@ node packages/lingxi-mcp/cli.mjs tasks --session SESSION_ID
 
 连接断开后当前操作保留已收输出、标为 UNKNOWN；服务不自动重连或重放。重新启动相同 selection 会建立新的远程会话，旧的 QUEUED/RUNNING 记录恢复为 UNKNOWN；已记录 requestId 继续去重。快照有保存时间，控制端异常退出时旧快照可能仍显示 RUNNING，需结合连接情况判断，不能视作实时状态。
 
+## 手动控制命令参考
+
+以下命令适合熟悉命令行的用户，在安装目录执行。`node` 需要在当前终端可用；若由安装脚本自动下载，可使用向导输出的 Node 完整路径。`SESSION` 替换为配置生成的会话 ID。
+
+```sh
+node packages/lingxi-mcp/cli.mjs devices --probe true
+node packages/lingxi-mcp/cli.mjs shell
+node packages/lingxi-mcp/cli.mjs exec --session SESSION --command "pwd"
+node packages/lingxi-mcp/cli.mjs list --session SESSION --path .
+node packages/lingxi-mcp/cli.mjs upload --session SESSION --local ./example.bin --path example.bin
+node packages/lingxi-mcp/cli.mjs download --session SESSION --path example.bin --local ./download.bin
+```
+
+`shell` 让用户选择设备，工作目录和 Shell 回车即可使用被控制端检测出的默认值，也可修改；输入普通文本执行命令，`/ls`、`/upload`、`/download`、`/exit` 完成文件操作或退出。每条命令独立执行，`cd` 不会改变下一条命令的固定工作目录。首期不是 vim 等全屏程序使用的交互式 PTY。
+
+单文件上限 64 MiB，包含二进制和空文件；目录递归传输暂不提供。默认拒绝覆盖，显式 `--overwrite true` 才替换。同目录暂存完成后提交；断线清理失败会报告暂存文件名。硬链接提交要求目标与工作目录同一文件系统，否则失败并保持原文件。远程路径限于绑定目录，连接失败不在本机执行。每个会话一次只允许一个 CLI/MCP 进程，另开会话可避免锁冲突；Agent 同时只执行一条结构化命令。
+
+MCP 旧的 UTF-8 读写接口仍限 128 KiB。`select --device DEVICE_ID` 可直接采用检测出的默认目录和 Shell；传入 `--workdir PATH --shell PATH` 可更换，生成新会话后重新接入模型。已有会话的绑定保持不变。
+
+旧版 `init/pair/select/serve/tasks/config` 保留，详见 [进阶文档](REMOTE_TASKS.md)。协议探测返回实际在线状态，旧 Agent 不支持新接口时应升级。
+
+快捷入口也支持参数，例如 `bash control.sh --home /absolute/profile`；Windows 可在终端执行 `control.cmd --home C:\Profiles\remote`。自定义过配置目录时，请使用相同的 `--home`。
+
 ## 开发验证
 
 在 `packages/remote` 目录执行：

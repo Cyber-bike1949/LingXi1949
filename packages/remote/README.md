@@ -87,7 +87,7 @@ LingXi Remote 让你在一台电脑上，通过命令或 AI 工具操作另一�
 
 选择 AI 工具后，脚本会安装缺失的工具并添加远程连接配置。**模型账号仍需你自己登录**，安装完成不等于账号已登录。
 
-看到“设备连接与工具配置已完成”，表示设备连接和配置已完成。向导会输出手动控制入口；AI 工具的启动信息保存在控制端 `~/.lingxi-mcp/setup-result.json`。
+看到“设备连接与工具配置已完成”，表示设备连接和配置已完成。手动操作请使用安装目录中的 `control.cmd`（Windows）或 `control.sh`（Linux）；AI 工具的启动信息保存在控制端 `~/.lingxi-mcp/setup-result.json`。
 
 使用 AI 时，可以先发送这样一条任务，确认连接的设备和目录正确：
 
@@ -141,24 +141,50 @@ LingXi Remote 让你在一台电脑上，通过命令或 AI 工具操作另一�
 
 ## 手动控制
 
-以下命令适合熟悉命令行的用户，在安装目录执行。`node` 需要在当前终端可用；若由安装脚本自动下载，可使用向导输出的 Node 完整路径。`SESSION` 替换为配置生成的会话 ID。
+完成控制端配置后，日常使用不用重新安装，也不用填写会话 ID 或 Node.js 路径。
 
-```sh
-node packages/lingxi-mcp/cli.mjs devices --probe true
-node packages/lingxi-mcp/cli.mjs shell
-node packages/lingxi-mcp/cli.mjs exec --session SESSION --command "pwd"
-node packages/lingxi-mcp/cli.mjs list --session SESSION --path .
-node packages/lingxi-mcp/cli.mjs upload --session SESSION --local ./example.bin --path example.bin
-node packages/lingxi-mcp/cli.mjs download --session SESSION --path example.bin --local ./download.bin
+### 1. 打开手动控制
+
+**Windows**：打开安装目录，双击 **`control.cmd`**。默认目录可直接粘贴到文件资源管理器地址栏：
+
+```text
+%LOCALAPPDATA%\LingXiRemote\5.0.0
 ```
 
-`shell` 让用户选择设备，工作目录和 Shell 回车即可使用被控制端检测出的默认值，也可修改；输入普通文本执行命令，`/ls`、`/upload`、`/download`、`/exit` 完成文件操作或退出。每条命令独立执行，`cd` 不会改变下一条命令的固定工作目录。首期不是 vim 等全屏程序使用的交互式 PTY。
+**Linux**：在终端执行：
 
-单文件上限 64 MiB，包含二进制和空文件；目录递归传输暂不提供。默认拒绝覆盖，显式 `--overwrite true` 才替换。同目录暂存完成后提交；断线清理失败会报告暂存文件名。硬链接提交要求目标与工作目录同一文件系统，否则失败并保持原文件。远程路径限于绑定目录，连接失败不在本机执行。每个会话一次只允许一个 CLI/MCP 进程，另开会话可避免锁冲突；Agent 同时只执行一条结构化命令。
+```bash
+bash ~/.local/share/lingxi-remote/5.0.0/control.sh
+```
 
-MCP 旧的 UTF-8 读写接口仍限 128 KiB。`select --device DEVICE_ID` 可直接采用检测出的默认目录和 Shell；传入 `--workdir PATH --shell PATH` 可更换，生成新会话后重新接入模型。已有会话的绑定保持不变。
+如果安装时自定义了目录，就打开那个目录下的 `control.cmd` 或 `control.sh`。入口会自动使用安装时准备好的 Node.js。
 
-旧版 `init/pair/select/serve/tasks/config` 保留，详见 [进阶文档](REMOTE_TASKS.md)。协议探测返回实际在线状态，旧 Agent 不支持新接口时应升级。
+**已经安装了 5.0.0，但找不到 `control` 文件？** 重新执行上方的一键安装命令即可补齐入口并修复运行依赖，已有身份和配置会保留。旧压缩包需要通过在线安装命令更新。
+
+### 2. 选择被控制端
+
+1. 输入列表中要操作的设备编号。
+2. 工作目录直接回车使用默认值；要操作某个项目，就填写被控制端上的项目完整路径。
+3. Shell 通常直接回车即可。
+
+看到 `lingxi>` 后，就可以开始输入命令了。想换一台设备，输入 `/exit` 退出，再打开手动控制并重新选择。
+
+### 3. 输入命令或传文件
+
+| 想做什么 | 输入什么 |
+| --- | --- |
+| 查看当前目录的文件 | `/ls` |
+| 查看某个子目录 | `/ls src` |
+| 上传文件到被控制端 | `/upload`，然后按提示填写文件路径 |
+| 下载文件到控制端 | `/download`，然后按提示填写文件路径 |
+| 执行命令 | 直接输入命令，例如 `git status` |
+| 退出手动控制 | `/exit` |
+
+上传、下载时，“本地”指控制端，“远程”指被控制端。单个文件最大 64 MiB，暂不支持整个文件夹；遇到同名文件默认不会覆盖。
+
+每条命令都从选择的工作目录开始执行，`cd` 不会改变下一条命令的目录。需要换项目时，退出后重新选择工作目录。此入口适合执行命令和传文件，暂不支持 vim 等全屏交互程序。
+
+需要编写自动化脚本、指定会话或查询传输限制时，再看 [手动控制命令参考](REMOTE_TASKS.md#手动控制命令参考)。
 
 ## 构建和验证
 

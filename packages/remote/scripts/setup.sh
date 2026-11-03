@@ -19,5 +19,8 @@ if ! command -v node >/dev/null || ! node -e 'if(+process.versions.node.split(".
   export PATH="$RUNTIME/node-$VERSION-linux-x64/bin:$PATH"
 fi
 cd "$ROOT"
-if [[ ! -d node_modules/@number0/iroh ]]; then npm ci --omit=dev --ignore-scripts --no-audit --no-fund; fi
+if ! node -e "require('@number0/iroh')" >/dev/null 2>&1; then
+  npm ci --omit=dev --ignore-scripts --no-audit --no-fund
+fi
+node -e "require('@number0/iroh')"
 exec node scripts/setup.mjs "$@"
