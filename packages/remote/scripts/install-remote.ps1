@@ -1,4 +1,6 @@
 param([Parameter(ValueFromRemainingArguments=$true)][string[]]$SetupArgs)
+# PowerShell 7 can pass its module path to Windows PowerShell 5.1.
+$env:PSModulePath = (Join-Path $PSHOME 'Modules') + [IO.Path]::PathSeparator + $env:PSModulePath
 $ErrorActionPreference = 'Stop'
 $Version = if ($env:LINGXI_REMOTE_VERSION) { $env:LINGXI_REMOTE_VERSION } else { '5.0.0' }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid LINGXI_REMOTE_VERSION' }
