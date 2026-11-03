@@ -64,6 +64,24 @@ fn open_target(root:&Dir,path:&Path)->io::Result<Dir>{
     parent.open_dir_nofollow(name)
 }
 
+// canonicalize() adds a verbatim prefix on Windows; policy paths may lack it.
+fn comparison_path(path:&Path)->PathBuf {
+    #[cfg(windows)] {
+        use std::path::Prefix;
+        let mut parts=path.components();
+        if let Some(Component::Prefix(prefix))=parts.next() {
+            let mut normalized=match prefix.kind() {
+                Prefix::VerbatimDisk(drive)=>PathBuf::from(format!("{}:",drive as char)),
+                Prefix::VerbatimUNC(server,share)=>PathBuf::from(r"\\").join(server).join(share),
+                _=>return path.to_owned(),
+            };
+            normalized.push(parts.as_path());
+            return normalized;
+        }
+    }
+    path.to_owned()
+}
+
 pub struct Engine { pub allowed:Vec<PathBuf>, pub protected:Vec<PathBuf>, pub journal:PathBuf }
 impl Engine {
     pub fn for_user(extra:Vec<PathBuf>)->Self{
@@ -79,11 +97,11 @@ impl Engine {
         if root.parent().is_none(){return Err("PROTECTED_PATH");}
         let allowed=self.allowed.iter().filter_map(|p|fs::canonicalize(p).ok()).any(|p|p.parent().is_some()&&root.starts_with(p));
         if !allowed{return Err("OUTSIDE_ROOT");}
-        if self.protected.iter().any(|p|root.starts_with(p)){return Err("PROTECTED_PATH");}
+        if self.protected.iter().any(|p|comparison_path(&root).starts_with(comparison_path(p))){return Err("PROTECTED_PATH");}
         let dir=Dir::open_ambient_dir(&root,ambient_authority()).map_err(|e|code(&e))?;
         Ok((dir,root))
     }
-    fn protected_path(&self,path:&Path)->bool{self.protected.iter().any(|p|path.starts_with(p)||p.starts_with(path))||self.allowed.iter().any(|p|p==path)}
+    fn protected_path(&self,path:&Path)->bool{let path=comparison_path(path);self.protected.iter().any(|p|{let p=comparison_path(p);path.starts_with(&p)||p.starts_with(&path)})||self.allowed.iter().any(|p|comparison_path(p)==path)}
     pub fn execute(&self,request:Request)->Response{
         let (root,root_path)=match self.root(&request){Ok(v)=>v,Err(c)=>return Response::error(c)};
         if request.action=="capabilities" {return Response::ok();}
@@ -159,18 +177,25 @@ fn rename_no_replace(from:&Dir,source:&Path,to:&Dir,target:&Path)->io::Result<()
     use cap_std::fs::OpenOptionsExt;
     use std::os::windows::{io::AsRawHandle,ffi::OsStrExt};
     use windows_sys::Win32::Storage::FileSystem::*;
+    use windows_sys::Wdk::Storage::FileSystem::{NtSetInformationFile,FileRenameInformation,FILE_RENAME_INFORMATION};
+    use windows_sys::Win32::{Foundation::RtlNtStatusToDosError,System::IO::IO_STATUS_BLOCK};
     let mut options=cap_std::fs::OpenOptions::new();
     options.access_mode(DELETE|FILE_READ_ATTRIBUTES).share_mode(FILE_SHARE_READ|FILE_SHARE_WRITE|FILE_SHARE_DELETE).custom_flags(FILE_FLAG_OPEN_REPARSE_POINT|FILE_FLAG_BACKUP_SEMANTICS);
     let file=from.open_with(source,&options)?;
     let name:Vec<u16>=target.as_os_str().encode_wide().collect();
-    let offset=std::mem::offset_of!(FILE_RENAME_INFO,FileName);let len=offset+name.len()*2;
-    let mut buffer=vec![0u64;(len+7)/8];let info=buffer.as_mut_ptr().cast::<FILE_RENAME_INFO>();
+    let offset=std::mem::offset_of!(FILE_RENAME_INFORMATION,FileName);
+    let len=(offset+name.len()*2).max(std::mem::size_of::<FILE_RENAME_INFORMATION>());
+    let mut buffer=vec![0u64;(len+7)/8];let info=buffer.as_mut_ptr().cast::<FILE_RENAME_INFORMATION>();
     unsafe {
         (*info).Anonymous.ReplaceIfExists=0;
         (*info).RootDirectory=to.as_raw_handle();
         (*info).FileNameLength=(name.len()*2) as u32;
         std::ptr::copy_nonoverlapping(name.as_ptr(),(*info).FileName.as_mut_ptr(),name.len());
-        if SetFileInformationByHandle(file.as_raw_handle(),FileRenameInfo,info.cast(),len as u32)==0{return Err(io::Error::last_os_error());}
+        // The NT API accepts a destination directory handle without resolving
+        // an ambient absolute path, and preserves atomic no-replace semantics.
+        let mut status:IO_STATUS_BLOCK=std::mem::zeroed();
+        let result=NtSetInformationFile(file.as_raw_handle(),&mut status,info.cast(),len as u32,FileRenameInformation);
+        if result<0{return Err(io::Error::from_raw_os_error(RtlNtStatusToDosError(result) as i32));}
     }
     Ok(())
 }
@@ -185,12 +210,19 @@ mod tests {
     #[test] fn native_move_uses_directory_handles() {
         let temp=tempfile::tempdir().unwrap();
         fs::create_dir(temp.path().join("destination")).unwrap();
-        fs::write(temp.path().join("example.txt"), "example").unwrap();
         let root=Dir::open_ambient_dir(temp.path(),ambient_authority()).unwrap();
         let dest=root.open_dir("destination").unwrap();
-        let result=rename_no_replace(&root,Path::new("example.txt"),&dest,Path::new("example.txt"));
-        assert!(result.is_ok(), "{result:?}");
-        assert_eq!(fs::read_to_string(temp.path().join("destination/example.txt")).unwrap(), "example");
+        for name in ["a", "example.txt", "示例.txt"] {
+            fs::write(temp.path().join(name), "example").unwrap();
+            let result=rename_no_replace(&root,Path::new(name),&dest,Path::new(name));
+            assert!(result.is_ok(), "{name}: {result:?}");
+            assert_eq!(fs::read_to_string(temp.path().join("destination").join(name)).unwrap(), "example");
+        }
+    }
+    #[cfg(windows)]
+    #[test] fn verbatim_policy_paths_match_disk_and_unc_paths() {
+        assert_eq!(comparison_path(Path::new(r"\\?\C:\example\protected")),PathBuf::from(r"C:\example\protected"));
+        assert_eq!(comparison_path(Path::new(r"\\?\UNC\server\share\protected")),PathBuf::from(r"\\server\share\protected"));
     }
     #[test] fn move_does_not_replace_and_retries_return_receipt(){
         let tmp=tempfile::tempdir().unwrap();let root=tmp.path();let e=engine(root);
