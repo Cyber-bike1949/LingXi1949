@@ -16,7 +16,7 @@ try {
   await chmod(join(stage, 'bin', `lingxi1949${platform === 'win32' ? '.exe' : ''}`), 0o755);
   for (const file of ['cli.mjs','manual.mjs','service.mjs','store.mjs','protocol.mjs']) await copyFile(`packages/lingxi-mcp/${file}`, join(stage, 'packages/lingxi-mcp', file));
   await cp('packages/remote-sdk/dist', join(stage, 'packages/remote-sdk/dist'), { recursive: true });
-  for (const file of ['setup.sh','setup.ps1','setup.mjs']) await copyFile(`scripts/${file}`, join(stage, 'scripts', file));
+  for (const file of ['setup.sh','setup.ps1','setup.mjs','install-remote.sh','install-remote.ps1']) await copyFile(`scripts/${file}`, join(stage, 'scripts', file));
   for (const file of ['LICENSE','README.md','REMOTE_TASKS.md','install.sh','install.cmd','package-lock.json']) await copyFile(file, join(stage, file));
   await chmod(join(stage, 'install.sh'), 0o755);
   // Keep the production dependency graph compatible with the committed npm lock.

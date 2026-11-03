@@ -4,10 +4,39 @@
 
 ## 首次使用
 
-下载并解压与设备匹配的完整平台包，保留解压目录（工具配置使用绝对路径）。无需先安装 Node.js、pnpm 或 Rust。
+在控制端和被控制端各复制执行一次下面的命令。`install-remote` 自动下载对应平台包、校验 SHA-256、解压并启动初始化；无需手动下载解压，也无需先安装 Node.js、pnpm 或 Rust。
 
-- **Windows x64**：双击根目录的 `install.cmd`。
-- **Linux x64**：在解压目录执行 `bash install.sh`。
+> 发布状态：Remote 5.0.0 平台包尚未公开发布。以下命令已接入安装流程，需发布 `remote-5.0.0` 后才能完成下载；当前不会改用旧版插件包。可在 [Release 页面](https://github.com/Cyber-bike1949/LingXi1949/releases) 查看发布状态。
+
+**Linux x64**，在终端粘贴执行整个代码块（需要系统自带或预先安装 `curl`、`tar`、`sha256sum`、`xz`）：
+
+```bash
+(
+  set -e
+  installer="$(mktemp)"
+  trap 'rm -f -- "$installer"' EXIT
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote/scripts/install-remote.sh -o "$installer"
+  bash "$installer"
+)
+```
+
+**Windows x64**，在 PowerShell 粘贴执行整个代码块（需要系统自带的 `tar.exe`）：
+
+```powershell
+& {
+  $ErrorActionPreference = 'Stop'
+  $installer = Join-Path ([IO.Path]::GetTempPath()) ([guid]::NewGuid().ToString() + '.ps1')
+  try {
+    Invoke-WebRequest -UseBasicParsing https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote/scripts/install-remote.ps1 -OutFile $installer
+    powershell.exe -NoProfile -ExecutionPolicy Bypass -File $installer
+    if ($LASTEXITCODE -ne 0) { throw '安装未完成，请查看上方错误后重试。' }
+  } finally { Remove-Item -LiteralPath $installer -ErrorAction SilentlyContinue }
+}
+```
+
+脚本名称是 `install-remote.sh` / `install-remote.ps1`。下载脚本后再执行，保留终端输入给初始化向导。Linux 安装到 `~/.local/share/lingxi-remote/5.0.0`，Windows 安装到 `%LOCALAPPDATA%\LingXiRemote\5.0.0`；请保留这个目录。重复执行复用完整安装，并重新进入配置，不删除身份和配置。可通过环境变量 `LINGXI_REMOTE_HOME` 更换安装根目录，`LINGXI_REMOTE_VERSION` 指定已发布的版本（例如 `5.0.0`）。
+
+如需手动下载，使用 [Release 页面](https://github.com/Cyber-bike1949/LingXi1949/releases)。`remote-5.0.0` 发布后的直达链接：[Linux x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.0/lingxi-remote-5.0.0-linux-x64.tar.gz) · [Windows x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.0/lingxi-remote-5.0.0-win32-x64.tar.gz)。手动解压后，Windows 双击 `install.cmd`；Linux 执行 `bash install.sh`。
 
 两台设备使用同一个安装入口，脚本自动补齐 Node.js 24 与生产依赖：
 
@@ -16,7 +45,7 @@
 3. 工作目录默认使用被控制端用户主目录，Shell 默认从被控制端实际存在的可执行程序中选择。界面显示路径和可用 Shell，回车使用默认值，也可填写项目目录或其他 Shell 的绝对路径。不会使用控制端本机路径猜测远程环境。
 4. 选择 Codex、Claude 或两者；脚本安装缺失工具并添加 MCP 配置。账号登录仍需人工完成；选择 `none` 仅配置手动控制。
 
-使用脚本输出的命令进入手动控制。日志和结果位于 `~/.lingxi-mcp`。这里的一键安装指解压后一个入口完成环境安装和配置；跨设备仍需传递连接码，模型账号仍需本人登录。
+使用脚本输出的命令进入手动控制。日志和结果位于 `~/.lingxi-mcp`。一条复制命令完成下载、解压、环境安装和配置引导；跨设备仍需传递连接码，模型账号仍需本人登录。
 
 脚本复用已有 Agent 和控制端身份，不重置配对。不自动配置开机自启。普通终端关闭后 Agent 继续运行；系统重启后重新运行脚本。已有运行 Agent 若低于本版本，应先停止并换用本版本后重跑。首次配置失败会显示具体步骤，模型登录未完成不会被称为已验证模型可用。
 
@@ -49,6 +78,7 @@ Node.js 24+、pnpm 10.33.4、Rust 1.97.1：
 pnpm install --ignore-workspace --frozen-lockfile
 pnpm build
 pnpm test
+pnpm test:installer
 cargo test --locked --manifest-path agent/Cargo.toml
 cargo build --locked --manifest-path agent/Cargo.toml
 pnpm test:e2e

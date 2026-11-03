@@ -14,7 +14,8 @@
     "build": "node scripts/build-mcp.mjs",
     "test": "node --test packages/lingxi-mcp/*.test.mjs",
     "test:e2e": "node packages/lingxi-mcp/e2e.mjs",
-    "package": "node scripts/package-remote.mjs"
+    "package": "node scripts/package-remote.mjs",
+    "test:installer": "node --test scripts/install-remote.test.mjs"
   },
   "dependencies": {
     "@number0/iroh": "1.1.0"
