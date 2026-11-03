@@ -181,6 +181,17 @@ mod tests {
     fn engine(root:&Path)->Engine{Engine{allowed:vec![root.to_owned()],protected:vec![root.join("protected")],journal:root.join("journal")}}
     fn req(root:&Path,action:&str,path:&str)->Request{Request{action:action.into(),root:root.to_string_lossy().into(),path:path.into(),target:None,expected_identity:None,operation_id:None}}
     fn mutation(e:&Engine,root:&Path,action:&str,path:&str)->Request{let mut r=req(root,action,path);r.expected_identity=e.execute(req(root,"inspect",path)).identity;r.operation_id=Some(uuid::Uuid::new_v4().to_string());r}
+    #[cfg(windows)]
+    #[test] fn native_move_uses_directory_handles() {
+        let temp=tempfile::tempdir().unwrap();
+        fs::create_dir(temp.path().join("destination")).unwrap();
+        fs::write(temp.path().join("example.txt"), "example").unwrap();
+        let root=Dir::open_ambient_dir(temp.path(),ambient_authority()).unwrap();
+        let dest=root.open_dir("destination").unwrap();
+        let result=rename_no_replace(&root,Path::new("example.txt"),&dest,Path::new("example.txt"));
+        assert!(result.is_ok(), "{result:?}");
+        assert_eq!(fs::read_to_string(temp.path().join("destination/example.txt")).unwrap(), "example");
+    }
     #[test] fn move_does_not_replace_and_retries_return_receipt(){
         let tmp=tempfile::tempdir().unwrap();let root=tmp.path();let e=engine(root);
         fs::write(root.join("source.txt"),"source").unwrap();fs::create_dir(root.join("folder")).unwrap();fs::write(root.join("folder/source.txt"),"target").unwrap();

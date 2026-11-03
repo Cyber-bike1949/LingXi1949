@@ -450,7 +450,7 @@ mod tests {
             Some("destination"),
             inspected.identity,
         );
-        assert_eq!(moved.status, "success");
+        assert_eq!(moved.status, "success", "{moved:?}");
         assert!(!home.path().join("example.txt").exists());
         assert_eq!(
             fs::read_to_string(home.path().join("destination/example.txt")).unwrap(),

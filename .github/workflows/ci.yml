@@ -75,3 +75,16 @@ jobs:
         with:
           node-version: '24'
       - run: node --test scripts/install-remote.test.mjs
+
+  core-filesystem:
+    name: Shared filesystem
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+      - run: cargo test --locked --manifest-path packages/core/crates/fs-operations/Cargo.toml
