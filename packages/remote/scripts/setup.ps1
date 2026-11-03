@@ -5,7 +5,7 @@ $Version = 'v24.22.1'
 if (-not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -notin @('AMD64','x86')) { throw 'Only Windows x64 is supported.' }
 $ValidNode = $false
 if ((Get-Command node -ErrorAction SilentlyContinue) -and (Get-Command npm -ErrorAction SilentlyContinue)) {
-  & node -e 'if(+process.versions.node.split(".")[0]<24)process.exit(1)'
+  & node -e 'if(parseInt(process.versions.node,10)<24)process.exit(1)'
   $ValidNode = $LASTEXITCODE -eq 0
 }
 if (-not $ValidNode) {

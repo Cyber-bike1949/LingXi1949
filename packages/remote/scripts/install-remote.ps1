@@ -41,6 +41,14 @@ try {
     } elseif (-not (Test-Path (Join-Path $Destination '.lingxi-installed')) -or -not (Test-Path (Join-Path $Destination 'scripts/setup.ps1')) -or -not (Test-Path (Join-Path $Destination 'scripts/setup.mjs')) -or -not (Test-Path (Join-Path $Destination 'bin/lingxi1949.exe'))) {
         throw "Existing directory is not managed by this installer: $Destination. Choose another LINGXI_REMOTE_HOME."
     }
+    # Repair the quoting bug in the published 5.0.0 setup script, including reused installs.
+    # Windows PowerShell 5.1 strips embedded double quotes from native arguments.
+    $SetupPath = Join-Path $Destination 'scripts/setup.ps1'
+    $SetupSource = [IO.File]::ReadAllText($SetupPath)
+    $FixedSetup = $SetupSource.Replace('if(+process.versions.node.split(".")[0]<24)process.exit(1)', 'if(parseInt(process.versions.node,10)<24)process.exit(1)')
+    if ($FixedSetup -cne $SetupSource) {
+        [IO.File]::WriteAllText($SetupPath, $FixedSetup, (New-Object System.Text.UTF8Encoding($false)))
+    }
     Write-Host "Installed at: $Destination"
     & (Join-Path $Destination 'scripts/setup.ps1') @SetupArgs
 } finally {

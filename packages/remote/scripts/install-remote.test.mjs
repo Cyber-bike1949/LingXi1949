@@ -19,7 +19,12 @@ test('bootstrap verifies downloads, reuses installs, preserves config and fails 
     await writeFile(join(pack, 'scripts/setup.mjs'), '');
     await writeFile(join(pack, 'bin', windows ? 'lingxi1949.exe' : 'lingxi1949'), 'fixture');
     await writeFile(join(pack, 'scripts/setup.sh'), '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$TEST_OUTPUT"\n');
-    await writeFile(join(pack, 'scripts/setup.ps1'), 'param([Parameter(ValueFromRemainingArguments=$true)][string[]]$SetupArgs)\n$SetupArgs | Set-Content $env:TEST_OUTPUT\n');
+    const legacySetup = `param([Parameter(ValueFromRemainingArguments=$true)][string[]]$SetupArgs)
+& node -e 'if(+process.versions.node.split(".")[0]<24)process.exit(1)'
+if ($LASTEXITCODE -ne 0) { throw 'Node version check failed' }
+$SetupArgs | Set-Content $env:TEST_OUTPUT
+`;
+    await writeFile(join(pack, 'scripts/setup.ps1'), legacySetup);
     const asset = `lingxi-remote-${version}-${process.platform}-x64.tar.gz`;
     await exec(windows ? 'tar.exe' : 'tar', ['-czf', join(fixture, asset), '-C', pack, '.']);
     const checksum = createHash('sha256').update(await readFile(join(fixture, asset))).digest('hex');
@@ -49,10 +54,17 @@ function Invoke-WebRequest {
     const env = { ...process.env, LINGXI_REMOTE_HOME: base, LINGXI_REMOTE_VERSION: version, TEST_FIXTURE: fixture, TEST_OUTPUT: output, TEST_INSTALLER: installer, PATH: `${bin}${delimiter}${process.env.PATH}` };
     const run = (overrides = {}) => exec(windows ? 'powershell.exe' : 'bash', windows ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', harness] : [installer, '--role', 'target', '--name', 'test device'], { env: { ...env, ...overrides }, timeout: 30000 });
     await run({ LINGXI_REMOTE_VERSION: '' });
+    if (windows) {
+      const setupPath = join(base, version, 'scripts/setup.ps1');
+      assert.match(await readFile(setupPath, 'utf8'), /parseInt\(process\.versions\.node,10\)/);
+      // Simulate an installation made before the bootstrap repair was published.
+      await writeFile(setupPath, legacySetup);
+    }
     assert.match(await readFile(output, 'utf8'), /--role\r?\ntarget\r?\n--name\r?\ntest device/);
     const preserved = join(base, version, 'user-config'); await writeFile(preserved, 'preserved');
     await rm(join(fixture, asset));
     await run();
+    if (windows) assert.match(await readFile(join(base, version, 'scripts/setup.ps1'), 'utf8'), /parseInt\(process\.versions\.node,10\)/);
     assert.equal(await readFile(preserved, 'utf8'), 'preserved');
     await assert.rejects(run({ LINGXI_REMOTE_HOME: join(root, 'no-release') }), /Download failed|下载失败/);
     await exec(windows ? 'tar.exe' : 'tar', ['-czf', join(fixture, asset), '-C', pack, '.']);
