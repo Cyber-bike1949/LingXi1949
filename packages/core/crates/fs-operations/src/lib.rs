@@ -83,6 +83,23 @@ fn comparison_path(path:&Path)->PathBuf {
 }
 
 pub struct Engine { pub allowed:Vec<PathBuf>, pub protected:Vec<PathBuf>, pub journal:PathBuf }
+
+// Resolve Windows short names and casing, even before a protected path exists.
+fn policy_path(path:&Path)->io::Result<PathBuf> {
+    #[cfg(windows)] {
+        match fs::canonicalize(path) {
+            Ok(path)=>Ok(comparison_path(&path)),
+            Err(error) if error.kind()==io::ErrorKind::NotFound=>{
+                let parent=path.parent().ok_or_else(||io::Error::from(io::ErrorKind::NotFound))?;
+                let name=path.file_name().ok_or_else(||io::Error::from(io::ErrorKind::NotFound))?;
+                Ok(policy_path(parent)?.join(name))
+            }
+            Err(error)=>Err(error),
+        }
+    }
+    #[cfg(not(windows))] { Ok(path.to_owned()) }
+}
+
 impl Engine {
     pub fn for_user(extra:Vec<PathBuf>)->Self{
         let home=std::env::var_os(if cfg!(windows){"USERPROFILE"}else{"HOME"}).map(PathBuf::from).unwrap_or_default();
@@ -97,11 +114,11 @@ impl Engine {
         if root.parent().is_none(){return Err("PROTECTED_PATH");}
         let allowed=self.allowed.iter().filter_map(|p|fs::canonicalize(p).ok()).any(|p|p.parent().is_some()&&root.starts_with(p));
         if !allowed{return Err("OUTSIDE_ROOT");}
-        if self.protected.iter().any(|p|comparison_path(&root).starts_with(comparison_path(p))){return Err("PROTECTED_PATH");}
+        if self.protected.iter().any(|p|comparison_path(&root).starts_with(comparison_path(p))||policy_path(p).map(|p|comparison_path(&root).starts_with(p)).unwrap_or(true)){return Err("PROTECTED_PATH");}
         let dir=Dir::open_ambient_dir(&root,ambient_authority()).map_err(|e|code(&e))?;
         Ok((dir,root))
     }
-    fn protected_path(&self,path:&Path)->bool{let path=comparison_path(path);self.protected.iter().any(|p|{let p=comparison_path(p);path.starts_with(&p)||p.starts_with(&path)})||self.allowed.iter().any(|p|comparison_path(p)==path)}
+    fn protected_path(&self,path:&Path)->bool{let path=comparison_path(path);self.protected.iter().any(|p|{let raw=comparison_path(p);path.starts_with(&raw)||raw.starts_with(&path)||policy_path(p).map(|p|path.starts_with(&p)||p.starts_with(&path)).unwrap_or(true)})||self.allowed.iter().any(|p|policy_path(p).is_ok_and(|p|p==path))}
     pub fn execute(&self,request:Request)->Response{
         let (root,root_path)=match self.root(&request){Ok(v)=>v,Err(c)=>return Response::error(c)};
         if request.action=="capabilities" {return Response::ok();}
@@ -223,6 +240,16 @@ mod tests {
     #[test] fn verbatim_policy_paths_match_disk_and_unc_paths() {
         assert_eq!(comparison_path(Path::new(r"\\?\C:\example\protected")),PathBuf::from(r"C:\example\protected"));
         assert_eq!(comparison_path(Path::new(r"\\?\UNC\server\share\protected")),PathBuf::from(r"\\server\share\protected"));
+    }
+    #[cfg(windows)]
+    #[test] fn missing_protected_paths_resolve_their_existing_parent() {
+        let temp=tempfile::tempdir().unwrap();
+        let path=temp.path().join("missing/protected");
+        let canonical=comparison_path(&fs::canonicalize(temp.path()).unwrap()).join("missing/protected");
+        assert_eq!(policy_path(&path).unwrap(),canonical);
+        let e=Engine{allowed:vec![temp.path().to_owned()],protected:vec![path],journal:temp.path().join("journal")};
+        assert!(e.protected_path(&canonical));
+        assert!(e.protected_path(canonical.parent().unwrap()));
     }
     #[test] fn move_does_not_replace_and_retries_return_receipt(){
         let tmp=tempfile::tempdir().unwrap();let root=tmp.path();let e=engine(root);
