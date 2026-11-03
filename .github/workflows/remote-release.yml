@@ -48,6 +48,11 @@ jobs:
       - run: cargo test --locked --manifest-path agent/Cargo.toml
       - run: cargo build --release --locked --manifest-path agent/Cargo.toml
       - run: pnpm build
+      - run: pnpm test
+      - run: pnpm test:installer
+      - run: node scripts/setup.e2e.mjs
+        env:
+          LINGXI_AGENT_BINARY: ${{ matrix.binary }}
       - run: pnpm package
         env:
           LINGXI_AGENT_BINARY: ${{ matrix.binary }}
