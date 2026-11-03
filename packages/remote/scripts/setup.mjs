@@ -80,7 +80,8 @@ async function configureAI(kind, session, serverName) {
 }
 
 try {
-  const role = await ask('role', '设备角色 controller（主控）/target（被控）');
+  const roleChoice = await ask('role', '设备角色 1（被控制端）/2（控制端），也可输入 target/controller', '1');
+  const role = ({ '1': 'target', '2': 'controller' })[roleChoice] ?? roleChoice;
   if (!['controller', 'target'].includes(role)) throw new Error('role must be controller or target');
   mkdirSync(home, { recursive: true, mode: 0o700 });
   backup(join(home, 'setup-result.json'));
@@ -91,19 +92,20 @@ try {
   if (role === 'target') {
     save('setup-result.json', { status: 'ready', role });
     console.log(run(agent, ['status']));
-    console.log('被控端已就绪。把上面的连接码复制到主控端；关闭此脚本后 Agent 继续运行。');
+    console.log('被控制端已就绪。把上面的连接码复制到控制端；关闭此脚本后 Agent 继续运行。');
   } else {
     console.log('2/4 初始化控制端并配对（保留已有身份）');
     if (!existsSync(join(home, 'profile.json'))) invoke('init');
-    const ticket = options['ticket-file'] ? readFileSync(options['ticket-file'], 'utf8').trim() : await ask('ticket', '粘贴被控端连接码');
+    const ticket = options['ticket-file'] ? readFileSync(options['ticket-file'], 'utf8').trim() : await ask('ticket', '粘贴被控制端连接码');
     const ticketPath = join(home, 'setup.ticket');
     writeFileSync(ticketPath, ticket + '\n', { mode: 0o600 });
     const paired = invoke('pair', '--ticket-file', ticketPath, '--name', await ask('name', '设备名称', '工作设备'));
     const probe = invoke('devices', '--probe', 'true').find(d => d.deviceId === paired.deviceId);
     if (probe?.status !== 'online') throw new Error(`Device unavailable: ${probe?.error ?? 'unknown'}`);
     console.log('3/4 验证远程目录与 Shell');
-    const workdir = await ask('workdir', '远程工作目录（绝对路径）');
-    const shell = await ask('shell', '远程 Shell 绝对路径（Windows 如 C:\\Windows\\System32\\cmd.exe）');
+    const workdir = await ask('workdir', '被控制端工作目录（回车使用默认，可输入其他绝对路径）', probe.defaults?.workDir ?? undefined);
+    if (probe.defaults?.shells?.length) console.log(`被控制端可用 Shell：${probe.defaults.shells.join('、')}`);
+    const shell = await ask('shell', '被控制端 Shell（回车使用默认，可输入其他绝对路径）', probe.defaults?.shell ?? undefined);
     const selected = invoke('select', '--device', paired.deviceId, '--workdir', workdir, '--shell', shell);
     const config = invoke('config', '--session', selected.session);
     save('mcp-config.json', config);

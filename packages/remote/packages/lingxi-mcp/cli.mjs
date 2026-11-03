@@ -72,7 +72,7 @@ function lock(id) {
 
 async function main() {
   if (!command || command === 'help' || command === '--help') {
-    process.stdout.write('lingxi-mcp (Node.js 24+)\nCommands: shell [--session ID], exec --session ID --command TEXT, list --session ID [--path DIR], upload/download --session ID --local FILE --path REMOTE [--overwrite true], init, pair --name NAME --ticket-file FILE, devices [--probe true], select --device ID --workdir PATH --shell PATH, serve --session ID, tasks [--session ID], config --session ID\nAll commands accept --home PATH. See REMOTE_TASKS.md for setup and limits.\n');
+    process.stdout.write('lingxi-mcp (Node.js 24+)\nCommands: shell [--session ID], exec --session ID --command TEXT, list --session ID [--path DIR], upload/download --session ID --local FILE --path REMOTE [--overwrite true], init, pair --name NAME --ticket-file FILE, devices [--probe true], select --device ID [--workdir PATH] [--shell PATH], serve --session ID, tasks [--session ID], config --session ID\nAll commands accept --home PATH. See REMOTE_TASKS.md for setup and limits.\n');
     return;
   }
   if (command === 'init') {
@@ -102,17 +102,19 @@ async function main() {
   if (command === 'devices') {
     const result = [];
     for (const device of devices.list()) {
-      let status = 'not-probed'; let error;
+      let status = 'not-probed'; let error; let defaults;
       if (options.probe === 'true') {
         try {
           const { endpoint, adapter } = await connect(profile, device);
           try {
-            await adapter.request({ action: 'probe', requestId: randomUUID() });
+            const probe = await adapter.request({ action: 'probe', requestId: randomUUID() });
+            if (probe.status !== 'SUCCESS') throw new Error(probe.error ?? probe.status);
+            defaults = probe.defaults;
             status = 'online';
           } finally { adapter.close(); await endpoint.close(); }
         } catch (e) { status = 'unavailable'; error = e.message; }
       }
-      result.push({ deviceId: device.nodeId, name: device.name, status, error });
+      result.push({ deviceId: device.nodeId, name: device.name, status, error, defaults });
     }
     print(result); return;
   }
@@ -121,7 +123,12 @@ async function main() {
     if (!device) throw new Error('DEVICE_NOT_PAIRED');
     const { endpoint, adapter } = await connect(profile, device);
     try {
-      const binding = await adapter.bind(required('workdir'), required('shell'));
+      const defaults = options.workdir && options.shell ? undefined :
+        (await adapter.request({ action: 'probe', requestId: randomUUID() })).defaults;
+      const workdir = options.workdir || defaults?.workDir;
+      const program = options.shell || defaults?.shell;
+      if (!workdir || !program) throw new Error('请升级被控制端，或通过 --workdir 和 --shell 指定路径');
+      const binding = await adapter.bind(workdir, program);
       const id = randomUUID();
       save(sessionPath(id), { id, deviceId: device.nodeId, workDir: binding.workDir, shell: binding.shell });
       print({ session: id, ...binding });
@@ -136,10 +143,13 @@ async function main() {
       list.forEach((d, i) => process.stdout.write(`${i + 1}. ${d.name} (${d.nodeId})\n`));
       const device = list[Number(await reader.question('选择设备编号: ')) - 1];
       if (!device) throw new Error('INVALID_DEVICE_SELECTION');
-      const workdir = await reader.question('远程工作目录（绝对路径）: ');
-      const program = await reader.question('远程 Shell（绝对路径，如 /bin/sh 或 C:\\Windows\\System32\\cmd.exe）: ');
       const { endpoint, adapter } = await connect(profile, device);
       try {
+        const { defaults } = await adapter.request({ action: 'probe', requestId: randomUUID() });
+        const workdir = (await reader.question(`被控制端工作目录 [${defaults?.workDir ?? '请输入绝对路径'}]: `)).trim() || defaults?.workDir;
+        if (defaults?.shells?.length) process.stdout.write(`可用 Shell：${defaults.shells.join('、')}\n`);
+        const program = (await reader.question(`被控制端 Shell [${defaults?.shell ?? '请输入绝对路径'}]: `)).trim() || defaults?.shell;
+        if (!workdir || !program) throw new Error('请指定被控制端工作目录和 Shell');
         const binding = await adapter.bind(workdir, program);
         const id = randomUUID();
         save(sessionPath(id), { id, deviceId: device.nodeId, workDir: binding.workDir, shell: binding.shell });
@@ -169,7 +179,7 @@ async function main() {
     } finally { adapter?.close(); await endpoint?.close(); store?.close(); unlock(); }
     return;
   }
-  throw new Error('Usage: init | pair --name NAME --ticket-file FILE | devices [--probe true] | select --device ID --workdir PATH --shell PATH | serve --session ID | tasks | config --session ID; all accept --home PATH');
+  throw new Error('Usage: init | pair --name NAME --ticket-file FILE | devices [--probe true] | select --device ID [--workdir PATH] [--shell PATH] | serve --session ID | tasks | config --session ID; all accept --home PATH');
 }
 
 main().catch(error => { process.stderr.write(`lingxi-mcp: ${error.message}\n`); process.exitCode = 1; });

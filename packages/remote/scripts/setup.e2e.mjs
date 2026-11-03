@@ -18,7 +18,11 @@ async function environment(name) {
 }
 const run = (env, ...args) => exec(process.execPath, [setup, '--agent', agent, '--loopback', 'true', ...args], {env, timeout:90000});
 try {
-  const targetEnv = await environment('target'); const controllerEnv = await environment('controller');
+  const targetEnv = await environment('target');
+  const targetHome = join(root, 'target-user'); await mkdir(targetHome);
+  targetEnv.HOME = targetHome; targetEnv.USERPROFILE = targetHome;
+  targetEnv.SHELL = join(root, 'missing-shell');
+  const controllerEnv = await environment('controller');
   const work = join(root, 'work'); await mkdir(work);
   const target = await run(targetEnv, '--role','target','--home',join(root,'target-profile'),'--receive-root',work);
   const ticket = target.stdout.match(/code\s+(endpoint[a-z2-7]+)/)?.[1]; assert.ok(ticket);
@@ -31,9 +35,23 @@ try {
   await run(controllerEnv,...args);
   const repeated = JSON.parse(await readFile(join(home,'profile.json'),'utf8'));
   assert.deepEqual(repeated.seed, profile.seed); assert.equal(repeated.devices.length,1);
+  const defaultsArgs = args.filter((value, index) => !['--workdir', '--shell'].includes(value) && !['--workdir', '--shell'].includes(args[index - 1]));
+  await run(controllerEnv, ...defaultsArgs);
+  const defaultsResult = JSON.parse(await readFile(join(home, 'setup-result.json'), 'utf8'));
+  const binding = JSON.parse(await readFile(join(home, `session-${defaultsResult.session}.json`), 'utf8'));
+  const { realpath, access } = await import('node:fs/promises');
+  assert.equal(binding.workDir, await realpath(targetHome));
+  await access(binding.shell);
+  assert.notEqual(binding.shell, targetEnv.SHELL);
+  const cli = resolve('packages/lingxi-mcp/cli.mjs');
+  const selected = await exec(process.execPath, [cli, 'select', '--device', defaultsResult.deviceId, '--home', home, '--loopback', 'true'], { env: controllerEnv });
+  assert.equal(JSON.parse(selected.stdout).workDir, binding.workDir);
+  assert.equal(JSON.parse(selected.stdout).shell, binding.shell);
+  const executed = await exec(process.execPath, [cli, 'exec', '--session', JSON.parse(selected.stdout).session, '--command', 'echo lingxi-default-shell', '--home', home, '--loopback', 'true'], { env: controllerEnv });
+  assert.match(executed.stdout, /lingxi-default-shell/);
   const bad = [...args]; bad[bad.indexOf('--workdir')+1] = join(root,'missing');
   await assert.rejects(run(controllerEnv,...bad));
-  console.log('PASS: real two-end setup, service startup, pairing, binding, repeated identity preservation, invalid-directory failure. AI account login not tested.');
+  console.log('PASS: real two-end setup, service startup, pairing, binding, repeated identity preservation, target defaults, missing-shell fallback, CLI defaults, explicit overrides, invalid-directory failure. AI account login not tested.');
 } finally {
   for (const env of environments) {
     try {

@@ -294,6 +294,53 @@ fn envelope(service: &TaskService, req: &Value, mut data: Value) -> Value {
     data
 }
 
+// Discover on the target: controller paths may belong to a different OS.
+fn environment_defaults() -> Value {
+    let work_dir = std::fs::canonicalize(crate::config::home_dir())
+        .ok()
+        .filter(|path| path.is_dir() && std::fs::read_dir(path).is_ok());
+    let mut candidates = Vec::new();
+    for key in ["SHELL", "ComSpec"] {
+        if let Some(value) = std::env::var_os(key) {
+            candidates.push(PathBuf::from(value));
+        }
+    }
+    if cfg!(windows) {
+        if let Some(root) = std::env::var_os("SystemRoot") {
+            let root = PathBuf::from(root);
+            candidates.push(root.join("System32/WindowsPowerShell/v1.0/powershell.exe"));
+            candidates.push(root.join("System32/cmd.exe"));
+        }
+    } else {
+        candidates.extend(["/bin/bash", "/bin/zsh", "/bin/sh"].map(PathBuf::from));
+    }
+    let shells: Vec<_> = candidates
+        .into_iter()
+        .filter(|path| {
+            if !path.is_absolute() || !path.is_file() {
+                return false;
+            }
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                path.metadata()
+                    .map(|m| m.permissions().mode() & 0o111 != 0)
+                    .unwrap_or(false)
+            }
+            #[cfg(not(unix))]
+            {
+                true
+            }
+        })
+        .fold(Vec::new(), |mut paths, path| {
+            if !paths.contains(&path) {
+                paths.push(path);
+            }
+            paths
+        });
+    json!({"workDir": work_dir, "shell": shells.first(), "shells": shells})
+}
+
 pub async fn serve(
     service: Arc<TaskService>,
     req: Value,
@@ -332,7 +379,7 @@ async fn handle(
     }
     if string(req, "action")? == "probe" {
         return Ok(
-            json!({"event":"result","status":"SUCCESS","capabilities":["tasks","binary-files-v1"]}),
+            json!({"event":"result","status":"SUCCESS","capabilities":["tasks","binary-files-v1"],"defaults":environment_defaults()}),
         );
     }
     if string(req, "action")? == "bind" {

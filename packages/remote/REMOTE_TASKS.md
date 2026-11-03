@@ -1,37 +1,31 @@
-> 5.0 提示：本文保留 4.0 接口与历史使用说明。远程组件已移至 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)，新版安装请使用该项目 README 中的 setup 脚本。
-
-# 远程模型任务（4.0）
-
-首次配置请先阅读 [A、B、C 三端首次使用指南](https://github.com/Cyber-bike1949/LingXi1949/blob/main/docs/remote-tasks-first-run.zh-CN.md)，按设备和顺序完成安装、配对、模型配置与验证。本文保留工具参数、限制和开发验证说明。
-
-A 的 Obsidian 是操作窗口，B 运行 Codex/Claude 与 `lingxi-mcp`，C/D 运行升级后的 LingXi Agent。B 直接连接目标设备；文件不自动同步到 B。
+# 远程模型任务（5.0）
 
 ## 安装与首次使用
 
-B 需要 Node.js 24（使用内置 SQLite）、pnpm 和本仓库。C 需要本版本 Agent，不需要模型 CLI。
+推荐使用完整平台包的**一键配置入口**，详见 [首次使用](README.md#首次使用)：Windows x64 双击 `install.cmd`；Linux x64 执行 `bash install.sh`。脚本自动安装运行环境、启动 Agent、配对并配置模型工具，无需手工执行下面的高级命令。
 
-也可下载 Release 中的 `lingxi-mcp-4.0.0.tar.gz`，解压后执行 `npm install --omit=dev`，再直接运行下方 `node packages/lingxi-mcp/cli.mjs ...` 命令。发行包已经包含 SDK 构建产物，无需 pnpm 或 Rust；目标 C 的 Agent 使用 Release 中对应平台的二进制。
+- **被控制端**：存放项目并执行命令，选择默认角色 `1`，把连接码复制给控制端。
+- **控制端**：运行 Codex/Claude 与 `lingxi-mcp`，选择角色 `2`，粘贴连接码。工作目录和 Shell 采用被控制端实际检测出的默认值，回车确认即可，也可以更换。
+- **Obsidian 操作窗口（可选）**：用于打开终端或查看任务记录，不是必需的第三台设备。控制端直接连接被控制端，文件不自动同步。
 
-```sh
-pnpm install --frozen-lockfile
-pnpm build:mcp
-cargo build --release --locked --manifest-path agent/Cargo.toml
-```
+默认工作目录为被控制端用户主目录；Shell 优先使用其环境中存在且可执行的 Shell，再尝试系统常见路径。检测不到时需填写绝对路径。建议将工作目录改为实际项目目录，以明确文件操作范围。模型账号登录仍需本人完成。
 
-将构建好的 Agent 部署到 C，按既有方式启动并取得连接码。以下命令在 B 的终端执行（可以从 A 的灵犀终端输入）：
+### 手动初始化（高级用法）
+
+以下命令在完整平台包目录的控制端执行，Node.js 24 可由安装入口自动准备：
 
 ```sh
 node packages/lingxi-mcp/cli.mjs init
-node packages/lingxi-mcp/cli.mjs pair --name C --ticket-file /path/to/c-ticket.txt
+node packages/lingxi-mcp/cli.mjs pair --name 开发设备 --ticket-file /path/to/ticket.txt
 node packages/lingxi-mcp/cli.mjs devices --probe true
-node packages/lingxi-mcp/cli.mjs select --device DEVICE_ID --workdir /workspace/app --shell /bin/bash
+node packages/lingxi-mcp/cli.mjs select --device DEVICE_ID
 ```
 
-`pair` 保存连接码中的设备身份；`select` 实际连接并检查工作目录和 Shell，返回新的 `session`。该选择不可变，模型工具没有切换设备的参数。Windows 目标应提供 Shell 的绝对路径，例如 `C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`。
+`select` 自动探测被控制端默认目录和 Shell，也可通过 `--workdir PATH --shell PATH` 分别覆盖。它连接并验证路径，返回新 `session`。修改目录或 Shell 时再次运行 `select` 并接入新会话；已有会话保持原绑定。旧 Agent 若不提供默认值，请升级或显式传入两个路径。
 
-默认数据目录是 B 的 `~/.lingxi-mcp`；所有命令支持 `--home /absolute/path`。`profile.json` 保存 B 自己的控制端身份与配对设备；不会读取 A 的 Obsidian 身份。连接码沿用既有 LingXi 信任语义，不是新增的双向人工批准或设备 ACL。
+默认数据目录为控制端的 `~/.lingxi-mcp`；所有命令支持 `--home /absolute/path`。安装脚本保留已有身份与配置。`profile.json` 保存控制端身份与配对设备，不读取 Obsidian 身份。连接码沿用既有 LingXi 信任语义。
 
-既有 Agent 同时只允许一个控制连接。B 连接 C 前，需要先关闭 A→C 的连接；A→B 的终端可以继续使用。不同模型会话可分别绑定 C、D 并发；同一目标同时只运行一个命令，冲突返回 `DEVICE_BUSY`。同一个 selection 不可被两个 MCP 进程同时打开。
+Agent 同时只允许一个控制连接。控制端连接前，请关闭 Obsidian 到同一被控制端的连接。不同模型会话可以绑定不同被控制端并发；同一被控制端同时只运行一个命令，冲突返回 `DEVICE_BUSY`。同一个会话不可被两个 MCP 进程同时打开。
 
 ## 接入模型 CLI
 
@@ -41,22 +35,22 @@ node packages/lingxi-mcp/cli.mjs select --device DEVICE_ID --workdir /workspace/
 node packages/lingxi-mcp/cli.mjs config --session SESSION_ID
 ```
 
-Codex 的配置放在 B 的 `~/.codex/config.toml`，例：
+Codex 的配置放在 控制端的 `~/.codex/config.toml`，例：
 
 ```toml
 [mcp_servers.lingxi]
 command = "/absolute/path/to/node"
-args = ["/absolute/path/to/LingXi1949/packages/lingxi-mcp/cli.mjs", "serve", "--session", "SESSION_ID"]
+args = ["/absolute/path/to/lingxi-remote/packages/lingxi-mcp/cli.mjs", "serve", "--session", "SESSION_ID"]
 startup_timeout_sec = 180
 tool_timeout_sec = 3660
 ```
 
-也可用 `codex mcp add lingxi -- /absolute/path/to/node /absolute/path/to/LingXi1949/packages/lingxi-mcp/cli.mjs serve --session SESSION_ID` 注册，再调整上述超时。使用 `/mcp` 检查连接。配置格式和超时字段依据 [Codex 官方 MCP 文档](https://developers.openai.com/codex/mcp)。
+也可用 `codex mcp add lingxi -- /absolute/path/to/node /absolute/path/to/lingxi-remote/packages/lingxi-mcp/cli.mjs serve --session SESSION_ID` 注册，再调整上述超时。使用 `/mcp` 检查连接。配置格式和超时字段依据 [Codex 官方 MCP 文档](https://developers.openai.com/codex/mcp)。
 
-Claude Code 在 B 注册：
+Claude Code 在控制端注册：
 
 ```sh
-claude mcp add --transport stdio lingxi -- /absolute/path/to/node /absolute/path/to/LingXi1949/packages/lingxi-mcp/cli.mjs serve --session SESSION_ID
+claude mcp add --transport stdio lingxi -- /absolute/path/to/node /absolute/path/to/lingxi-remote/packages/lingxi-mcp/cli.mjs serve --session SESSION_ID
 ```
 
 也可将 `config` 输出中的 `mcpServers` 对象写入项目 `.mcp.json`。通过 `/mcp` 查看连接；注册参数依据 [Claude Code 官方 MCP 文档](https://code.claude.com/docs/en/mcp)。两种 CLI 的真实模型登录与完整任务测试仍需在用户环境完成，当前验收覆盖标准 MCP 协议客户端。
@@ -89,22 +83,22 @@ node packages/lingxi-mcp/cli.mjs tasks
 node packages/lingxi-mcp/cli.mjs tasks --session SESSION_ID
 ```
 
-B 的 `tasks.sqlite` 为完整记录，`tasks.json` 为最近 30 条任务的轻量快照（每个输出流只保留末尾 512 字符）。A 的 Obsidian 命令面板选择“远程模型任务”，选 B，再填写 B 的 `tasks.json` 绝对路径即可查看。此入口复用 A→B 的文件传输，不转发 B→C 的执行。
+控制端的 `tasks.sqlite` 为完整记录，`tasks.json` 为最近 30 条任务的轻量快照（每个输出流只保留末尾 512 字符）。Obsidian 命令面板选择“远程模型任务”，选择控制端，再填写控制端的 `tasks.json` 绝对路径即可查看。此入口复用 Obsidian→控制端的文件传输，不转发控制端→被控制端的执行。
 
-连接断开后当前操作保留已收输出、标为 UNKNOWN；服务不自动重连或重放。重新启动相同 selection 会建立新的远程会话，旧的 QUEUED/RUNNING 记录恢复为 UNKNOWN；已记录 requestId 继续去重。快照有保存时间，B 异常退出时旧快照可能仍显示 RUNNING，需结合连接情况判断，不能视作实时状态。
+连接断开后当前操作保留已收输出、标为 UNKNOWN；服务不自动重连或重放。重新启动相同 selection 会建立新的远程会话，旧的 QUEUED/RUNNING 记录恢复为 UNKNOWN；已记录 requestId 继续去重。快照有保存时间，控制端异常退出时旧快照可能仍显示 RUNNING，需结合连接情况判断，不能视作实时状态。
 
 ## 开发验证
 
+在 `packages/remote` 目录执行：
+
 ```sh
-pnpm build:mcp
-pnpm test:mcp
-cargo test --manifest-path agent/Cargo.toml
-cargo build --manifest-path agent/Cargo.toml
-node packages/lingxi-mcp/e2e.mjs
-pnpm lint:obsidian
 pnpm build
-pnpm test:remote
-pnpm test:terminal
+pnpm test
+cargo fmt --check --manifest-path agent/Cargo.toml
+cargo test --locked --manifest-path agent/Cargo.toml
+cargo build --locked --manifest-path agent/Cargo.toml
+pnpm test:e2e
+node scripts/setup.e2e.mjs
 ```
 
-`e2e.mjs` 在临时配置目录启动两个真实 Rust Agent 和两个 Node MCP 控制端，通过 loopback QUIC 检查身份、设备隔离、文件、命令、取消和断线。不访问用户真实项目，不调用付费模型。测试结果与未测项见 [实施记录](IMPLEMENTATION_4.0.md)。
+集成测试在临时配置目录运行真实 Agent 和控制端，验证配对、默认路径、覆盖路径、身份保留及文件与命令操作，不调用付费模型。
