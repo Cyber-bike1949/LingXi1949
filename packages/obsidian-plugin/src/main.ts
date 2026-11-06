@@ -1299,7 +1299,7 @@ export default class TerminalPlugin extends Plugin {
     this.localCommitSequence += 1;
     const eventId = `${this.localCommitEpoch}:${this.localCommitSequence}`;
     for (const leaf of this.app.workspace.getLeavesOfType(TERMINAL_VIEW_TYPE)) {
-      if (this.isTerminalView(leaf.view)) {
+      if (this.isTerminalView(leaf.view) && typeof leaf.view.receiveFileCommit === 'function') {
         leaf.view.receiveFileCommit('local', path, this.localCommitEpoch, this.localCommitSequence, eventId);
       }
     }
