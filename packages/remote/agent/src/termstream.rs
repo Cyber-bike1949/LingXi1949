@@ -70,6 +70,10 @@ use crate::AgentError;
 pub struct OpenPayload {
     pub cols: u16,
     pub rows: u16,
+    #[serde(default, skip_serializing_if = "Option::is_none", rename = "workDir")]
+    pub work_dir: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shell: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -659,7 +663,12 @@ mod tests {
 
     #[test]
     fn every_frame_kind_round_trips() {
-        roundtrip(Frame::Open(OpenPayload { cols: 80, rows: 24 }));
+        roundtrip(Frame::Open(OpenPayload {
+            cols: 80,
+            rows: 24,
+            work_dir: None,
+            shell: None,
+        }));
         roundtrip(Frame::Opened(OpenedPayload {
             session_id: Uuid::new_v4(),
             shell: "/bin/bash".into(),

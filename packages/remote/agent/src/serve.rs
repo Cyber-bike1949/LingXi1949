@@ -352,22 +352,40 @@ async fn serve_terminal_session(
         return;
     }
 
-    // 3. Spawn the shell. Same starting directory as V1: the user's home.
-    let session_id = Uuid::new_v4();
-    let (pty, reader) = match PtySession::spawn(
-        &options.shell.program,
-        &options.shell.args,
-        Some(&crate::config::home_dir()),
-        open.cols,
-        open.rows,
-    ) {
-        Ok(spawned) => spawned,
-        Err(e) => {
-            let message = format!("SHELL_START_FAILED: {}", redact(&e.to_string()));
-            send_error(&mut send, &message).await;
-            return;
-        }
+    // 3. Spawn the shell.  A controller may request a per-terminal directory
+    // and shell; both are validated on the Agent that actually starts it.
+    // This keeps a manual terminal's state on the authenticated target rather
+    // than trusting controller-local state.
+    let cwd = match open.work_dir.as_deref() {
+        Some(path) => match std::fs::canonicalize(path) {
+            Ok(path) if path.is_dir() && std::fs::read_dir(&path).is_ok() => path,
+            _ => {
+                send_error(&mut send, "WORKDIR_INVALID_OR_UNAVAILABLE").await;
+                return;
+            }
+        },
+        None => crate::config::home_dir(),
     };
+    let program = open.shell.as_deref().unwrap_or(&options.shell.program);
+    if !std::path::Path::new(program).is_absolute() || !std::path::Path::new(program).is_file() {
+        send_error(&mut send, "SHELL_REQUIRES_EXISTING_ABSOLUTE_PATH").await;
+        return;
+    }
+    let shell_args = if open.shell.is_some() {
+        Vec::new()
+    } else {
+        options.shell.args.clone()
+    };
+    let session_id = Uuid::new_v4();
+    let (pty, reader) =
+        match PtySession::spawn(program, &shell_args, Some(&cwd), open.cols, open.rows) {
+            Ok(spawned) => spawned,
+            Err(e) => {
+                let message = format!("SHELL_START_FAILED: {}", redact(&e.to_string()));
+                send_error(&mut send, &message).await;
+                return;
+            }
+        };
     let shell = pty.shell.clone();
 
     // Bound to a block so the guard (and the Ok branch's borrow of the
@@ -1488,7 +1506,12 @@ mod tests {
         let (send, recv) = within(connection.open_bi()).await.unwrap();
         let mut stream = TestStream::new(send, recv);
         stream
-            .send_frame(Frame::Open(OpenPayload { cols: 80, rows: 24 }))
+            .send_frame(Frame::Open(OpenPayload {
+                cols: 80,
+                rows: 24,
+                work_dir: None,
+                shell: None,
+            }))
             .await;
         match stream.next_frame().await {
             Frame::Opened(payload) => (stream, payload),
@@ -2009,7 +2032,12 @@ mod tests {
             let (send, recv) = within(connection.open_bi()).await.unwrap();
             let mut refused = TestStream::new(send, recv);
             refused
-                .send_frame(Frame::Open(OpenPayload { cols: 80, rows: 24 }))
+                .send_frame(Frame::Open(OpenPayload {
+                    cols: 80,
+                    rows: 24,
+                    work_dir: None,
+                    shell: None,
+                }))
                 .await;
             match refused.next_frame().await {
                 Frame::Error(payload) => assert!(

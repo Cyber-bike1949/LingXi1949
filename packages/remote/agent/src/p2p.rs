@@ -275,7 +275,15 @@ mod tests {
                         let n = recv.read(&mut buf).await.unwrap().expect("stream ended");
                         decoder.push(&buf[..n]);
                     };
-                    assert_eq!(open, Frame::Open(OpenPayload { cols: 80, rows: 24 }));
+                    assert_eq!(
+                        open,
+                        Frame::Open(OpenPayload {
+                            cols: 80,
+                            rows: 24,
+                            work_dir: None,
+                            shell: None
+                        })
+                    );
 
                     let opened = Frame::Opened(OpenedPayload {
                         session_id: uuid::Uuid::new_v4(),
@@ -293,7 +301,12 @@ mod tests {
                 .expect("connect via the pasted code should succeed");
 
             let (mut send, mut recv) = within(connection.open_bi()).await.unwrap();
-            let open = Frame::Open(OpenPayload { cols: 80, rows: 24 });
+            let open = Frame::Open(OpenPayload {
+                cols: 80,
+                rows: 24,
+                work_dir: None,
+                shell: None,
+            });
             send.write_all(&open.encode().unwrap()).await.unwrap();
 
             let mut decoder = FrameDecoder::new();

@@ -34,6 +34,13 @@ import { parseFileOperationResponse, type FileOperationRequest, type FileOperati
 export interface OpenPayload {
   cols: number;
   rows: number;
+  /**
+   * Optional per-terminal launch settings.  They are deliberately part of
+   * the authenticated stream handshake, never inferred from a display name
+   * or a controller-local current directory.
+   */
+  workDir?: string;
+  shell?: string;
 }
 
 export interface OpenedPayload {

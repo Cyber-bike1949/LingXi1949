@@ -102,11 +102,11 @@ node packages/lingxi-mcp/cli.mjs upload --session SESSION --local ./example.bin 
 node packages/lingxi-mcp/cli.mjs download --session SESSION --path example.bin --local ./download.bin
 ```
 
-`shell` 让用户选择设备，工作目录和 Shell 回车即可使用被控制端检测出的默认值，也可修改；输入普通文本执行命令，`/ls`、`/upload`、`/download`、`/exit` 完成文件操作或退出。每条命令独立执行，`cd` 不会改变下一条命令的固定工作目录。首期不是 vim 等全屏程序使用的交互式 PTY。
+`shell` 让用户选择设备，工作目录和 Shell 回车即可使用被控制端检测出的默认值，也可修改；随后建立一个目标设备上的持续交互 PTY。普通输入、方向键、Ctrl+C 和窗口尺寸按字节透传，`cd` 会保持在该终端内。按 `Ctrl+]` 进入控制命令入口后可使用 `/ls`、`/upload`、`/download`、`/exit`；这样远端前台程序收到的 `/upload` 文本不会被控制端截获。文件扩展命令使用创建终端时的不可变设备和目录绑定，绝不根据路径、显示名称或最近设备选择目标。
 
 单文件上限 64 MiB，包含二进制和空文件；目录递归传输暂不提供。默认拒绝覆盖，显式 `--overwrite true` 才替换。同目录暂存完成后提交；断线清理失败会报告暂存文件名。硬链接提交要求目标与工作目录同一文件系统，否则失败并保持原文件。远程路径限于绑定目录，连接失败不在本机执行。每个会话一次只允许一个 CLI/MCP 进程，另开会话可避免锁冲突；Agent 同时只执行一条结构化命令。
 
-MCP 旧的 UTF-8 读写接口仍限 128 KiB。`select --device DEVICE_ID` 可直接采用检测出的默认目录和 Shell；传入 `--workdir PATH --shell PATH` 可更换，生成新会话后重新接入模型。已有会话的绑定保持不变。
+MCP 旧的 UTF-8 读写接口仍限 128 KiB。`select --device DEVICE_ID` 可直接采用检测出的默认目录和 Shell；传入 `--workdir PATH --shell PATH` 可更换，生成新会话后重新接入模型。已有会话的绑定保持不变。MCP 服务只提供固定远端工具；它不能从技术上移除 Codex/Claude 自带的本地工具，部署时必须以受限工具配置运行，并用绕过测试确认模型没有额外的本地执行、文件或其他设备入口。
 
 旧版 `init/pair/select/serve/tasks/config` 保留，详见 [进阶文档](REMOTE_TASKS.md)。协议探测返回实际在线状态，旧 Agent 不支持新接口时应升级。
 

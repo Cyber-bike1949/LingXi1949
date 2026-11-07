@@ -2,6 +2,7 @@ import { open, stat, link, rename, unlink } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
+import { RemoteTerminal } from '../remote-sdk/dist/index.mjs';
 
 const CHUNK = 128 * 1024;
 const LIMIT = 64 * 1024 * 1024;
@@ -102,25 +103,69 @@ export async function runManual(service, command, options) {
 }
 
 export async function shell(service) {
-  const reader = createInterface({ input: process.stdin, output: process.stdout });
-  process.stdout.write('输入远程命令；/ls [路径] 浏览，/upload 上传，/download 下载，/exit 退出。\n同名默认拒绝覆盖；每条命令独立执行，工作目录固定。\n');
-  try {
-    while (true) {
-      let line;
-      try { line = (await reader.question('lingxi> ')).trim(); } catch { break; }
-      if (line === '/exit') break;
-      if (!line) continue;
-      try {
-        let command = 'exec'; let options = { command: line };
-        if (line === '/ls' || line.startsWith('/ls ')) { command = 'list'; options = { path: line.slice(3).trim() || '.' }; }
-        if (line === '/upload' || line === '/download') {
-          command = line.slice(1);
-          options = { local: await reader.question('本地文件路径: '), path: await reader.question('远程相对文件路径: ') };
-          options.overwrite = (await reader.question('允许覆盖已有文件？输入 yes，否则拒绝: ')).trim() === 'yes' ? 'true' : 'false';
-        }
-        const result = await runManual(service, command, options);
-        process.stdout.write(`\n${JSON.stringify(result, null, 2)}\n`);
-      } catch (error) { process.stderr.write(`${error.message}\n`); }
+  const terminal = new RemoteTerminal(service.adapter, service.binding);
+  const opened = await terminal.open();
+  const stdin = process.stdin;
+  const rawCapable = stdin.isTTY && typeof stdin.setRawMode === 'function';
+  let control = false;
+  let controlBuffer = '';
+  const render = data => process.stdout.write(data);
+  const runControl = async line => {
+    const reader = createInterface({ input: process.stdin, output: process.stdout });
+    try {
+      let command = 'exec'; let options = { command: line };
+      if (line === '/ls' || line.startsWith('/ls ')) { command = 'list'; options = { path: line.slice(3).trim() || '.' }; }
+      if (line === '/upload' || line === '/download') {
+        command = line.slice(1);
+        options = { local: await reader.question('本地文件路径: '), path: await reader.question('远程相对文件路径: ') };
+        options.overwrite = (await reader.question('允许覆盖已有文件？输入 yes，否则拒绝: ')).trim() === 'yes' ? 'true' : 'false';
+      }
+      if (line === '/exit') return false;
+      const result = await runManual(service, command, options);
+      process.stdout.write(`\n${JSON.stringify(result, null, 2)}\n`);
+      return true;
+    } finally { reader.close(); }
+  };
+  process.stdout.write(`已连接至 ${service.binding.deviceId} 的持续远程终端（${opened.shell}）。\nCtrl+] 打开控制命令（/ls、/upload、/download、/exit）；其余按键按字节透传。\n`);
+  terminal.onData(render);
+  const onData = async data => {
+    if (!control) {
+      const marker = data.indexOf('\x1d');
+      if (marker < 0) { terminal.write(data); return; }
+      if (marker > 0) terminal.write(data.subarray(0, marker));
+      control = true;
+      controlBuffer = '';
+      process.stdout.write('\ncontrol> ');
+      const remainder = data.subarray(marker + 1);
+      if (remainder.length) await onData(remainder);
+      return;
     }
-  } finally { reader.close(); }
+    for (const byte of data) {
+      if (byte === 13 || byte === 10) {
+        process.stdout.write('\n');
+        const line = controlBuffer.trim(); controlBuffer = ''; control = false;
+        if (line) {
+          if (rawCapable) stdin.setRawMode(false);
+          const keep = await runControl(line);
+          if (!keep) { await terminal.close(); return; }
+          if (rawCapable) stdin.setRawMode(true);
+        }
+        process.stdout.write('');
+      } else if (byte === 127 || byte === 8) {
+        if (controlBuffer) { controlBuffer = controlBuffer.slice(0, -1); process.stdout.write('\b \b'); }
+      } else {
+        controlBuffer += String.fromCharCode(byte); process.stdout.write(String.fromCharCode(byte));
+      }
+    }
+  };
+  if (!rawCapable) {
+    await terminal.close();
+    throw new Error('INTERACTIVE_TTY_REQUIRED');
+  }
+  stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
+  try {
+    await new Promise(resolve => terminal.onClose(resolve));
+  } finally {
+    stdin.off('data', onData); stdin.setRawMode(false); await terminal.close();
+  }
 }
