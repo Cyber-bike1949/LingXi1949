@@ -61,7 +61,9 @@ claude mcp add --transport stdio lingxi -- /absolute/path/to/node /absolute/path
 
 ### 切换 AI 远程设备或工作目录
 
-AI 绑定不是通过提示词选择的。必须在**控制端**新建 session，再把 AI CLI 的 LingXi MCP 配置改为该 session。原 AI 会话继续绑定原设备，不能被悄悄迁移。
+日常使用不需要理解 `DEVICE_ID` 或 session。Linux 控制端运行 `bash ~/.local/share/lingxi-remote/5.0.0/control.sh ai`；Windows 控制端在安装目录终端运行 `control.cmd ai`。按提示选择设备、远端目录、Shell 和 `codex`/`claude` 后，入口会自动创建 session、替换名为 `lingxi` 的 MCP 配置并启动 AI CLI。要切换设备或目录，先退出当前 AI CLI，再重新运行该入口；原 AI 会话继续绑定原设备，不能被悄悄迁移。
+
+以下命令仅供排障、自动化或没有快捷入口的高级场景使用。AI 绑定不是通过提示词选择的；必须在**控制端**新建 session，再把 AI CLI 的 LingXi MCP 配置改为该 session。
 
 ```sh
 # 1. 读取已经配对的设备及实际在线状态，记下目标 DEVICE_ID。
