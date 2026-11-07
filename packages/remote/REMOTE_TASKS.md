@@ -59,6 +59,28 @@ claude mcp add --transport stdio lingxi -- /absolute/path/to/node /absolute/path
 
 给模型的任务建议明确写出：“先调用 remote_target 确认目标。本轮所有文件和命令仅通过 lingxi 的 remote_* 工具执行，不能用本地工具代替。读取文件、完成修改并运行测试，最后报告 taskId 和退出码。”MCP 只能约束自己的远程工具，无法禁用模型 CLI 自带的本地 Shell/文件工具。
 
+### 切换 AI 远程设备或工作目录
+
+AI 绑定不是通过提示词选择的。必须在**控制端**新建 session，再把 AI CLI 的 LingXi MCP 配置改为该 session。原 AI 会话继续绑定原设备，不能被悄悄迁移。
+
+```sh
+# 1. 读取已经配对的设备及实际在线状态，记下目标 DEVICE_ID。
+node packages/lingxi-mcp/cli.mjs devices --probe true
+
+# 2. 在目标 Windows 设备上验证目录与 Shell，并创建新的固定绑定。
+node packages/lingxi-mcp/cli.mjs select \
+  --device DEVICE_ID \
+  --workdir 'C:\Projects\my-app' \
+  --shell 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe'
+
+# 3. 用上一步输出的 session 生成该 session 的 MCP 配置。
+node packages/lingxi-mcp/cli.mjs config --session NEW_SESSION
+```
+
+第三步会输出包含 `NEW_SESSION` 的 Codex/Claude MCP 配置。将其替换当前 AI CLI 中原有 LingXi 服务配置后，完全退出并重新启动 AI CLI；在新对话的第一条任务要求调用 `remote_target`，核对返回的 `deviceId`、目录和 Shell。不要手工修改 session JSON、MCP 的 `--session` 参数或工具调用来“切换”目标。
+
+只改 AI 的工作目录时也必须重复这三步中的 `select` 和 `config`；已有 session 保持原目录。手动持续终端则在启动时填写工作目录，或在终端内使用远端 Shell 的 `cd`；`cd` 仅影响该 PTY，文件扩展命令仍以创建终端时的绑定目录为根。
+
 ## 工具与结果
 
 | 工具 | 必填参数 | 行为 |

@@ -95,6 +95,15 @@ LingXi Remote 让你在一台电脑上，通过命令或 AI 工具操作另一�
 
 更多模型接入说明见 [接入模型 CLI](REMOTE_TASKS.md#接入模型-cli)；手动操作见下方 [手动控制](#手动控制)。
 
+### 修改工作目录或 AI 操作的设备
+
+“设备、工作目录、Shell”会在创建手动终端或 AI 会话时一起固定；AI 不能在提示词、工具参数或路径中改写它们。
+
+- **手动终端：** 每次启动 `control.sh` / `control.cmd` 并选择设备后，按“被控制端工作目录”提示输入新的 Windows 绝对路径，例如 `C:\Projects\my-app`。进入终端后可直接执行 `cd 'C:\Projects\other-app'`；这个 `cd` 仅对当前 PTY 有效。要让 `/ls`、上传和下载也以新目录为根，退出后新建终端，并在创建时填写新目录。
+- **AI CLI：** 先用 `devices --probe true` 找到目标的 `deviceId`，再执行 `select --device DEVICE_ID --workdir WINDOWS_ABSOLUTE_PATH --shell WINDOWS_SHELL_PATH`。它会创建一个新的不可变 session；随后用 `config --session NEW_SESSION` 生成新的 MCP 配置，替换 Codex 或 Claude 中原来的 LingXi MCP 配置并重启 AI CLI。完整命令和示例见[切换 AI 远程设备或工作目录](REMOTE_TASKS.md#切换-ai-远程设备或工作目录)。
+
+断线后旧终端和旧 AI 请求不接管、不改派；重新启动控制入口后，选择同一已配对设备即可重新建立一个新会话，无须再次输入连接码。只有身份或配对授权轮换、或控制端配对资料丢失时，才需要重新配对。
+
 ## 安装后常见问题
 
 ### 以后还需要重新安装吗？
