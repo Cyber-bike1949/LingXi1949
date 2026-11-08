@@ -43,11 +43,12 @@ try {
     }
     # Repair only the published 5.0.0 startup files; preserve identity and configuration.
     if ($Version -eq '5.0.0') {
-        $FixUrl = 'https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/407e322f2e90757ff7fa38259d56c2fb95bdb89a/packages/remote'
+        $FixUrl = 'https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote'
         $Fixes = [ordered]@{
             'package-lock.json' = 'eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a'
             'scripts/setup.ps1' = 'ba7b45dd6e431e3b692853b0c94aa1d3f6c338e32035c82f434563e2f291db0e'
-            'control.cmd' = '24d9b49d0345e078354ff659c350e95c88875f53ff2046faa5ad428f614eeb1e'
+            'control.cmd' = '5be01b6390153bcead1999111c91f778fbfc5e3089a0fd923535dae6b853c87b'
+            'packages/lingxi-mcp/cli.mjs' = '2258a5bac835997bc6c66d3be98eeab8de367ee29e905e01e7b8ffe085397a29'
         }
         foreach ($File in $Fixes.Keys) {
             $Target = Join-Path $Destination $File

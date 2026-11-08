@@ -30,16 +30,18 @@ test('manual launcher finds bundled Node and passes paths with spaces from any d
     const cli = join(root, 'packages/lingxi-mcp');
     await mkdir(cli, { recursive: true });
     await writeFile(join(cli, 'cli.mjs'), 'console.log(JSON.stringify({args:process.argv.slice(2),node:process.execPath,cwd:process.cwd()}));');
-    const run = () => exec(windows ? process.env.ComSpec : 'bash', windows ? ['/d', '/s', '/c', `""${launcher}" --home "profile with spaces""`] : [launcher, '--home', 'profile with spaces'], { cwd: tmpdir(), timeout: 10000, windowsVerbatimArguments: windows });
-    const fallback = JSON.parse((await run()).stdout);
+    const run = (args) => exec(windows ? process.env.ComSpec : 'bash', windows ? ['/d', '/s', '/c', `""${launcher}" ${args.map(arg => `"${arg}"`).join(' ')}"`] : [launcher, ...args], { cwd: tmpdir(), timeout: 10000, windowsVerbatimArguments: windows });
+    const fallback = JSON.parse((await run(['--home', 'profile with spaces'])).stdout);
     assert.deepEqual(fallback.args, ['shell', '--home', 'profile with spaces']);
     const runtime = join(root, '.runtime', windows ? 'node-v24.22.1-win-x64' : 'node-v24.22.1-linux-x64/bin');
     await mkdir(runtime, { recursive: true });
     const node = join(runtime, windows ? 'node.exe' : 'node');
     await copyFile(process.execPath, node);
-    const bundled = JSON.parse((await run()).stdout);
+    const bundled = JSON.parse((await run(['--home', 'profile with spaces'])).stdout);
     assert.deepEqual(bundled.args, fallback.args);
     assert.equal(bundled.node.toLowerCase(), node.toLowerCase());
     assert.equal(bundled.cwd, fallback.cwd);
+    const ai = JSON.parse((await run(['ai', '--kind', 'codex'])).stdout);
+    assert.deepEqual(ai.args, ['ai', '--kind', 'codex']);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

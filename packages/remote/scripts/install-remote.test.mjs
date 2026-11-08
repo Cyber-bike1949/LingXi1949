@@ -15,12 +15,13 @@ test('bootstrap verifies downloads, reuses installs, preserves config and fails 
   const root = await mkdtemp(join(tmpdir(), 'lingxi-bootstrap-'));
   try {
     const fixture = join(root, 'fixture'); const pack = join(root, 'pack'); const bin = join(root, 'mock-bin');
-    for (const dir of [fixture, bin, join(pack, 'scripts'), join(pack, 'bin')]) await mkdir(dir, { recursive: true });
+    for (const dir of [fixture, bin, join(pack, 'scripts'), join(pack, 'bin'), join(pack, 'packages/lingxi-mcp')]) await mkdir(dir, { recursive: true });
     await writeFile(join(pack, 'scripts/setup.mjs'), "import { writeFileSync } from 'node:fs'; writeFileSync(process.env.TEST_OUTPUT, process.argv.slice(2).join('\\n'));");
     await writeFile(join(pack, 'package.json'), await readFile('package.json'));
     for (const file of ['package-lock.json', `scripts/setup.${windows ? 'ps1' : 'sh'}`, windows ? 'control.cmd' : 'control.sh']) {
       await writeFile(join(fixture, file.split('/').at(-1)), await readFile(file));
     }
+    await writeFile(join(fixture, 'cli.mjs'), await readFile('packages/lingxi-mcp/cli.mjs'));
     await writeFile(join(pack, 'bin', windows ? 'lingxi1949.exe' : 'lingxi1949'), 'fixture');
     await writeFile(join(pack, 'scripts/setup.sh'), '#!/usr/bin/env bash\nprintf "%s\\n" "$@" > "$TEST_OUTPUT"\n');
     const legacySetup = `param([Parameter(ValueFromRemainingArguments=$true)][string[]]$SetupArgs)

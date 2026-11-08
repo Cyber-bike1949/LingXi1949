@@ -181,7 +181,7 @@ async function main() {
       } finally { adapter.close(); await endpoint.close(); }
       const id = randomUUID();
       save(sessionPath(id), { id, deviceId: device.nodeId, workDir: binding.workDir, shell: binding.shell });
-      const kind = options.kind ?? (await reader.question('启动 codex 还是 claude [codex]: ')).trim() || 'codex';
+      const kind = options.kind ?? ((await reader.question('启动 codex 还是 claude [codex]: ')).trim() || 'codex');
       if (!['codex', 'claude'].includes(kind)) throw new Error('INVALID_AI_KIND: use codex or claude');
       const server = 'lingxi';
       const mcpArgs = [fileURLToPath(import.meta.url), 'serve', '--home', home, '--session', id];
@@ -198,7 +198,7 @@ async function main() {
       }
       if (kind === 'codex') execFileSync('codex', ['mcp', 'add', server, '--', process.execPath, ...mcpArgs], { stdio: 'inherit' });
       else execFileSync('claude', ['mcp', 'add', '--transport', 'stdio', server, '--', process.execPath, ...mcpArgs], { stdio: 'inherit' });
-      save('setup-result.json', {
+      save(join(home, 'setup-result.json'), {
         ...setupResult, status: 'configured', session: id, deviceId: device.nodeId,
         tools: { ...(setupResult.tools ?? {}), [kind]: { serverName: server } }, transport: 'ready',
       });

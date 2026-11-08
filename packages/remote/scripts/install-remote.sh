@@ -43,7 +43,7 @@ elif [[ ! -f "$DEST/.lingxi-installed" || ! -f "$DEST/scripts/setup.sh" || ! -f 
 fi
 # Repair only the published 5.0.0 startup files; preserve identity and configuration.
 if [[ "$VERSION" == 5.0.0 ]]; then
-  FIX_URL="https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/407e322f2e90757ff7fa38259d56c2fb95bdb89a/packages/remote"
+  FIX_URL="https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote"
   while read -r HASH FILE; do
     if [[ -f "$DEST/$FILE" ]] && printf '%s  %s\n' "$HASH" "$DEST/$FILE" | sha256sum -c - >/dev/null 2>&1; then continue; fi
     [[ -n "$STAGE" ]] || STAGE="$(mktemp -d "$BASE/.repair.XXXXXXXX")"
@@ -54,7 +54,8 @@ if [[ "$VERSION" == 5.0.0 ]]; then
   done <<'LINGXI_FIXES'
 eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a package-lock.json
 af91aada3fcb31985cdce0a607f6ad39d754bc339ded986762a72be4745a5f90 scripts/setup.sh
-4a27a09998a067913e98f1d8094634fd3b75825297cd1134461a59afc80192fd control.sh
+da60c4da22dae9bba4fcd236a129bc15dbeec199650f2a5fede039b48ccf2560 control.sh
+2258a5bac835997bc6c66d3be98eeab8de367ee29e905e01e7b8ffe085397a29 packages/lingxi-mcp/cli.mjs
 LINGXI_FIXES
   chmod +x "$DEST/control.sh" "$DEST/scripts/setup.sh"
 fi
