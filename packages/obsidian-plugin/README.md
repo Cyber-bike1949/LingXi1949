@@ -63,7 +63,7 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 
 ### Connect a remote Linux Agent
 
-On the **Linux x64** device that Obsidian will control, run the following command. The system needs `curl`, `tar`, `sha256sum`, and `xz`; the installer downloads the published platform package, verifies it, and starts a setup wizard.
+On the **Linux x64** device that will run the LingXi1949 remote Agent, run the following command. The system needs `curl`, `tar`, `sha256sum`, and `xz`; the installer downloads the published platform package, verifies it, and starts a setup wizard.
 
 ```bash
 (
@@ -75,9 +75,9 @@ On the **Linux x64** device that Obsidian will control, run the following comman
 )
 ```
 
-Choose **1** (or press Enter) for the controlled device. When the wizard reports that the controlled device is ready, copy its connection code. Back in Obsidian, run **LingXi1949: Open terminal**, choose to add a device, and paste the code. The installer verifies downloaded content and preserves existing device identity and configuration; closing the installer terminal does not stop the Agent.
+Choose **1** (or press Enter) for the Agent device. When installation finishes, copy its connection code. Back in Obsidian, run **LingXi1949: Open terminal**, choose to add a device, and paste the code. The installer verifies downloaded content and preserves existing device identity and configuration; closing the installer terminal does not stop the Agent.
 
-See [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote) for the controller setup, Windows installer, AI CLI setup, and troubleshooting. Do not use the legacy `agent/packaging/install-linux.sh` or the retired 4.0 installer command.
+See [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote) for the Windows Agent, AI CLI setup, and troubleshooting. Do not use the legacy `agent/packaging/install-linux.sh` or the retired 4.0 installer command.
 
 For a locally compiled Agent, follow the [development guide](docs/development.md#33-rust-agent-lingxi1949).
 

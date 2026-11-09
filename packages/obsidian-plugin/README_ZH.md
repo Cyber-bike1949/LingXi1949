@@ -60,7 +60,7 @@ LingXi1949 仅支持 Obsidian 桌面版。
 
 ### 连接远程 Linux Agent
 
-在需要被 Obsidian 控制的 **Linux x64** 设备上执行以下命令。需要系统提供 `curl`、`tar`、`sha256sum` 和 `xz`；安装器会下载已发布的平台包、校验文件，并启动配置向导。
+在要作为 LingXi1949 远程设备的 **Linux x64** 设备上执行以下命令。需要系统提供 `curl`、`tar`、`sha256sum` 和 `xz`；安装器会下载已发布的平台包、校验文件，并启动配置向导。
 
 ```bash
 (
@@ -72,9 +72,9 @@ LingXi1949 仅支持 Obsidian 桌面版。
 )
 ```
 
-在向导中输入 `1`（或直接回车）选择“被控制端”。看到“被控制端已就绪”后，复制终端输出的连接码。回到 Obsidian，运行“LingXi1949：打开终端”，选择添加设备并粘贴该连接码。安装器会校验下载内容，并保留已有设备身份和配置；关闭安装终端不会停止 Agent。
+在向导中输入 `1`（或直接回车）选择 Agent 设备。安装完成后，复制终端输出的连接码。回到 Obsidian，运行“LingXi1949：打开终端”，选择添加设备并粘贴该连接码。安装器会校验下载内容，并保留已有设备身份和配置；关闭安装终端不会停止 Agent。
 
-完整的控制端、Windows、AI CLI 与故障排查说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。不要使用旧的 `agent/packaging/install-linux.sh` 或已废弃的 4.0 安装命令。
+Windows Agent、AI CLI 与故障排查说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。不要使用旧的 `agent/packaging/install-linux.sh` 或已废弃的 4.0 安装命令。
 
 本地编译 Agent 的运行方式见[开发指南](docs/development_ZH.md#33-rust-agentlingxi1949)。
 
