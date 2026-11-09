@@ -46,9 +46,11 @@ export async function launchStrictAi({ kind, home, session, cli }) {
     // Preserve only the provider login material needed by the selected CLI.
     // Pairing data remains outside the sandbox in `home`.
     if (kind === 'codex') {
+      const codeModeHost = join(dirname(tool), 'codex-code-mode-host');
+      if (await exists(codeModeHost)) await copyFile(codeModeHost, join(app, 'codex-code-mode-host'));
       await copyIfPresent(join(homedir(), '.codex', 'auth.json'), join(sandboxHome, '.codex', 'auth.json'));
       await mkdir(join(sandboxHome, '.codex'), { recursive: true, mode: 0o700 });
-      await writeFile(join(sandboxHome, '.codex', 'config.toml'), `[mcp_servers.lingxi]\ncommand = \"/app/node\"\nargs = [\"/app/mcp-socket-proxy.mjs\", \"--socket\", \"/bridge/mcp.sock\"]\n`, { mode: 0o600 });
+      await writeFile(join(sandboxHome, '.codex', 'config.toml'), `[features]\ncode_mode_host = true\n\n[mcp_servers.lingxi]\ncommand = \"/app/node\"\nargs = [\"/app/mcp-socket-proxy.mjs\", \"--socket\", \"/bridge/mcp.sock\"]\n`, { mode: 0o600 });
     } else {
       await copyIfPresent(join(homedir(), '.claude.json'), join(sandboxHome, '.claude.json'));
     }
@@ -61,6 +63,9 @@ export async function launchStrictAi({ kind, home, session, cli }) {
       // filesystem boundary and is unavailable on some user-namespace setups.
       '--unshare-pid', '--unshare-ipc', '--unshare-uts',
       '--ro-bind', '/usr', '/usr', '--ro-bind', '/lib', '/lib', '--ro-bind', '/lib64', '/lib64',
+      '--dir', '/etc', '--ro-bind-try', '/etc/resolv.conf', '/etc/resolv.conf',
+      '--ro-bind-try', '/etc/nsswitch.conf', '/etc/nsswitch.conf', '--ro-bind-try', '/etc/hosts', '/etc/hosts',
+      '--ro-bind-try', '/etc/ssl', '/etc/ssl',
       '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/workspace',
       '--ro-bind', app, '/app', '--bind', join(stage, 'home'), '/home', '--ro-bind', bridgeDirectory, '/bridge',
       '--setenv', 'HOME', '/home/lingxi', '--setenv', 'PATH', '/usr/bin:/bin', '--chdir', '/workspace',
