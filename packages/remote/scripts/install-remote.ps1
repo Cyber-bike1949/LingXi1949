@@ -47,8 +47,11 @@ try {
         $Fixes = [ordered]@{
             'package-lock.json' = 'eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a'
             'scripts/setup.ps1' = 'ba7b45dd6e431e3b692853b0c94aa1d3f6c338e32035c82f434563e2f291db0e'
-            'control.cmd' = '5be01b6390153bcead1999111c91f778fbfc5e3089a0fd923535dae6b853c87b'
-            'packages/lingxi-mcp/cli.mjs' = '2258a5bac835997bc6c66d3be98eeab8de367ee29e905e01e7b8ffe085397a29'
+            'control.cmd' = 'f1aaa8c1101b7735f36439b24f0c0259797f16492bac6dd48f1bce19a7ef2171'
+            'packages/lingxi-mcp/cli.mjs' = 'e388a20ba975ab81ef8a7d83c42f48c0f652042634e235b3800fd08fd2d0b5a8'
+            'packages/lingxi-mcp/strict-ai.mjs' = '771bb0e3470a2b299ee91a77c4128bbd46bce10a1928b4c524b5f445fb536fa7'
+            'packages/lingxi-mcp/ai-bridge.mjs' = '30a738482add2281aad9c095bdd70b1d26cd5dba9543bf8ba8301e900f8082ec'
+            'packages/lingxi-mcp/mcp-socket-proxy.mjs' = 'e8a9f261238f46515ce07efb85dab98df7d2db73e271e4b4634552e09d3d4bd0'
         }
         foreach ($File in $Fixes.Keys) {
             $Target = Join-Path $Destination $File

@@ -54,8 +54,11 @@ if [[ "$VERSION" == 5.0.0 ]]; then
   done <<'LINGXI_FIXES'
 eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a package-lock.json
 af91aada3fcb31985cdce0a607f6ad39d754bc339ded986762a72be4745a5f90 scripts/setup.sh
-da60c4da22dae9bba4fcd236a129bc15dbeec199650f2a5fede039b48ccf2560 control.sh
-2258a5bac835997bc6c66d3be98eeab8de367ee29e905e01e7b8ffe085397a29 packages/lingxi-mcp/cli.mjs
+745548a7c7203658ba4e05c4e7f9f0a93beb2b1a820ac2b4604b2d8fc1ef934a control.sh
+e388a20ba975ab81ef8a7d83c42f48c0f652042634e235b3800fd08fd2d0b5a8 packages/lingxi-mcp/cli.mjs
+771bb0e3470a2b299ee91a77c4128bbd46bce10a1928b4c524b5f445fb536fa7 packages/lingxi-mcp/strict-ai.mjs
+30a738482add2281aad9c095bdd70b1d26cd5dba9543bf8ba8301e900f8082ec packages/lingxi-mcp/ai-bridge.mjs
+e8a9f261238f46515ce07efb85dab98df7d2db73e271e4b4634552e09d3d4bd0 packages/lingxi-mcp/mcp-socket-proxy.mjs
 LINGXI_FIXES
   chmod +x "$DEST/control.sh" "$DEST/scripts/setup.sh"
 fi
