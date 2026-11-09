@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
@@ -27,8 +27,9 @@ export async function launchStrictAi({ kind, home, session, cli }) {
   if (process.platform !== 'linux') throw new Error('STRICT_AI_RUNTIME_UNAVAILABLE: strict AI currently requires Linux bubblewrap');
   const bwrap = executable('bwrap');
   if (!bwrap) throw new Error('STRICT_AI_RUNTIME_UNAVAILABLE: install bubblewrap before starting strict AI');
-  const tool = executable(kind);
-  if (!tool) throw new Error(`AI_CLI_NOT_FOUND: ${kind}`);
+  const launcher = executable(kind);
+  if (!launcher) throw new Error(`AI_CLI_NOT_FOUND: ${kind}`);
+  const tool = await realpath(launcher);
 
   const stage = await mkdtemp(join(tmpdir(), 'lingxi-strict-ai-'));
   const app = join(stage, 'app');
