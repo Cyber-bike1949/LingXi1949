@@ -1,3 +1,7 @@
+## [5.0.1] - 2026-11-09
+
+- Republished the Obsidian release assets to recover reliable Community Plugins installation after an intermittent GitHub Release asset delivery failure.
+
 ## [5.0.0] - 2026-11-06
 
 - 将主控端、Agent、MCP 和远程发布移至独立 LingXiRemote 项目。
