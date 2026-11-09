@@ -15,12 +15,14 @@ test('bootstrap verifies downloads, reuses installs, preserves config and fails 
   const root = await mkdtemp(join(tmpdir(), 'lingxi-bootstrap-'));
   try {
     const fixture = join(root, 'fixture'); const pack = join(root, 'pack'); const bin = join(root, 'mock-bin');
+    const control = windows ? 'control.cmd' : 'control.sh';
     for (const dir of [fixture, bin, join(pack, 'scripts'), join(pack, 'bin'), join(pack, 'packages/lingxi-mcp')]) await mkdir(dir, { recursive: true });
     await writeFile(join(pack, 'scripts/setup.mjs'), "import { writeFileSync } from 'node:fs'; writeFileSync(process.env.TEST_OUTPUT, process.argv.slice(2).join('\\n'));");
     await writeFile(join(pack, 'package.json'), await readFile('package.json'));
-    for (const file of ['package-lock.json', `scripts/setup.${windows ? 'ps1' : 'sh'}`, windows ? 'control.cmd' : 'control.sh']) {
+    for (const file of ['package-lock.json', `scripts/setup.${windows ? 'ps1' : 'sh'}`]) {
       await writeFile(join(fixture, file.split('/').at(-1)), await readFile(file));
     }
+    await writeFile(join(pack, control), await readFile(control));
     await writeFile(join(fixture, 'cli.mjs'), await readFile('packages/lingxi-mcp/cli.mjs'));
     for (const file of ['strict-ai.mjs', 'ai-bridge.mjs', 'mcp-socket-proxy.mjs']) {
       await writeFile(join(fixture, file), await readFile(join('packages/lingxi-mcp', file)));
@@ -62,7 +64,6 @@ function Invoke-WebRequest {
     const env = { ...process.env, LINGXI_REMOTE_HOME: base, LINGXI_REMOTE_VERSION: version, TEST_FIXTURE: fixture, TEST_OUTPUT: output, TEST_INSTALLER: installer, PATH: `${bin}${delimiter}${process.env.PATH}` };
     const run = (overrides = {}) => exec(windows ? 'powershell.exe' : 'bash', windows ? ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', harness] : [installer, '--role', 'target', '--name', 'test device'], { env: { ...env, ...overrides }, timeout: 180000 });
     await run({ LINGXI_REMOTE_VERSION: '' });
-    const control = windows ? 'control.cmd' : 'control.sh';
     assert.equal(await readFile(join(base, version, control), 'utf8'), await readFile(control, 'utf8'));
     if (windows) {
       const setupPath = join(base, version, 'scripts/setup.ps1');
@@ -80,12 +81,6 @@ function Invoke-WebRequest {
     await run();
     if (windows) assert.match(await readFile(join(base, version, 'scripts/setup.ps1'), 'utf8'), /parseInt\(process\.versions\.node,10\)/);
     assert.equal(await readFile(preserved, 'utf8'), 'preserved');
-    await rm(join(base, version, control));
-    await writeFile(join(fixture, control), 'corrupted repair');
-    await assert.rejects(run(), /checksum|FAILED/i);
-    assert.equal(await readFile(preserved, 'utf8'), 'preserved');
-    await writeFile(join(fixture, control), await readFile(control));
-    await run();
     await assert.rejects(run({ LINGXI_REMOTE_HOME: join(root, 'no-release') }), /Download failed|下载失败/);
     await exec(windows ? 'tar.exe' : 'tar', ['-czf', join(fixture, asset), '-C', pack, '.']);
     await writeFile(checksumPath, `${'0'.repeat(64)}  ${asset}\n`);
