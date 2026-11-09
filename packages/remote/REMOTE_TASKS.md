@@ -61,7 +61,9 @@ claude mcp add --transport stdio lingxi -- /absolute/path/to/node /absolute/path
 
 ### 切换 AI 远程设备或工作目录
 
-日常使用不需要理解 `DEVICE_ID` 或 session。Linux 控制端运行 `bash ~/.local/share/lingxi-remote/5.0.0/control.sh ai`；Windows 控制端在安装目录终端运行 `control.cmd ai`。按提示选择设备、远端目录、Shell 和 `codex`/`claude` 后，入口会自动创建 session、替换名为 `lingxi` 的 MCP 配置并启动 AI CLI。要切换设备或目录，先退出当前 AI CLI，再重新运行该入口；原 AI 会话继续绑定原设备，不能被悄悄迁移。
+日常使用不需要理解 `DEVICE_ID` 或 session。Linux 控制端先运行 `bash ~/.local/share/lingxi-remote/5.0.0/control.sh ai`；Windows 控制端在安装目录终端运行 `control.cmd ai`。按提示选择设备、远端目录和 Shell 后，入口创建不可变的当前 AI 绑定。随后运行 `control.sh codex` 或 `control.sh claude`（Windows 为 `control.cmd codex` / `control.cmd claude`）启动 AI。要切换设备或目录，先重新运行 `ai`；已启动的 AI 会话不能被悄悄迁移。严格模式不得通过修改用户全局 MCP 配置实现，也不得在隔离运行时缺失时降级为可访问控制端的本机 AI。
+
+Linux 严格模式需要 `bubblewrap`（Ubuntu：`sudo apt install bubblewrap`）。启动器在宿主侧为当前 session 创建真实 MCP 服务，配对密钥和 session 文件不进入沙箱；沙箱中的 AI CLI 只能通过 Unix socket 上的无凭据代理访问该服务。Windows 严格运行时尚未提供，`control.cmd codex` / `claude` 会拒绝启动。
 
 以下命令仅供排障、自动化或没有快捷入口的高级场景使用。AI 绑定不是通过提示词选择的；必须在**控制端**新建 session，再把 AI CLI 的 LingXi MCP 配置改为该 session。
 

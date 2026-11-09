@@ -11,7 +11,7 @@ import { TaskService } from './service.mjs';
 import { serveStdio } from './protocol.mjs';
 import { runManual, shell } from './manual.mjs';
 import { createInterface } from 'node:readline/promises';
-import { execFileSync, spawn } from 'node:child_process';
+import { launchStrictAi } from './strict-ai.mjs';
 
 const args = process.argv.slice(2);
 const command = args.shift();
@@ -55,6 +55,32 @@ function sessionPath(id) {
   return join(home, `session-${id}.json`);
 }
 
+const activeBindingPath = join(home, 'active-ai-binding.json');
+
+function saveActiveBinding(config) {
+  save(activeBindingPath, {
+    session: config.id,
+    deviceId: config.deviceId,
+    workDir: config.workDir,
+    shell: config.shell,
+    createdAt: new Date().toISOString(),
+  });
+}
+
+function activeBinding() {
+  let active;
+  try { active = read(activeBindingPath); } catch (error) {
+    if (error.code === 'ENOENT') throw new Error('NO_ACTIVE_AI_BINDING: run control.sh ai and select a device first');
+    throw error;
+  }
+  if (!active || typeof active.session !== 'string') throw new Error('INVALID_ACTIVE_AI_BINDING');
+  const config = read(sessionPath(active.session));
+  if (config.id !== active.session || config.deviceId !== active.deviceId || config.workDir !== active.workDir || config.shell !== active.shell) {
+    throw new Error('ACTIVE_AI_BINDING_CHANGED: run control.sh ai again');
+  }
+  return active;
+}
+
 function lock(id) {
   const path = `${sessionPath(id)}.lock`;
   try { const fd = openSync(path, 'wx', 0o600); writeFileSync(fd, String(process.pid)); closeSync(fd); }
@@ -73,7 +99,7 @@ function lock(id) {
 
 async function main() {
   if (!command || command === 'help' || command === '--help') {
-    process.stdout.write('lingxi-mcp (Node.js 24+)\nCommands: shell [--session ID], ai [--kind codex|claude], exec --session ID --command TEXT, list --session ID [--path DIR], upload/download --session ID --local FILE --path REMOTE [--overwrite true], init, pair --name NAME --ticket-file FILE, devices [--probe true], select --device ID [--workdir PATH] [--shell PATH], serve --session ID, tasks [--session ID], config --session ID\nAll commands accept --home PATH. See REMOTE_TASKS.md for setup and limits.\n');
+    process.stdout.write('lingxi-mcp (Node.js 24+)\nCommands: shell [--session ID], ai, codex, claude, exec --session ID --command TEXT, list --session ID [--path DIR], upload/download --session ID --local FILE --path REMOTE [--overwrite true], init, pair --name NAME --ticket-file FILE, devices [--probe true], select --device ID [--workdir PATH] [--shell PATH], serve --session ID, tasks [--session ID], config --session ID\nAll commands accept --home PATH. See REMOTE_TASKS.md for setup and limits.\n');
     return;
   }
   if (command === 'init') {
@@ -180,35 +206,22 @@ async function main() {
         binding = await adapter.bind(workdir, program);
       } finally { adapter.close(); await endpoint.close(); }
       const id = randomUUID();
-      save(sessionPath(id), { id, deviceId: device.nodeId, workDir: binding.workDir, shell: binding.shell });
-      const kind = options.kind ?? ((await reader.question('启动 codex 还是 claude [codex]: ')).trim() || 'codex');
-      if (!['codex', 'claude'].includes(kind)) throw new Error('INVALID_AI_KIND: use codex or claude');
-      const server = 'lingxi';
-      const mcpArgs = [fileURLToPath(import.meta.url), 'serve', '--home', home, '--session', id];
+      const config = { id, deviceId: device.nodeId, workDir: binding.workDir, shell: binding.shell };
+      save(sessionPath(id), config);
+      saveActiveBinding(config);
       let setupResult = {};
       try { setupResult = read(join(home, 'setup-result.json')); } catch {}
-      const priorServers = new Set([server]);
-      for (const tool of Object.values(setupResult.tools ?? {})) {
-        if (typeof tool?.serverName === 'string') priorServers.add(tool.serverName);
-      }
-      // Remove the old LingXi registration before adding the new one. Leaving
-      // it in place would expose a second, stale remote target to the model.
-      for (const name of priorServers) {
-        try { execFileSync(kind, ['mcp', 'remove', name], { stdio: 'ignore' }); } catch {}
-      }
-      if (kind === 'codex') execFileSync('codex', ['mcp', 'add', server, '--', process.execPath, ...mcpArgs], { stdio: 'inherit' });
-      else execFileSync('claude', ['mcp', 'add', '--transport', 'stdio', server, '--', process.execPath, ...mcpArgs], { stdio: 'inherit' });
       save(join(home, 'setup-result.json'), {
         ...setupResult, status: 'configured', session: id, deviceId: device.nodeId,
-        tools: { ...(setupResult.tools ?? {}), [kind]: { serverName: server } }, transport: 'ready',
+        activeBinding: { session: id, deviceId: device.nodeId, workDir: binding.workDir, shell: binding.shell }, transport: 'ready',
       });
-      process.stdout.write(`AI 已固定到“${device.name}”的 ${binding.workDir}。启动后先调用 remote_target 核对目标。\n`);
-      await new Promise((resolve, reject) => {
-        const child = spawn(kind, [], { stdio: 'inherit' });
-        child.once('error', reject);
-        child.once('exit', code => code === 0 ? resolve() : reject(new Error(`${kind} exited ${code ?? 'unknown'}`)));
-      });
+      process.stdout.write(`AI 已固定到“${device.name}”的 ${binding.workDir}。请运行 control.sh codex 或 control.sh claude 启动严格远端 AI。\n`);
     } finally { reader.close(); }
+    return;
+  }
+  if (command === 'codex' || command === 'claude') {
+    const binding = activeBinding();
+    await launchStrictAi({ kind: command, home, session: binding.session, cli: fileURLToPath(import.meta.url) });
     return;
   }
   if (['serve', 'shell', 'exec', 'list', 'upload', 'download'].includes(command)) {
@@ -233,7 +246,7 @@ async function main() {
     } finally { adapter?.close(); await endpoint?.close(); store?.close(); unlock(); }
     return;
   }
-  throw new Error('Usage: init | pair --name NAME --ticket-file FILE | devices [--probe true] | select --device ID [--workdir PATH] [--shell PATH] | shell | ai [--kind codex|claude] | serve --session ID | tasks | config --session ID; all accept --home PATH');
+  throw new Error('Usage: init | pair --name NAME --ticket-file FILE | devices [--probe true] | select --device ID [--workdir PATH] [--shell PATH] | shell | ai | codex | claude | serve --session ID | tasks | config --session ID; all accept --home PATH');
 }
 
 main().catch(error => { process.stderr.write(`lingxi-mcp: ${error.message}\n`); process.exitCode = 1; });

@@ -5,6 +5,12 @@ if not exist "%LINGXI_NODE%" set "LINGXI_NODE=node"
 if /I "%~1"=="ai" (
   shift
   "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" ai %*
+) else if /I "%~1"=="codex" (
+  shift
+  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" codex %*
+) else if /I "%~1"=="claude" (
+  shift
+  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" claude %*
 ) else (
   "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" shell %*
 )

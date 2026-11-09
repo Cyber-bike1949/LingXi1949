@@ -43,5 +43,9 @@ test('manual launcher finds bundled Node and passes paths with spaces from any d
     assert.equal(bundled.cwd, fallback.cwd);
     const ai = JSON.parse((await run(['ai', '--kind', 'codex'])).stdout);
     assert.deepEqual(ai.args, ['ai', '--kind', 'codex']);
+    const codex = JSON.parse((await run(['codex', '--home', 'profile with spaces'])).stdout);
+    assert.deepEqual(codex.args, ['codex', '--home', 'profile with spaces']);
+    const claude = JSON.parse((await run(['claude'])).stdout);
+    assert.deepEqual(claude.args, ['claude']);
   } finally { await rm(root, { recursive: true, force: true }); }
 });

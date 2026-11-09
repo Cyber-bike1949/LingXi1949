@@ -9,7 +9,7 @@ const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 const staging = await mkdtemp(join(tmpdir(), 'lingxi-mcp-package-'));
 try {
   for (const directory of ['packages/lingxi-mcp', 'packages/remote-sdk/dist']) await mkdir(join(staging, directory), { recursive: true });
-  for (const file of ['cli.mjs', 'service.mjs', 'store.mjs', 'protocol.mjs', 'manual.mjs']) await copyFile(`packages/lingxi-mcp/${file}`, join(staging, 'packages/lingxi-mcp', file));
+  for (const file of ['cli.mjs', 'service.mjs', 'store.mjs', 'protocol.mjs', 'manual.mjs', 'ai-bridge.mjs', 'mcp-socket-proxy.mjs', 'strict-ai.mjs']) await copyFile(`packages/lingxi-mcp/${file}`, join(staging, 'packages/lingxi-mcp', file));
   await copyFile('packages/remote-sdk/dist/index.mjs', join(staging, 'packages/remote-sdk/dist/index.mjs'));
   await copyFile('REMOTE_TASKS.md', join(staging, 'README.md'));
   await copyFile('LICENSE', join(staging, 'LICENSE'));
