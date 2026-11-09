@@ -1,6 +1,6 @@
 [package]
 name = "lingxi1949"
-version = "5.0.0"
+version = "5.0.1"
 edition = "2021"
 rust-version = "1.97.1"
 description = "LingXi1949 remote MVP agent: outbound WSS client, PTY host and file receiver"

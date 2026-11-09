@@ -7,7 +7,7 @@ on:
         description: Semantic version tag matching packages/remote/package.json
         required: true
         type: string
-        default: 'remote-5.0.0'
+        default: 'remote-5.0.1'
   push:
     tags: ['remote-*']
 
@@ -38,6 +38,12 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
+      - name: Validate release version
+        shell: bash
+        run: |
+          set -euo pipefail
+          package_version="$(node -p "require('./package.json').version")"
+          test "$RELEASE_VERSION" = "remote-$package_version"
       - uses: pnpm/action-setup@v5
         with:
           version: 10.33.4
@@ -59,7 +65,7 @@ jobs:
       - uses: actions/upload-artifact@v7
         with:
           name: remote-${{ runner.os }}
-          path: packages/remote/release-assets/lingxi-remote-*
+          path: packages/remote/release-assets/*
           if-no-files-found: error
 
   publish:
@@ -74,5 +80,5 @@ jobs:
       - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_VERSION }}
-          draft: true
+          draft: false
           files: assets/*

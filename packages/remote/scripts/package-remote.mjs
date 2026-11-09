@@ -28,5 +28,12 @@ try {
   execFileSync('tar', ['-czf', archive, '-C', stage, '.']);
   const hash = createHash('sha256').update(await readFile(archive)).digest('hex');
   await writeFile(`${archive}.sha256`, `${hash}  ${name}\n`);
+  const agentName = `lingxi1949-agent-${manifest.version}-${platform}-x64${platform === 'win32' ? '.exe' : ''}`;
+  const agentAsset = resolve('release-assets', agentName);
+  await copyFile(agent, agentAsset);
+  await chmod(agentAsset, 0o755);
+  const agentHash = createHash('sha256').update(await readFile(agentAsset)).digest('hex');
+  await writeFile(`${agentAsset}.sha256`, `${agentHash}  ${agentName}\n`);
   console.log(archive);
+  console.log(agentAsset);
 } finally { await rm(stage, { recursive: true, force: true }); }

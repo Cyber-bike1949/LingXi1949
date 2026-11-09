@@ -70,12 +70,12 @@ On the **Linux x64** device that will run the LingXi1949 remote Agent, run the f
   set -e
   installer="$(mktemp)"
   trap 'rm -f -- "$installer"' EXIT
-  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote/scripts/install-remote.sh -o "$installer"
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh -o "$installer"
   bash "$installer"
 )
 ```
 
-Choose **1** (or press Enter) for the Agent device. When installation finishes, copy its connection code. Back in Obsidian, run **LingXi1949: Open terminal**, choose to add a device, and paste the code. The installer verifies downloaded content and preserves existing device identity and configuration; closing the installer terminal does not stop the Agent.
+The installer downloads and verifies the Agent, then prints its connection code. Copy it, then in Obsidian run **LingXi1949: Open terminal**, choose to add a device, and paste the code. Existing device identity and configuration are preserved. Keep the terminal open while using the Agent; press **Ctrl-C** to stop it.
 
 See [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote) for the Windows Agent, AI CLI setup, and troubleshooting. Do not use the legacy `agent/packaging/install-linux.sh` or the retired 4.0 installer command.
 

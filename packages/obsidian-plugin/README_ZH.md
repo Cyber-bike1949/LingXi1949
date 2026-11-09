@@ -67,12 +67,12 @@ LingXi1949 仅支持 Obsidian 桌面版。
   set -e
   installer="$(mktemp)"
   trap 'rm -f -- "$installer"' EXIT
-  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote/scripts/install-remote.sh -o "$installer"
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh -o "$installer"
   bash "$installer"
 )
 ```
 
-在向导中输入 `1`（或直接回车）选择 Agent 设备。安装完成后，复制终端输出的连接码。回到 Obsidian，运行“LingXi1949：打开终端”，选择添加设备并粘贴该连接码。安装器会校验下载内容，并保留已有设备身份和配置；关闭安装终端不会停止 Agent。
+安装器会下载并校验 Agent，随后直接显示连接码。复制该连接码，回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。已有设备身份和配置会保留；使用期间请保持该终端打开，按 `Ctrl-C` 才会停止 Agent。
 
 Windows Agent、AI CLI 与故障排查说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。不要使用旧的 `agent/packaging/install-linux.sh` 或已废弃的 4.0 安装命令。
 
