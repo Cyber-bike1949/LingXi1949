@@ -60,7 +60,7 @@ LingXi1949 仅支持 Obsidian 桌面版。
 
 ### 连接远程 Linux Agent
 
-在要作为 LingXi1949 远程设备的 **Linux x64** 设备上执行以下命令。需要系统提供 `curl`、`tar`、`sha256sum` 和 `xz`；安装器会下载已发布的平台包、校验文件，并启动配置向导。
+在要作为 LingXi1949 远程设备的 **Linux x64** 设备上执行以下命令。系统需要提供 `curl` 和 `sha256sum`；安装器会下载并校验已发布的 Agent。
 
 ```bash
 (
@@ -68,11 +68,13 @@ LingXi1949 仅支持 Obsidian 桌面版。
   installer="$(mktemp)"
   trap 'rm -f -- "$installer"' EXIT
   curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh -o "$installer"
-  bash "$installer"
+  sudo bash "$installer" --service
 )
 ```
 
-安装器会下载并校验 Agent，随后直接显示连接码。复制该连接码，回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。已有设备身份和配置会保留；使用期间请保持该终端打开，按 `Ctrl-C` 才会停止 Agent。
+该一键安装会创建专用的 `lingxi1949` 系统用户，安装 `lingxi1949-agent.service` systemd 服务，并设置为开机自动启动。服务账户中已有的 Agent 身份和配置会保留。通过 `sudo journalctl -u lingxi1949-agent.service -n 100 --no-pager` 查看连接码，再回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。
+
+如需指定专用账户，可在命令末尾加 `--user 名称`。如只想为当前用户临时运行 Agent、不创建账户或服务，去掉 `sudo` 和 `--service` 即可；使用时需保持终端打开，按 `Ctrl-C` 才会停止 Agent。
 
 Windows Agent、AI CLI 与故障排查说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。不要使用旧的 `agent/packaging/install-linux.sh` 或已废弃的 4.0 安装命令。
 

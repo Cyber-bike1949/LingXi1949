@@ -63,7 +63,7 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 
 ### Connect a remote Linux Agent
 
-On the **Linux x64** device that will run the LingXi1949 remote Agent, run the following command. The system needs `curl`, `tar`, `sha256sum`, and `xz`; the installer downloads the published platform package, verifies it, and starts a setup wizard.
+On the **Linux x64** device that will run the LingXi1949 remote Agent, run the following command. The system needs `curl` and `sha256sum`; the installer downloads and verifies the published Agent.
 
 ```bash
 (
@@ -71,11 +71,13 @@ On the **Linux x64** device that will run the LingXi1949 remote Agent, run the f
   installer="$(mktemp)"
   trap 'rm -f -- "$installer"' EXIT
   curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh -o "$installer"
-  bash "$installer"
+  sudo bash "$installer" --service
 )
 ```
 
-The installer downloads and verifies the Agent, then prints its connection code. Copy it, then in Obsidian run **LingXi1949: Open terminal**, choose to add a device, and paste the code. Existing device identity and configuration are preserved. Keep the terminal open while using the Agent; press **Ctrl-C** to stop it.
+This one-command installation creates the dedicated `lingxi1949` system user, installs a `lingxi1949-agent.service` systemd service, and enables it to start automatically after reboot. It preserves the service account's existing Agent identity and configuration. Read the connection code with `sudo journalctl -u lingxi1949-agent.service -n 100 --no-pager`, then in Obsidian run **LingXi1949: Open terminal**, choose to add a device, and paste the code.
+
+To use a different dedicated account, append `--user NAME`. To run the Agent only for the current user without creating an account or service, omit `sudo` and `--service`; keep that terminal open while using it and press **Ctrl-C** to stop it.
 
 See [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote) for the Windows Agent, AI CLI setup, and troubleshooting. Do not use the legacy `agent/packaging/install-linux.sh` or the retired 4.0 installer command.
 
