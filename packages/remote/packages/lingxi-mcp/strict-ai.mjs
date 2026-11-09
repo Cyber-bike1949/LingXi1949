@@ -55,7 +55,11 @@ export async function launchStrictAi({ kind, home, session, cli }) {
     const bridge = await startAiBridge({ socketPath, node: process.execPath, cli, home, session });
     const base = [
       '--die-with-parent', '--new-session', '--unshare-user', '--uid', '0', '--gid', '0',
-      '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--unshare-cgroup', '--share-net',
+      // Network sharing is the Bubblewrap default. Do not pass --share-net:
+      // Ubuntu's 0.9 implementation only documents it as an override after
+      // --unshare-net/--unshare-all. Cgroup isolation is not required for the
+      // filesystem boundary and is unavailable on some user-namespace setups.
+      '--unshare-pid', '--unshare-ipc', '--unshare-uts',
       '--ro-bind', '/usr', '/usr', '--ro-bind', '/lib', '/lib', '--ro-bind', '/lib64', '/lib64',
       '--proc', '/proc', '--dev', '/dev', '--tmpfs', '/tmp', '--tmpfs', '/workspace',
       '--ro-bind', app, '/app', '--bind', join(stage, 'home'), '/home', '--ro-bind', bridgeDirectory, '/bridge',

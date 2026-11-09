@@ -49,7 +49,7 @@ try {
             'scripts/setup.ps1' = 'ba7b45dd6e431e3b692853b0c94aa1d3f6c338e32035c82f434563e2f291db0e'
             'control.cmd' = 'f1aaa8c1101b7735f36439b24f0c0259797f16492bac6dd48f1bce19a7ef2171'
             'packages/lingxi-mcp/cli.mjs' = 'e388a20ba975ab81ef8a7d83c42f48c0f652042634e235b3800fd08fd2d0b5a8'
-            'packages/lingxi-mcp/strict-ai.mjs' = '771bb0e3470a2b299ee91a77c4128bbd46bce10a1928b4c524b5f445fb536fa7'
+            'packages/lingxi-mcp/strict-ai.mjs' = 'a5dfce1ace7f8d2d9cb185fc538a21be80c03d255b0af72f77b759222c887c64'
             'packages/lingxi-mcp/ai-bridge.mjs' = '30a738482add2281aad9c095bdd70b1d26cd5dba9543bf8ba8301e900f8082ec'
             'packages/lingxi-mcp/mcp-socket-proxy.mjs' = 'e8a9f261238f46515ce07efb85dab98df7d2db73e271e4b4634552e09d3d4bd0'
         }
