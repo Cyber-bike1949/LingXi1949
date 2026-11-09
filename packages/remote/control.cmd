@@ -3,14 +3,11 @@ setlocal
 set "LINGXI_NODE=%~dp0.runtime\node-v24.22.1-win-x64\node.exe"
 if not exist "%LINGXI_NODE%" set "LINGXI_NODE=node"
 if /I "%~1"=="ai" (
-  shift
-  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" ai %*
+  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" %*
 ) else if /I "%~1"=="codex" (
-  shift
-  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" codex %*
+  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" %*
 ) else if /I "%~1"=="claude" (
-  shift
-  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" claude %*
+  "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" %*
 ) else (
   "%LINGXI_NODE%" "%~dp0packages\lingxi-mcp\cli.mjs" shell %*
 )
