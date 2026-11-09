@@ -36,10 +36,13 @@ jobs:
           const version = process.env.RELEASE_VERSION;
           const rootManifest = JSON.parse(fs.readFileSync('manifest.json', 'utf8'));
           const manifest = JSON.parse(fs.readFileSync('packages/obsidian-plugin/manifest.json', 'utf8'));
+          const rootVersions = JSON.parse(fs.readFileSync('versions.json', 'utf8'));
+          const versions = JSON.parse(fs.readFileSync('packages/obsidian-plugin/versions.json', 'utf8'));
           const packageJson = JSON.parse(fs.readFileSync('packages/obsidian-plugin/package.json', 'utf8'));
           const changelog = fs.readFileSync('packages/obsidian-plugin/CHANGELOG.md', 'utf8');
           if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Invalid semantic version tag');
           if (JSON.stringify(rootManifest) !== JSON.stringify(manifest)) throw new Error('Root manifest.json must match packages/obsidian-plugin/manifest.json');
+          if (JSON.stringify(rootVersions) !== JSON.stringify(versions)) throw new Error('Root versions.json must match packages/obsidian-plugin/versions.json');
           if (manifest.version !== version || packageJson.version !== version) throw new Error(`Version mismatch: tag=${version}, manifest=${manifest.version}, package=${packageJson.version}`);
           const escaped = version.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
           if (!new RegExp(`^## \\[${escaped}\\]`, 'm').test(changelog)) throw new Error('CHANGELOG.md is missing the release section');

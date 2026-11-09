@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- Added the root-level `versions.json` required by the Obsidian Community Plugins installer when resolving a compatible release.
+
 ### Added
 - Added current-user Linux x64 and Windows x64 installers for B (Agent + MCP) and C (Agent), pinned to the published 4.0.0 assets, with SHA-256 checks, staged activation, stable launchers, and no automatic identity or service changes.
 - Added cross-platform installer smoke checks and first-run one-command installation instructions. B requires an existing Node.js 24+ installation with npm.
