@@ -1,4 +1,4 @@
-> **5.0 项目拆分：** 本仓库交付 Obsidian 插件与终端后端；主控终端、Agent 和 AI CLI 接入已迁至 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。共用代码由 [LingXiCore](https://github.com/Cyber-bike1949/LingXiCore) 维护。新版说明见 [5.0 使用与测试](docs/5.0-usage-and-testing.zh-CN.md)。下方旧安装段落属于 4.0 历史信息，以新版说明为准。
+> **5.0 项目拆分：** 本仓库交付 Obsidian 插件与终端后端；主控终端、Agent 和 AI CLI 接入已迁至 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。共用代码由 [LingXiCore](https://github.com/Cyber-bike1949/LingXiCore) 维护。Linux Agent 的一键安装见下方[连接远程 Linux Agent](#连接远程-linux-agent)；完整远程使用说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。
 
 <img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
@@ -60,13 +60,21 @@ LingXi1949 仅支持 Obsidian 桌面版。
 
 ### 连接远程 Linux Agent
 
-Linux x64 一键安装已发布的 **4.0.0** Agent（C 端），以当前普通用户执行，无需 sudo：
+在需要被 Obsidian 控制的 **Linux x64** 设备上执行以下命令。需要系统提供 `curl`、`tar`、`sha256sum` 和 `xz`；安装器会下载已发布的平台包、校验文件，并启动配置向导。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh && bash ./lingxi-install.sh --role c
+(
+  set -e
+  installer="$(mktemp)"
+  trap 'rm -f -- "$installer"' EXIT
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote/scripts/install-remote.sh -o "$installer"
+  bash "$installer"
+)
 ```
 
-随后运行 `~/.local/share/lingxi1949-install/bin/lingxi1949 run`，将连接码用于“添加设备”。安装器校验 SHA-256、保留已有身份，不自动启动服务。B 端将 `--role c` 改为 `--role b`，同时安装 MCP（需预装 Node.js 24+ 和 npm）。完整步骤、Windows 一键命令和旧服务迁移注意事项见[首次使用指南](docs/remote-tasks-first-run.zh-CN.md)。旧 `agent/packaging/install-linux.sh` 仍固定为 2.1.0，请勿用于 4.0 功能。
+在向导中输入 `1`（或直接回车）选择“被控制端”。看到“被控制端已就绪”后，复制终端输出的连接码。回到 Obsidian，运行“LingXi1949：打开终端”，选择添加设备并粘贴该连接码。安装器会校验下载内容，并保留已有设备身份和配置；关闭安装终端不会停止 Agent。
+
+完整的控制端、Windows、AI CLI 与故障排查说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。不要使用旧的 `agent/packaging/install-linux.sh` 或已废弃的 4.0 安装命令。
 
 本地编译 Agent 的运行方式见[开发指南](docs/development_ZH.md#33-rust-agentlingxi1949)。
 

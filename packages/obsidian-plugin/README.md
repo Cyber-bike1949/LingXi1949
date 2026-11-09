@@ -1,4 +1,4 @@
-> **5.0 项目拆分：** 本仓库交付 Obsidian 插件与终端后端；主控终端、Agent 和 AI CLI 接入已迁至 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。共用代码由 [LingXiCore](https://github.com/Cyber-bike1949/LingXiCore) 维护。新版说明见 [5.0 使用与测试](docs/5.0-usage-and-testing.zh-CN.md)。下方旧安装段落属于 4.0 历史信息，以新版说明为准。
+> **5.0 project split:** this repository ships the Obsidian plugin and terminal backend. The controller CLI, Agent, and AI CLI integration live in [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote); shared code lives in [LingXiCore](https://github.com/Cyber-bike1949/LingXiCore). See [Connect a remote Linux Agent](#connect-a-remote-linux-agent) below for the supported Linux installer.
 
 <img src="assets/logo.png" width="150" alt="LingXi1949 logo" />
 
@@ -63,13 +63,21 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 
 ### Connect a remote Linux Agent
 
-Install the published **4.0.0** Linux x64 Agent (role C) as the current ordinary user, without sudo:
+On the **Linux x64** device that Obsidian will control, run the following command. The system needs `curl`, `tar`, `sha256sum`, and `xz`; the installer downloads the published platform package, verifies it, and starts a setup wizard.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/scripts/install.sh -o lingxi-install.sh && bash ./lingxi-install.sh --role c
+(
+  set -e
+  installer="$(mktemp)"
+  trap 'rm -f -- "$installer"' EXIT
+  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote/scripts/install-remote.sh -o "$installer"
+  bash "$installer"
+)
 ```
 
-Then run `~/.local/share/lingxi1949-install/bin/lingxi1949 run` and use its connection code for **Add device**. The installer verifies SHA-256, preserves identity, and does not start services automatically. Use `--role b` for Agent + MCP (requires Node.js 24+ and npm). See the [first-run guide](docs/remote-tasks-first-run.zh-CN.md) for Windows one-command installation and existing-service precautions. The legacy `agent/packaging/install-linux.sh` remains pinned to 2.1.0 and must not be used for 4.0 features.
+Choose **1** (or press Enter) for the controlled device. When the wizard reports that the controlled device is ready, copy its connection code. Back in Obsidian, run **LingXi1949: Open terminal**, choose to add a device, and paste the code. The installer verifies downloaded content and preserves existing device identity and configuration; closing the installer terminal does not stop the Agent.
+
+See [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote) for the controller setup, Windows installer, AI CLI setup, and troubleshooting. Do not use the legacy `agent/packaging/install-linux.sh` or the retired 4.0 installer command.
 
 For a locally compiled Agent, follow the [development guide](docs/development.md#33-rust-agent-lingxi1949).
 
