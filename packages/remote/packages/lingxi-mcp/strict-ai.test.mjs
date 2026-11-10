@@ -42,8 +42,9 @@ test('strict Codex launcher receives its optional platform package', async () =>
     await mkdir(app);
     await writeFile(join(app, 'package.json'), JSON.stringify({ type: 'module' }));
     const command = await copyCodexRuntime(tool, app);
-    assert.equal(command, '/app/node_modules/@openai/codex/bin/codex.js');
-    const { stdout } = await exec(process.execPath, [join(app, command.slice('/app/'.length))]);
+    assert.equal(command.replaceAll('\\', '/'), '/app/node_modules/@openai/codex/bin/codex.js');
+    const relativeCommand = command.replace(/^[/\\]app[/\\]/, '').split(/[/\\]/);
+    const { stdout } = await exec(process.execPath, [join(app, ...relativeCommand)]);
     assert.equal(stdout, 'available\n');
   } finally {
     await rm(root, { recursive: true, force: true });
