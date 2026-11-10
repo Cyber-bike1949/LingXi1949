@@ -63,13 +63,7 @@ LingXi1949 仅支持 Obsidian 桌面版。
 在要作为 LingXi1949 远程设备的 **Linux x64** 设备上执行以下命令。系统需要提供 `curl` 和 `sha256sum`；安装器会下载并校验已发布的 Agent。
 
 ```bash
-(
-  set -e
-  installer="$(mktemp)"
-  trap 'rm -f -- "$installer"' EXIT
-  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh -o "$installer"
-  sudo bash "$installer" --service
-)
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```
 
 该一键安装会创建专用的 `lingxi1949` 系统用户，安装 `lingxi1949-agent.service` systemd 服务，并设置为开机自动启动。服务账户中已有的 Agent 身份和配置会保留。通过 `sudo journalctl -u lingxi1949-agent.service -n 100 --no-pager` 查看连接码，再回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。

@@ -71,7 +71,11 @@ if [[ "$MODE" == 'service' ]]; then
   fi
 fi
 
-stage="$(mktemp -d "${TMPDIR:-/tmp}/lingxi1949-agent.XXXXXXXX")"
+# Some cloud images mount /tmp with noexec; the version check below must run the downloaded binary.
+umask 077
+cache_home="${XDG_CACHE_HOME:-$HOME/.cache}"
+mkdir -p "$cache_home"
+stage="$(mktemp -d "$cache_home/lingxi1949-agent.XXXXXXXX")"
 cleanup() { rm -rf -- "$stage"; }
 trap cleanup EXIT
 
@@ -90,7 +94,6 @@ if [[ "$MODE" == 'foreground' ]]; then
   data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
   install_dir="$data_home/lingxi1949-agent/$AGENT_VERSION"
   binary="$install_dir/lingxi1949"
-  umask 077
   mkdir -p "$install_dir"
   install -m 0755 "$stage/$asset" "$binary"
 fi

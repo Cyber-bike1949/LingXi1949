@@ -66,13 +66,7 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 On the **Linux x64** device that will run the LingXi1949 remote Agent, run the following command. The system needs `curl` and `sha256sum`; the installer downloads and verifies the published Agent.
 
 ```bash
-(
-  set -e
-  installer="$(mktemp)"
-  trap 'rm -f -- "$installer"' EXIT
-  curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh -o "$installer"
-  sudo bash "$installer" --service
-)
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```
 
 This one-command installation creates the dedicated `lingxi1949` system user, installs a `lingxi1949-agent.service` systemd service, and enables it to start automatically after reboot. It preserves the service account's existing Agent identity and configuration. Read the connection code with `sudo journalctl -u lingxi1949-agent.service -n 100 --no-pager`, then in Obsidian run **LingXi1949: Open terminal**, choose to add a device, and paste the code.

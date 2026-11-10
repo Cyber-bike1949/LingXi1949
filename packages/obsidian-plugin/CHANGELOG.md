@@ -26,6 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - Added the root-level `versions.json` required by the Obsidian Community Plugins installer when resolving a compatible release.
+- Stage downloaded Linux Agent binaries in the invoking user's cache directory so version verification works on hosts where `/tmp` is mounted with `noexec`.
 
 ### Added
 - Added current-user Linux x64 and Windows x64 installers for B (Agent + MCP) and C (Agent), pinned to the published 4.0.0 assets, with SHA-256 checks, staged activation, stable launchers, and no automatic identity or service changes.
