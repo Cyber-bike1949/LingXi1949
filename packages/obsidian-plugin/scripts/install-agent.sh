@@ -88,6 +88,7 @@ expected="$(awk -v name="$asset" '$2 == name { print $1; exit }' "$stage/$asset.
 [[ "$expected" =~ ^[0-9A-Fa-f]{64}$ ]] || { echo 'Invalid Agent checksum.' >&2; exit 1; }
 actual="$(sha256sum "$stage/$asset" | awk '{print $1}')"
 [[ "${actual,,}" == "${expected,,}" ]] || { echo 'Agent checksum mismatch.' >&2; exit 1; }
+chmod 0755 "$stage/$asset"
 "$stage/$asset" --version >/dev/null
 
 if [[ "$MODE" == 'foreground' ]]; then
