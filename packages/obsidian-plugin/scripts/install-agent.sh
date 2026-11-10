@@ -117,7 +117,9 @@ IFS=: read -r _ _ service_uid _ _ service_home _ <<< "$service_entry"
 [[ "$service_uid" != '0' ]] || { echo 'Refusing to run the Agent as root.' >&2; exit 1; }
 [[ "$service_home" == /* && "$service_home" != '/' ]] || { echo 'The service user has an invalid home directory.' >&2; exit 1; }
 service_group="$(id -gn "$SERVICE_USER")"
-mkdir -p "$install_dir"
+# umask is intentionally restrictive while downloading the release, but the
+# unprivileged service user must be able to traverse the installed binary path.
+install -d -o root -g root -m 0755 /usr/local/lib/lingxi1949-agent "$install_dir"
 install -o root -g root -m 0755 "$stage/$asset" "$binary"
 "$binary" --version >/dev/null
 install -d -o "$SERVICE_USER" -g "$service_group" -m 0700 "$service_home"
