@@ -1,3 +1,8 @@
+## [5.0.2] - 2026-11-10
+
+- Added a Linux x64 one-command Agent installation mode that creates a dedicated system user and a persistent, auto-starting systemd service.
+- Documented how to retrieve the Agent connection code from the service journal, choose a dedicated account, or use the current-user foreground mode.
+
 ## [5.0.1] - 2026-11-09
 
 - Republished the Obsidian release assets to recover reliable Community Plugins installation after an intermittent GitHub Release asset delivery failure.
