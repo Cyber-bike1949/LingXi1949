@@ -40,6 +40,9 @@ export async function launchStrictAi({ kind, home, session, cli }) {
     await mkdir(app, { recursive: true, mode: 0o700 });
     await mkdir(sandboxHome, { recursive: true, mode: 0o700 });
     await mkdir(bridgeDirectory, { recursive: true, mode: 0o700 });
+    // Codex's launcher is an extensionless ESM file. Keep its module scope
+    // when it is copied out of the npm package into the isolated app directory.
+    await writeFile(join(app, 'package.json'), JSON.stringify({ type: 'module' }), { mode: 0o600 });
     await copyFile(process.execPath, join(app, 'node'));
     await copyFile(fileURLToPath(new URL('./mcp-socket-proxy.mjs', import.meta.url)), join(app, 'mcp-socket-proxy.mjs'));
     await copyFile(tool, join(app, kind));

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-VERSION="${LINGXI_REMOTE_VERSION:-5.0.1}"
+VERSION="${LINGXI_REMOTE_VERSION:-5.0.2}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid LINGXI_REMOTE_VERSION' >&2; exit 1; }
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || { echo '仅支持 Linux x64；Windows 请使用 install-remote.ps1。' >&2; exit 1; }
 for tool in curl tar sha256sum mktemp xz; do
