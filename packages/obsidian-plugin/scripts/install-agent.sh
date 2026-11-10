@@ -88,8 +88,6 @@ expected="$(awk -v name="$asset" '$2 == name { print $1; exit }' "$stage/$asset.
 [[ "$expected" =~ ^[0-9A-Fa-f]{64}$ ]] || { echo 'Invalid Agent checksum.' >&2; exit 1; }
 actual="$(sha256sum "$stage/$asset" | awk '{print $1}')"
 [[ "${actual,,}" == "${expected,,}" ]] || { echo 'Agent checksum mismatch.' >&2; exit 1; }
-chmod 0755 "$stage/$asset"
-"$stage/$asset" --version >/dev/null
 
 if [[ "$MODE" == 'foreground' ]]; then
   data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
@@ -97,6 +95,7 @@ if [[ "$MODE" == 'foreground' ]]; then
   binary="$install_dir/lingxi1949"
   mkdir -p "$install_dir"
   install -m 0755 "$stage/$asset" "$binary"
+  "$binary" --version >/dev/null
 fi
 
 if [[ "$MODE" == 'foreground' ]]; then
@@ -119,6 +118,7 @@ IFS=: read -r _ _ service_uid _ _ service_home _ <<< "$service_entry"
 service_group="$(id -gn "$SERVICE_USER")"
 mkdir -p "$install_dir"
 install -o root -g root -m 0755 "$stage/$asset" "$binary"
+"$binary" --version >/dev/null
 install -d -o "$SERVICE_USER" -g "$service_group" -m 0700 "$service_home"
 
 cat > "$unit_path" <<EOF

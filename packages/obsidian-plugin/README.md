@@ -65,6 +65,8 @@ Run **LingXi1949: Open terminal** from the Obsidian command palette and choose *
 
 On the **Linux x64** device that will run the LingXi1949 remote Agent, run the following command. The system needs `curl` and `sha256sum`; the installer downloads and verifies the published Agent.
 
+The Agent release version is independent from the Obsidian plugin version. For example, plugin 5.0.3 currently uses the published Agent 5.0.1 when no newer Agent release is required.
+
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```

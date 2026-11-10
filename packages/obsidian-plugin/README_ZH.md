@@ -62,6 +62,8 @@ LingXi1949 仅支持 Obsidian 桌面版。
 
 在要作为 LingXi1949 远程设备的 **Linux x64** 设备上执行以下命令。系统需要提供 `curl` 和 `sha256sum`；安装器会下载并校验已发布的 Agent。
 
+Agent 的发布版本与 Obsidian 插件版本彼此独立。例如插件 5.0.3 当前仍使用已发布的 Agent 5.0.1；只有 Agent 本身需要更新时才会发布新的 Agent 版本。
+
 ```bash
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```
