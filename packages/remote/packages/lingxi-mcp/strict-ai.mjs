@@ -93,7 +93,10 @@ export async function launchStrictAi({ kind, home, session, cli }) {
     ];
     try {
       if (kind === 'claude') await run(bwrap, [...base, '--', '/app/claude', 'mcp', 'add', '--transport', 'stdio', 'lingxi', '--', '/app/node', '/app/mcp-socket-proxy.mjs', '--socket', '/bridge/mcp.sock']);
-      await run(bwrap, [...base, '--', kind === 'codex' ? codexCommand : `/app/${kind}`]);
+      // The isolated runtime intentionally does not expose Codex's host daemon
+      // socket or state directory. Run Codex in-process so it remains usable
+      // inside Bubblewrap and does not try to reconnect to an unavailable daemon.
+      await run(bwrap, [...base, '--', kind === 'codex' ? codexCommand : `/app/${kind}`, ...(kind === 'codex' ? ['--no-daemon'] : [])]);
     } finally { await bridge.close(); }
   } finally { await rm(stage, { recursive: true, force: true }); }
 }
