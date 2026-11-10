@@ -1,4 +1,4 @@
-import { access, copyFile, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
+import { access, copyFile, cp, mkdir, realpath, rm, writeFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir, homedir } from 'node:os';
@@ -21,6 +21,21 @@ function executable(name) {
 
 async function copyIfPresent(source, destination) {
   if (await exists(source)) { await mkdir(dirname(destination), { recursive: true, mode: 0o700 }); await copyFile(source, destination); }
+}
+
+export async function copyCodexRuntime(tool, app) {
+  // npm's Codex launcher resolves its platform binary as an optional sibling
+  // package, so preserve the package layout instead of copying bin/codex.js.
+  const packageRoot = dirname(dirname(tool));
+  const scopeRoot = dirname(packageRoot);
+  if (basename(packageRoot) !== 'codex' || basename(scopeRoot) !== '@openai') return join('/app', 'codex');
+  const packageName = `codex-${process.platform}-${process.arch}`;
+  const destinationRoot = join(app, 'node_modules', '@openai');
+  await mkdir(destinationRoot, { recursive: true, mode: 0o700 });
+  await cp(packageRoot, join(destinationRoot, 'codex'), { recursive: true });
+  const source = join(scopeRoot, packageName);
+  if (await exists(source)) await cp(source, join(destinationRoot, packageName), { recursive: true });
+  return join('/app', 'node_modules', '@openai', 'codex', 'bin', 'codex.js');
 }
 
 export async function launchStrictAi({ kind, home, session, cli }) {
@@ -49,9 +64,11 @@ export async function launchStrictAi({ kind, home, session, cli }) {
 
     // Preserve only the provider login material needed by the selected CLI.
     // Pairing data remains outside the sandbox in `home`.
+    let codexCommand = join('/app', 'codex');
     if (kind === 'codex') {
       const codeModeHost = join(dirname(tool), 'codex-code-mode-host');
       if (await exists(codeModeHost)) await copyFile(codeModeHost, join(app, 'codex-code-mode-host'));
+      codexCommand = await copyCodexRuntime(tool, app);
       await copyIfPresent(join(homedir(), '.codex', 'auth.json'), join(sandboxHome, '.codex', 'auth.json'));
       await mkdir(join(sandboxHome, '.codex'), { recursive: true, mode: 0o700 });
       await writeFile(join(sandboxHome, '.codex', 'config.toml'), `[features]\ncode_mode_host = true\n\n[mcp_servers.lingxi]\ncommand = \"/app/node\"\nargs = [\"/app/mcp-socket-proxy.mjs\", \"--socket\", \"/bridge/mcp.sock\"]\n`, { mode: 0o600 });
@@ -76,7 +93,7 @@ export async function launchStrictAi({ kind, home, session, cli }) {
     ];
     try {
       if (kind === 'claude') await run(bwrap, [...base, '--', '/app/claude', 'mcp', 'add', '--transport', 'stdio', 'lingxi', '--', '/app/node', '/app/mcp-socket-proxy.mjs', '--socket', '/bridge/mcp.sock']);
-      await run(bwrap, [...base, '--', `/app/${kind}`]);
+      await run(bwrap, [...base, '--', kind === 'codex' ? codexCommand : `/app/${kind}`]);
     } finally { await bridge.close(); }
   } finally { await rm(stage, { recursive: true, force: true }); }
 }
