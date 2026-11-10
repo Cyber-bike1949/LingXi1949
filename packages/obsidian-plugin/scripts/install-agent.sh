@@ -56,7 +56,7 @@ release_url="https://github.com/$RELEASE_REPOSITORY/releases/download/remote-$AG
 
 if [[ "$MODE" == 'service' ]]; then
   [[ -d /run/systemd/system ]] || { echo 'The --service mode requires systemd.' >&2; exit 1; }
-  for command in getent useradd systemctl id; do
+  for command in getent useradd systemctl id runuser; do
     command -v "$command" >/dev/null || {
       echo "Missing required command for service installation: $command" >&2
       exit 1
@@ -107,6 +107,7 @@ fi
 install_dir="/usr/local/lib/lingxi1949-agent/$AGENT_VERSION"
 binary="$install_dir/lingxi1949"
 unit_path="/etc/systemd/system/$SERVICE_NAME"
+launcher_path='/usr/local/bin/lingxi1949'
 
 if ! getent passwd "$SERVICE_USER" >/dev/null; then
   useradd --system --create-home --home-dir "/var/lib/$SERVICE_USER" --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -120,6 +121,40 @@ mkdir -p "$install_dir"
 install -o root -g root -m 0755 "$stage/$asset" "$binary"
 "$binary" --version >/dev/null
 install -d -o "$SERVICE_USER" -g "$service_group" -m 0700 "$service_home"
+
+cat > "$launcher_path" <<EOF
+#!/usr/bin/env bash
+# Manage the persistent LingXi1949 Agent service.
+set -euo pipefail
+
+service_name='$SERVICE_NAME'
+service_user='$SERVICE_USER'
+service_home='$service_home'
+agent_binary='$binary'
+
+if [[ "\$(id -u)" -ne 0 ]]; then
+  exec sudo "\$0" "\$@"
+fi
+
+case "\${1:-status}" in
+  status)
+    if ! systemctl is-active --quiet "\$service_name"; then
+      echo "Agent service is not running: \$service_name" >&2
+      systemctl status "\$service_name" --no-pager --lines=8 || true
+      exit 3
+    fi
+    exec runuser -u "\$service_user" -- env HOME="\$service_home" "\$agent_binary" status
+    ;;
+  run)
+    systemctl restart "\$service_name"
+    exec "\$0" status
+    ;;
+  *)
+    exec runuser -u "\$service_user" -- env HOME="\$service_home" "\$agent_binary" "\$@"
+    ;;
+esac
+EOF
+chmod 0755 "$launcher_path"
 
 cat > "$unit_path" <<EOF
 [Unit]
@@ -153,4 +188,5 @@ systemctl is-active --quiet "$SERVICE_NAME" || {
   exit 1
 }
 echo "Agent service is running as $SERVICE_USER and will start automatically after reboot."
-echo "Read the connection code with: sudo journalctl -u $SERVICE_NAME -n 100 --no-pager"
+echo 'Show the connection code: lingxi1949 status'
+echo 'Restart the persistent Agent service: lingxi1949 run'

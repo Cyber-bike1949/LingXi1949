@@ -68,7 +68,7 @@ Agent 的发布版本与 Obsidian 插件版本彼此独立。例如插件 5.0.3 
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```
 
-该一键安装会创建专用的 `lingxi1949` 系统用户，安装 `lingxi1949-agent.service` systemd 服务，并设置为开机自动启动。服务账户中已有的 Agent 身份和配置会保留。通过 `sudo journalctl -u lingxi1949-agent.service -n 100 --no-pager` 查看连接码，再回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。
+该一键安装会创建专用的 `lingxi1949` 系统用户，安装 `lingxi1949-agent.service` systemd 服务，并设置为开机自动启动。服务账户中已有的 Agent 身份和配置会保留。输入 `lingxi1949 status` 即可查看连接码；输入 `lingxi1949 run` 会重启并继续后台常驻运行 Agent。随后回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。
 
 如需指定专用账户，可在命令末尾加 `--user 名称`。如只想为当前用户临时运行 Agent、不创建账户或服务，去掉 `sudo` 和 `--service` 即可；使用时需保持终端打开，按 `Ctrl-C` 才会停止 Agent。
 
