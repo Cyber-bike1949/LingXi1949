@@ -13,6 +13,7 @@ test('strict Codex launcher retains ESM package scope in the sandbox', async () 
   const source = await readFile(new URL('./strict-ai.mjs', import.meta.url), 'utf8');
   assert.match(source, /writeFile\(join\(app, 'package\.json'\), JSON\.stringify\(\{ type: 'module' \}\)/);
   assert.match(source, /kind === 'codex' \? \['--no-daemon'\] : \[\]/);
+  assert.match(source, /approval_policy = "never"/);
 
   const app = await mkdtemp(join(tmpdir(), 'lingxi-strict-ai-test-'));
   try {

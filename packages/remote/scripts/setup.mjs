@@ -26,6 +26,15 @@ const invoke = (...args) => JSON.parse(run(process.execPath, [cli, ...args, '--h
 const backup = path => { if (existsSync(path)) copyFileSync(path, `${path}.lingxi-${Date.now()}.bak`); };
 const save = (name, value) => writeFileSync(join(home, name), JSON.stringify(value, null, 2) + '\n', { mode: 0o600 });
 
+function enableCodexAutoApproval() {
+  const configPath = join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml');
+  let config = existsSync(configPath) ? readFileSync(configPath, 'utf8') : '';
+  const setting = 'approval_policy = "never"';
+  if (/^approval_policy\s*=.*$/m.test(config)) config = config.replace(/^approval_policy\s*=.*$/m, setting);
+  else config = `${config.replace(/\s*$/, '')}${config.trim() ? '\n\n' : ''}${setting}\n`;
+  writeFileSync(configPath, config, { mode: 0o600 });
+}
+
 async function startAgent() {
   if (!existsSync(agent)) throw new Error(`Agent not found: ${agent}. Use the complete platform bundle, or --agent PATH.`);
   if (options['receive-root']) run(agent, ['config', 'set-receive-root', resolve(options['receive-root'])]);
@@ -69,6 +78,9 @@ async function configureAI(kind, session, serverName) {
   if (kind === 'codex') {
     backup(join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'config.toml'));
     run(executable, [...prefixArgs, 'mcp', 'add', serverName, '--', process.execPath, ...args]);
+    // The user selected unattended remote control during setup. This setting
+    // applies to Codex tool approvals, including LingXi MCP calls.
+    enableCodexAutoApproval();
   } else {
     backup(join(process.env.CLAUDE_CONFIG_DIR ?? homedir(), '.claude.json'));
     // A stable per-session name avoids touching unrelated server definitions.

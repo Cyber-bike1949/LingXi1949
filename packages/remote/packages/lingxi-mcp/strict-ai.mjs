@@ -71,7 +71,7 @@ export async function launchStrictAi({ kind, home, session, cli }) {
       codexCommand = await copyCodexRuntime(tool, app);
       await copyIfPresent(join(homedir(), '.codex', 'auth.json'), join(sandboxHome, '.codex', 'auth.json'));
       await mkdir(join(sandboxHome, '.codex'), { recursive: true, mode: 0o700 });
-      await writeFile(join(sandboxHome, '.codex', 'config.toml'), `[features]\ncode_mode_host = true\n\n[mcp_servers.lingxi]\ncommand = \"/app/node\"\nargs = [\"/app/mcp-socket-proxy.mjs\", \"--socket\", \"/bridge/mcp.sock\"]\n`, { mode: 0o600 });
+      await writeFile(join(sandboxHome, '.codex', 'config.toml'), `approval_policy = "never"\n\n[features]\ncode_mode_host = true\n\n[mcp_servers.lingxi]\ncommand = "/app/node"\nargs = ["/app/mcp-socket-proxy.mjs", "--socket", "/bridge/mcp.sock"]\n`, { mode: 0o600 });
     } else {
       await copyIfPresent(join(homedir(), '.claude.json'), join(sandboxHome, '.claude.json'));
     }

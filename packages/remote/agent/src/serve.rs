@@ -5,17 +5,18 @@
 //! gate, `session_table` owns PTY lifecycles, `termstream` owns the wire
 //! format - this module only stitches them together:
 //!
-//! - every inbound connection is dispatched by ALPN; `termy/terminal/1`
-//!   connections pass through the [`ControllerGate`], everything else is
-//!   closed (`termy/transfer/1` arrives in phase C),
+//! - every inbound connection is dispatched by ALPN; a new
+//!   `termy/terminal/1` connection replaces the previous controller through
+//!   the [`ControllerGate`], everything else is closed (`termy/transfer/1`
+//!   arrives in phase C),
 //! - every bi-stream on the admitted connection is either one terminal
 //!   session (doc 8.2 handshake: `Open` first) or one directory-tree
 //!   list+watch (candidate doc "目录树与双向文件传输" phase 2A: `FsList`
 //!   first, see `termstream`'s module doc for why this rides the terminal
 //!   connection instead of getting its own ALPN); `serve_bi_stream` reads
 //!   the first frame and routes to whichever it is,
-//! - the controller connection dying tears down every session under it
-//!   (doc 7.5) and reopens the gate.
+//! - a controller connection dying or being replaced tears down every session
+//!   under it and reopens the gate when it remains current.
 //!
 //! PTY output is read on a dedicated blocking thread and handed to the
 //! async side over an mpsc channel - the same shape as V1's
@@ -185,13 +186,11 @@ async fn dispatch_connection(
 ) {
     match connection.alpn() {
         alpn if alpn == ALPN_TERMINAL => {
-            let Some(slot) = admit_controller(&gate, &connection) else {
-                tracing::info!(
-                    remote = %connection.remote_id().fmt_short(),
-                    "second controller refused (CONTROLLER_ALREADY_CONNECTED)"
-                );
-                return;
-            };
+            let slot = admit_controller(&gate, &connection);
+            tracing::info!(
+                remote = %connection.remote_id().fmt_short(),
+                "controller connected (replacing any existing controller)"
+            );
             serve_controller(connection, slot, options).await;
         }
         alpn if alpn == ALPN_TRANSFER => {
@@ -210,8 +209,8 @@ async fn dispatch_connection(
 }
 
 /// Serves one admitted controller until its connection dies. Holding `_slot`
-/// for the whole body is what enforces doc 7.7 - it drops (reopening the
-/// gate) only after every session has been torn down.
+/// for the whole body is what keeps this controller current. It drops only
+/// after every session has been torn down.
 async fn serve_controller(
     connection: Connection,
     _slot: ControllerSlot,
