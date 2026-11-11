@@ -1955,7 +1955,7 @@ dependencies = [
 
 [[package]]
 name = "lingxi1949"
-version = "5.0.5"
+version = "5.0.6"
 dependencies = [
  "base64",
  "clap",

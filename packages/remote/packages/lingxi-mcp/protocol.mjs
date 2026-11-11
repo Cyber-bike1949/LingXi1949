@@ -65,7 +65,7 @@ export function serveStdio(service, input = process.stdin, output = process.stdo
         if (initialized) throw new Error('ALREADY_INITIALIZED');
         initialized = true;
         const supported = ['2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25'];
-        result = { protocolVersion: supported.includes(params.protocolVersion) ? params.protocolVersion : '2025-11-25', capabilities: { tools: {} }, serverInfo: { name: 'lingxi-mcp', version: '5.0.5' }, instructions: 'Use remote_target first. All remote tools are fixed to one user-selected device and directory. Native CLI shell/file tools still operate locally. Never substitute local execution for a failed remote operation.' };
+        result = { protocolVersion: supported.includes(params.protocolVersion) ? params.protocolVersion : '2025-11-25', capabilities: { tools: {} }, serverInfo: { name: 'lingxi-mcp', version: '5.0.6' }, instructions: 'Use remote_target first. All remote tools are fixed to one user-selected device and directory. Native CLI shell/file tools still operate locally. Never substitute local execution for a failed remote operation.' };
       } else if (method === 'ping') result = {};
       else if (!initialized) throw new Error('NOT_INITIALIZED');
       else if (method === 'tools/list') result = { tools };
