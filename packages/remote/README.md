@@ -21,7 +21,7 @@ LingXi Remote 让你在一台电脑上，通过命令或 AI 工具操作另一�
 
 到**存放项目、准备被远程操作的设备**上，打开终端，按系统复制执行下面对应的整个代码块。
 
-脚本会下载 [Remote 5.0.4](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/remote-5.0.4)、校验文件、解压并启动配置向导，还会自动补齐 Node.js 和运行依赖。无需手动下载解压，也无需提前安装 Node.js、pnpm 或 Rust。首次安装需要联网，下载期间请等待。
+脚本会下载 [Remote 5.0.5](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/remote-5.0.5)、校验文件、解压并启动配置向导，还会自动补齐 Node.js 和运行依赖。无需手动下载解压，也无需提前安装 Node.js、pnpm 或 Rust。首次安装需要联网，下载期间请等待。
 
 目前支持 **Linux x64 和 Windows x64**，暂不支持 macOS 和 ARM 设备。
 
@@ -100,7 +100,7 @@ LingXi Remote 让你在一台电脑上，通过命令或 AI 工具操作另一�
 “设备、工作目录、Shell”会在创建手动终端或 AI 会话时一起固定；AI 不能在提示词、工具参数或路径中改写它们。
 
 - **手动终端：** 每次启动 `control.sh` / `control.cmd` 并选择设备后，按“被控制端工作目录”提示输入新的 Windows 绝对路径，例如 `C:\Projects\my-app`。进入终端后可直接执行 `cd 'C:\Projects\other-app'`；这个 `cd` 仅对当前 PTY 有效。要让 `/ls`、上传和下载也以新目录为根，退出后新建终端，并在创建时填写新目录。
-- **AI CLI：** Linux 控制端先执行 `bash ~/.local/share/lingxi-remote/5.0.4/control.sh ai`；Windows 控制端在终端执行 `control.cmd ai`。该命令只选择设备、远端工作目录和 Shell，并创建不可变的当前 AI 绑定；随后使用 `control.sh codex`、`control.sh claude`（Windows 对应 `control.cmd codex`、`control.cmd claude`）启动所选 AI。切换设备或 AI 工作目录时，重新执行 `control ... ai`。严格模式绝不修改用户全局的 Codex/Claude MCP 配置；隔离运行时未安装时，启动命令会拒绝运行，不能降级为可访问控制端的本机 AI。
+- **AI CLI：** Linux 控制端先执行 `bash ~/.local/share/lingxi-remote/5.0.5/control.sh ai`；Windows 控制端在终端执行 `control.cmd ai`。该命令只选择设备、远端工作目录和 Shell，并创建不可变的当前 AI 绑定；随后使用 `control.sh codex`、`control.sh claude`（Windows 对应 `control.cmd codex`、`control.cmd claude`）启动所选 AI。切换设备或 AI 工作目录时，重新执行 `control ... ai`。严格模式绝不修改用户全局的 Codex/Claude MCP 配置；隔离运行时未安装时，启动命令会拒绝运行，不能降级为可访问控制端的本机 AI。
 
 Linux 严格 AI 模式需要预先安装 `bubblewrap`（Ubuntu：`sudo apt install bubblewrap`）。控制端上的真实 LingXi MCP 与配对资料留在宿主进程；Codex/Claude 在临时沙箱中只获得一个无凭据 Unix socket 转发器。沙箱退出后其工作区和临时登录副本会被删除。
 
@@ -118,8 +118,8 @@ Linux 严格 AI 模式需要预先安装 `bubblewrap`（Ubuntu：`sudo apt insta
 
 | 系统 | 默认安装目录 |
 | --- | --- |
-| Linux | `~/.local/share/lingxi-remote/5.0.4` |
-| Windows | `%LOCALAPPDATA%\LingXiRemote\5.0.4` |
+| Linux | `~/.local/share/lingxi-remote/5.0.5` |
+| Windows | `%LOCALAPPDATA%\LingXiRemote\5.0.5` |
 
 请保留安装目录。控制端的配置与任务记录默认放在 `~/.lingxi-mcp`；其中 `~` 表示当前用户的主目录。
 
@@ -137,16 +137,16 @@ Linux 严格 AI 模式需要预先安装 `bubblewrap`（Ubuntu：`sudo apt insta
 
 ### 可以手动下载安装吗？
 
-可以。在 [Remote 5.0.4 发布页](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/remote-5.0.4) 下载对应平台包，或直接点击：
+可以。在 [Remote 5.0.5 发布页](https://github.com/Cyber-bike1949/LingXi1949/releases/tag/remote-5.0.5) 下载对应平台包，或直接点击：
 
-- [Linux x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.4/lingxi-remote-5.0.4-linux-x64.tar.gz)：解压后，在解压目录执行 `bash install.sh`。
-- [Windows x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.4/lingxi-remote-5.0.4-win32-x64.tar.gz)：解压后，双击 `install.cmd`。
+- [Linux x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.5/lingxi-remote-5.0.5-linux-x64.tar.gz)：解压后，在解压目录执行 `bash install.sh`。
+- [Windows x64 平台包](https://github.com/Cyber-bike1949/LingXi1949/releases/download/remote-5.0.5/lingxi-remote-5.0.5-win32-x64.tar.gz)：解压后，双击 `install.cmd`。
 
 两种方式都会进入同一个配置向导。
 
 ### 需要自定义安装位置或使用高级参数？
 
-安装前可通过环境变量 `LINGXI_REMOTE_HOME` 更换安装根目录，`LINGXI_REMOTE_VERSION` 指定已发布的版本（例如 `5.0.4`）。下载脚本名为 `install-remote.sh` / `install-remote.ps1`。
+安装前可通过环境变量 `LINGXI_REMOTE_HOME` 更换安装根目录，`LINGXI_REMOTE_VERSION` 指定已发布的版本（例如 `5.0.5`）。下载脚本名为 `install-remote.sh` / `install-remote.ps1`。
 
 开发目录可用 `node scripts/setup.mjs --agent ABSOLUTE_AGENT_PATH ...`；支持 `--role controller|target --home PATH --ticket-file FILE --name NAME --workdir PATH --shell PATH --ai codex|claude|both|none`。`--loopback true` 仅用于本机隔离验证。
 
@@ -159,13 +159,13 @@ Linux 严格 AI 模式需要预先安装 `bubblewrap`（Ubuntu：`sudo apt insta
 **Windows**：打开安装目录，双击 **`control.cmd`**。默认目录可直接粘贴到文件资源管理器地址栏：
 
 ```text
-%LOCALAPPDATA%\LingXiRemote\5.0.4
+%LOCALAPPDATA%\LingXiRemote\5.0.5
 ```
 
 **Linux**：在终端执行：
 
 ```bash
-bash ~/.local/share/lingxi-remote/5.0.4/control.sh
+bash ~/.local/share/lingxi-remote/5.0.5/control.sh
 ```
 
 如果安装时自定义了目录，就打开那个目录下的 `control.cmd` 或 `control.sh`。入口会自动使用安装时准备好的 Node.js。

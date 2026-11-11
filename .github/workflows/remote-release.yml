@@ -7,7 +7,7 @@ on:
         description: Semantic version tag matching packages/remote/package.json
         required: true
         type: string
-        default: 'remote-5.0.4'
+        default: 'remote-5.0.5'
   push:
     tags: ['remote-*']
 
