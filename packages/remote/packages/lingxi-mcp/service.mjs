@@ -1,11 +1,36 @@
 import { StringDecoder } from 'node:string_decoder';
+import { randomUUID } from 'node:crypto';
 
 export class TaskService {
-  constructor(adapter, store, binding, scope) {
+  constructor(adapter, store, binding, scope, reconnectTransport) {
     this.adapter = adapter; this.store = store; this.binding = Object.freeze({ ...binding }); this.scope = scope;
+    this.reconnectTransport = reconnectTransport;
+    this.reconnectInFlight = null;
     this.active = new Map();
     store.recover(scope);
     store.bind(scope, binding);
+  }
+  async target() {
+    if (this.adapter.connected) {
+      try {
+        const probe = await this.adapter.request({ action: 'probe', requestId: randomUUID(), timeoutMs: 15000 });
+        if (probe.status === 'SUCCESS') return { ...this.binding, connected: true, status: 'online' };
+      } catch { /* Reconnect below after a failed liveness probe. */ }
+    }
+    if (!this.reconnectTransport) return { ...this.binding, connected: false, status: 'unavailable' };
+    try {
+      if (!this.reconnectInFlight) {
+        this.reconnectInFlight = this.reconnectTransport().then(({ adapter, binding }) => {
+          this.adapter = adapter;
+          this.binding = Object.freeze({ ...binding });
+          this.store.bind(this.scope, this.binding);
+        }).finally(() => { this.reconnectInFlight = null; });
+      }
+      await this.reconnectInFlight;
+      return { ...this.binding, connected: true, status: 'online', reconnected: true };
+    } catch (error) {
+      return { ...this.binding, connected: false, status: 'unavailable', error: String(error.message ?? error) };
+    }
   }
   async run(input, onProgress = () => {}, signal) {
     const { task, fresh } = this.store.begin(this.scope, this.binding, input);

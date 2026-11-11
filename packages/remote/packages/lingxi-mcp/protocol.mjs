@@ -10,7 +10,7 @@ export const tools = [
   ...Object.entries(schemas).map(([name, spec]) => ({ name, description: `Run ${spec.action} on the fixed remote device. Never runs locally. Reuse requestId only for the same request.`, inputSchema: {
     type: 'object', properties: { requestId: text('Unique idempotency key for this operation'), ...spec.fields }, required: ['requestId', ...Object.keys(spec.fields).filter(k => !spec.optional?.includes(k))], additionalProperties: false,
   } })),
-  { name: 'remote_target', description: 'Inspect the immutable device, directory and shell binding.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
+  { name: 'remote_target', description: 'Check the fixed remote device and reconnect it when needed. Reports online or unavailable without changing the selected device, directory or shell.', inputSchema: { type: 'object', properties: {}, additionalProperties: false } },
   { name: 'remote_tasks', description: 'List recent tasks for this binding, or inspect one task.', inputSchema: { type: 'object', properties: { taskId: text('Task identifier') }, additionalProperties: false } },
   { name: 'remote_cancel', description: 'Request cancellation; inspect task status to confirm termination.', inputSchema: { type: 'object', properties: { taskId: text('Task identifier') }, required: ['taskId'], additionalProperties: false } },
 ];
@@ -34,7 +34,7 @@ function validate(name, args) {
 export async function callTool(service, name, args = {}, progress, signal) {
   validate(name, args);
   let result;
-  if (name === 'remote_target') result = { ...service.binding, connected: service.adapter.connected };
+  if (name === 'remote_target') result = await service.target();
   else if (name === 'remote_tasks') result = args.taskId ? service.store.get(service.scope, args.taskId) : service.store.list(service.scope);
   else if (name === 'remote_cancel') result = service.cancel(args.taskId);
   else result = await service.run({ action: schemas[name].action, ...args }, progress, signal);

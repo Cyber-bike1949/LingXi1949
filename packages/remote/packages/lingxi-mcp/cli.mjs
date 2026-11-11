@@ -236,7 +236,30 @@ async function main() {
       const binding = await adapter.bind(config.workDir, config.shell);
       if (binding.workDir !== config.workDir || binding.shell !== config.shell) throw new Error('BINDING_CHANGED');
       store = new TaskStore(join(home, 'tasks.sqlite'));
-      const service = new TaskService(adapter, store, binding, id);
+      const reconnect = async () => {
+        const oldEndpoint = endpoint;
+        const oldAdapter = adapter;
+        // A restarted Agent invalidates its old binding. Close the failed
+        // transport before dialing so the replacement owns the controller slot.
+        oldAdapter?.close();
+        await oldEndpoint?.close();
+        endpoint = undefined;
+        adapter = undefined;
+        let nextEndpoint, nextAdapter;
+        try {
+          ({ endpoint: nextEndpoint, adapter: nextAdapter } = await connect(profile, device));
+          const nextBinding = await nextAdapter.bind(config.workDir, config.shell);
+          if (nextBinding.workDir !== config.workDir || nextBinding.shell !== config.shell) throw new Error('BINDING_CHANGED');
+          endpoint = nextEndpoint;
+          adapter = nextAdapter;
+          return { adapter, binding: nextBinding };
+        } catch (error) {
+          nextAdapter?.close();
+          await nextEndpoint?.close();
+          throw error;
+        }
+      };
+      const service = new TaskService(adapter, store, binding, id, reconnect);
       process.stderr.write(`LingXi target ${device.name} (${device.nodeId}), ${binding.workDir}\n`);
       if (command === 'shell') { await shell(service); return; }
       if (command !== 'serve') { const result = await runManual(service, command, options); print(result); return; }

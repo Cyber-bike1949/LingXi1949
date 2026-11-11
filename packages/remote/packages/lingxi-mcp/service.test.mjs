@@ -66,6 +66,38 @@ test('MCP tools forbid overriding device or binding and validate optional inputs
   store.close();
 });
 
+test('remote_target reconnects a lost transport without changing its selected path or shell', async () => {
+  const store = new TaskStore(':memory:');
+  const lost = { connected: false, close() {} };
+  const replacement = { connected: true, close() {}, request: async request => {
+    assert.equal(request.action, 'probe');
+    return { status: 'SUCCESS' };
+  } };
+  let reconnects = 0;
+  const service = new TaskService(lost, store, binding, 'selection-1', async () => {
+    reconnects++;
+    return { adapter: replacement, binding: { ...binding, sessionId: 'session-2', bindingVersion: 'v2' } };
+  });
+  const result = JSON.parse((await callTool(service, 'remote_target')).content[0].text);
+  assert.equal(reconnects, 1);
+  assert.equal(result.status, 'online');
+  assert.equal(result.reconnected, true);
+  assert.equal(result.workDir, binding.workDir);
+  assert.equal(result.shell, binding.shell);
+  assert.equal(service.binding.sessionId, 'session-2');
+  store.close();
+});
+
+test('remote_target reports an unavailable device when reconnect fails', async () => {
+  const store = new TaskStore(':memory:');
+  const service = new TaskService({ connected: false, close() {} }, store, binding, 'selection-1', async () => { throw new Error('CONNECT_TIMEOUT'); });
+  const result = JSON.parse((await callTool(service, 'remote_target')).content[0].text);
+  assert.equal(result.status, 'unavailable');
+  assert.equal(result.connected, false);
+  assert.equal(result.error, 'CONNECT_TIMEOUT');
+  store.close();
+});
+
 test('stdio negotiates, lists tools and handles malformed input without polluting stdout', async () => {
   const { store, service } = setup(async () => ({ status: 'SUCCESS' }));
   const input = new PassThrough(); const output = new PassThrough(); let bytes = '';
