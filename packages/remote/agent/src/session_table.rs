@@ -25,6 +25,10 @@ use crate::AgentError;
 pub struct SessionHandle {
     pub session_id: Uuid,
     pub pty: PtySession,
+    /// Canonical directory selected when the session was opened. It is not
+    /// changed by shell `cd`, which keeps the binding and its exclusivity
+    /// stable for the lifetime of the session.
+    pub work_dir: PathBuf,
     pub last_known_cwd: Option<PathBuf>,
 }
 
@@ -49,6 +53,19 @@ impl SessionTable {
         session_id: Uuid,
         pty: PtySession,
     ) -> Result<&mut SessionHandle, AgentError> {
+        self.open_with_work_dir(
+            session_id,
+            pty,
+            PathBuf::from(format!("<legacy:{session_id}>")),
+        )
+    }
+
+    pub fn open_with_work_dir(
+        &mut self,
+        session_id: Uuid,
+        pty: PtySession,
+        work_dir: PathBuf,
+    ) -> Result<&mut SessionHandle, AgentError> {
         if self.sessions.contains_key(&session_id) {
             return Err(AgentError::Protocol(format!(
                 "session {session_id} is already open"
@@ -57,10 +74,18 @@ impl SessionTable {
         if self.sessions.len() >= self.max_concurrent {
             return Err(AgentError::SessionLimitReached(self.max_concurrent));
         }
+        if self
+            .sessions
+            .values()
+            .any(|handle| handle.work_dir == work_dir)
+        {
+            return Err(AgentError::WorkDirInUse(work_dir.display().to_string()));
+        }
 
         let handle = SessionHandle {
             session_id,
             pty,
+            work_dir,
             last_known_cwd: None,
         };
         Ok(self.sessions.entry(session_id).or_insert(handle))
@@ -78,6 +103,12 @@ impl SessionTable {
 
     pub fn contains(&self, session_id: Uuid) -> bool {
         self.sessions.contains_key(&session_id)
+    }
+
+    pub fn work_dir(&self, session_id: Uuid) -> Option<&PathBuf> {
+        self.sessions
+            .get(&session_id)
+            .map(|handle| &handle.work_dir)
     }
 
     /// No-op for an unknown `session_id`: a shell event can race a session's
@@ -203,6 +234,26 @@ mod tests {
             1,
             "the rejected session must not be admitted"
         );
+    }
+
+    #[test]
+    fn canonical_work_directory_is_exclusive_until_session_closes() {
+        let mut table = SessionTable::new(4);
+        let work_dir = PathBuf::from("/workspace/project");
+        let first = Uuid::new_v4();
+        table
+            .open_with_work_dir(first, spawn_session(), work_dir.clone())
+            .unwrap();
+
+        let rejected = table.open_with_work_dir(Uuid::new_v4(), spawn_session(), work_dir.clone());
+        assert!(
+            matches!(rejected, Err(AgentError::WorkDirInUse(path)) if path == "/workspace/project")
+        );
+
+        drop(table.close(first));
+        table
+            .open_with_work_dir(Uuid::new_v4(), spawn_session(), work_dir)
+            .unwrap();
     }
 
     #[test]

@@ -29,17 +29,34 @@ struct Binding {
 pub struct TaskService {
     device: String,
     bindings: Mutex<HashMap<String, Binding>>,
+    claims: Arc<Mutex<HashMap<PathBuf, String>>>,
     requests: Mutex<std::collections::HashSet<String>>,
     commands: Semaphore,
 }
 
 impl TaskService {
-    pub fn new(device: String) -> Self {
+    pub fn new(device: String, claims: Arc<Mutex<HashMap<PathBuf, String>>>) -> Self {
         Self {
             device,
             bindings: Mutex::new(HashMap::new()),
+            claims,
             requests: Mutex::new(Default::default()),
             commands: Semaphore::new(1),
+        }
+    }
+}
+
+impl Drop for TaskService {
+    fn drop(&mut self) {
+        let bindings = self.bindings.get_mut().expect("bindings poisoned");
+        let mut claims = self.claims.lock().expect("work-directory claims poisoned");
+        for (session_id, binding) in bindings.drain() {
+            if claims
+                .get(&binding.root)
+                .is_some_and(|owner| owner == &session_id)
+            {
+                claims.remove(&binding.root);
+            }
         }
     }
 }
@@ -392,15 +409,27 @@ async fn handle(
         if !Path::new(&shell).is_absolute() || !Path::new(&shell).is_file() {
             return Err("SHELL_REQUIRES_EXISTING_ABSOLUTE_PATH".into());
         }
+        let session = Uuid::new_v4().to_string();
+        {
+            let mut claims = service.claims.lock().unwrap();
+            if let Some(owner) = claims.get(&root) {
+                return Err(format!(
+                    "WORKDIR_IN_USE: {} ({})",
+                    root.display(),
+                    &owner[..8]
+                ));
+            }
+            claims.insert(root.clone(), session.clone());
+        }
         let binding = Binding {
             root,
             shell,
             version: Uuid::new_v4().to_string(),
         };
-        let session = Uuid::new_v4().to_string();
         let result = json!({"event":"result","status":"SUCCESS","binding":{"sessionId":session,"bindingVersion":binding.version,"workDir":binding.root,"shell":binding.shell}});
         let mut bindings = service.bindings.lock().unwrap();
         if bindings.len() >= 1024 {
+            service.claims.lock().unwrap().remove(&binding.root);
             return Err("BINDING_LIMIT".into());
         }
         bindings.insert(session, binding);

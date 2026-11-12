@@ -67,6 +67,11 @@ pub struct ServeOptions {
     /// names a `sessionId` with no known cwd, or none at all.
     pub receive_root: std::path::PathBuf,
     transfer_state: Arc<TransferCommitState>,
+    /// Shared by every authenticated controller connection. This is the
+    /// authoritative directory lease table, so two controllers cannot open
+    /// terminals on equivalent canonical paths at the same time.
+    session_table: Arc<Mutex<SessionTable>>,
+    task_claims: Arc<Mutex<HashMap<std::path::PathBuf, String>>>,
     pub file_operations: Arc<lingxi_fs_operations::Engine>,
 }
 
@@ -85,6 +90,8 @@ impl ServeOptions {
             ])),
             receive_root,
             transfer_state: Arc::new(TransferCommitState::new()),
+            session_table: Arc::new(Mutex::new(SessionTable::new(max_concurrent_sessions))),
+            task_claims: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -189,7 +196,7 @@ async fn dispatch_connection(
             let slot = admit_controller(&gate, &connection);
             tracing::info!(
                 remote = %connection.remote_id().fmt_short(),
-                "controller connected (replacing any existing controller)"
+                "controller connected"
             );
             serve_controller(connection, slot, options).await;
         }
@@ -219,11 +226,10 @@ async fn serve_controller(
     let remote = connection.remote_id();
     tracing::info!(remote = %remote.fmt_short(), "controller connected");
 
-    let table = Arc::new(Mutex::new(SessionTable::new(
-        options.max_concurrent_sessions,
-    )));
+    let table = Arc::clone(&options.session_table);
     let tasks = Arc::new(crate::tasks::TaskService::new(
         options.task_device_id.clone(),
+        Arc::clone(&options.task_claims),
     ));
 
     loop {
@@ -243,16 +249,9 @@ async fn serve_controller(
         }
     }
 
-    // Doc 7.5: the connection dying kills every session under it. Dropping
-    // the handles terminates each PTY's whole process tree.
-    let orphaned = table.lock().expect("session table poisoned").close_all();
-    if !orphaned.is_empty() {
-        tracing::info!(
-            count = orphaned.len(),
-            "terminating sessions with the connection"
-        );
-    }
-    drop(orphaned);
+    // Each terminal stream observes this connection closing and releases its
+    // own session. Do not drain the shared table here: other controllers may
+    // legitimately still be running independent work directories.
 }
 
 /// What the blocking PTY-reader thread reports to the async side.
@@ -363,7 +362,13 @@ async fn serve_terminal_session(
                 return;
             }
         },
-        None => crate::config::home_dir(),
+        None => match std::fs::canonicalize(crate::config::home_dir()) {
+            Ok(path) if path.is_dir() && std::fs::read_dir(&path).is_ok() => path,
+            _ => {
+                send_error(&mut send, "WORKDIR_INVALID_OR_UNAVAILABLE").await;
+                return;
+            }
+        },
     };
     let program = open.shell.as_deref().unwrap_or(&options.shell.program);
     if !std::path::Path::new(program).is_absolute() || !std::path::Path::new(program).is_file() {
@@ -392,7 +397,10 @@ async fn serve_terminal_session(
     // the pre-check above.
     let admission_error = {
         let mut table = table.lock().expect("session table poisoned");
-        table.open(session_id, pty).map(|_| ()).err()
+        table
+            .open_with_work_dir(session_id, pty, cwd.clone())
+            .map(|_| ())
+            .err()
     };
     if let Some(e) = admission_error {
         // Lost the admission race; the just-spawned PTY was dropped (and

@@ -10,17 +10,18 @@
 //!   seed, so the `EndpointId` is stable across restarts),
 //! - turn the endpoint's address into the connection code (an
 //!   `EndpointTicket` string, doc 5.1) and parse one back,
-//! - keep one active controller via [`ControllerGate`], replacing it when a
-//!   newer controller connects.
+//! - track active controllers via [`ControllerGate`] without disconnecting
+//!   independent authenticated controllers.
 //!
 //! The accept loop that stitches these into `lingxi1949 run` (spawning PTY
 //! sessions per `termy/terminal/1` stream) is the next slice; keeping it out
 //! of this module keeps every piece here testable in isolation.
 
+use std::collections::HashMap;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 
-use iroh::endpoint::{presets, Connection, VarInt};
+use iroh::endpoint::{presets, Connection};
 use iroh::{Endpoint, EndpointAddr, RelayMode, TransportAddr};
 use iroh_tickets::endpoint::EndpointTicket;
 
@@ -105,18 +106,13 @@ pub fn parse_connection_code(code: &str) -> Result<EndpointAddr, AgentError> {
 
 #[derive(Default)]
 struct GateState {
-    active: Option<Connection>,
+    active: HashMap<u64, Connection>,
     generation: u64,
 }
 
-/// The agent serves one control end at a time. A newer connection replaces
-/// the active controller and explicitly closes it with `CONTROLLER_REPLACED`.
-/// Dropping the active [`ControllerSlot`] (the connection handler ending,
-/// however it ends) reopens the gate.
-///
-/// This is the v2.0 analogue of V1's `pty::SessionSlot`, one level up: V1
-/// admitted one *session*, v2.0 admits one *controller* which may hold many
-/// sessions (doc 4 decision 4).
+/// Tracks every active control end.  Controller connections are independent:
+/// directory exclusivity is enforced by the process-wide session table, not
+/// by disconnecting another authenticated controller.
 #[derive(Default, Clone)]
 pub struct ControllerGate {
     inner: Arc<Mutex<GateState>>,
@@ -132,52 +128,45 @@ impl ControllerGate {
         Self::default()
     }
 
-    /// Claims the gate for `connection`, closing any previous controller.
-    pub fn claim_replacing(&self, connection: &Connection) -> ControllerSlot {
+    /// Registers one controller connection without disturbing existing ones.
+    pub fn claim(&self, connection: &Connection) -> ControllerSlot {
         let mut state = self.inner.lock().expect("controller gate poisoned");
-        if let Some(previous) = state.active.replace(connection.clone()) {
-            previous.close(
-                VarInt::from_u32(CLOSE_CODE_CONTROLLER_REPLACED),
-                CLOSE_REASON_CONTROLLER_REPLACED,
-            );
-        }
         state.generation += 1;
+        let generation = state.generation;
+        state.active.insert(generation, connection.clone());
         ControllerSlot {
             gate: Arc::clone(&self.inner),
-            generation: state.generation,
+            generation,
         }
     }
 
     pub fn is_held(&self) -> bool {
-        self.inner
+        !self
+            .inner
             .lock()
             .expect("controller gate poisoned")
             .active
-            .is_some()
+            .is_empty()
     }
 }
 
 impl Drop for ControllerSlot {
     fn drop(&mut self) {
         let mut state = self.gate.lock().expect("controller gate poisoned");
-        // The generation check makes a late drop harmless if a force-release
-        // path is ever added: a stale slot can only release its own claim.
-        if state.generation == self.generation {
-            state.active = None;
-        }
+        state.active.remove(&self.generation);
     }
 }
 
-/// Applies the gate to a freshly accepted connection. A new controller always
-/// takes ownership and disconnects any previous controller.
+/// Registers a freshly accepted controller connection.
 pub fn admit_controller(gate: &ControllerGate, connection: &Connection) -> ControllerSlot {
-    gate.claim_replacing(connection)
+    gate.claim(connection)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::termstream::{Frame, FrameDecoder, OpenPayload, OpenedPayload};
+    use iroh::endpoint::VarInt;
     use std::time::Duration;
 
     fn test_identity() -> DeviceIdentity {
@@ -328,10 +317,10 @@ mod tests {
         });
     }
 
-    /// A new real QUIC controller replaces the old one. A stale slot must not
-    /// release the new controller after the old connection finishes cleanup.
+    /// Independent controllers remain connected at the same time. Dropping
+    /// one slot must not release another controller's registration.
     #[test]
-    fn a_second_controller_replaces_the_first() {
+    fn controllers_are_admitted_concurrently() {
         let agent_identity = test_identity();
         let runtime = tokio::runtime::Runtime::new().unwrap();
 
@@ -339,7 +328,6 @@ mod tests {
             let agent = bind_loopback(&agent_identity).await;
             let first = bind_loopback(&test_identity()).await;
             let second = bind_loopback(&test_identity()).await;
-            let third = bind_loopback(&test_identity()).await;
             let addr = || parse_connection_code(&connection_code(loopback_addr(&agent))).unwrap();
             let gate = ControllerGate::new();
 
@@ -347,7 +335,6 @@ mod tests {
                 let agent = agent.clone();
                 let gate = gate.clone();
                 async move {
-                    // First controller: admitted and held while serving.
                     let conn1 = agent
                         .accept()
                         .await
@@ -358,7 +345,6 @@ mod tests {
                         .unwrap();
                     let slot1 = admit_controller(&gate, &conn1);
 
-                    // Second controller replaces the first one.
                     let conn2 = agent
                         .accept()
                         .await
@@ -368,14 +354,12 @@ mod tests {
                         .await
                         .unwrap();
                     let slot2 = admit_controller(&gate, &conn2);
-                    conn1.closed().await;
                     drop(slot1);
                     assert!(
                         gate.is_held(),
-                        "a stale slot must not release the replacement"
+                        "dropping one controller must not release another"
                     );
 
-                    // The replacement controller remains serviceable.
                     let (mut send, mut recv) = conn2.accept_bi().await.unwrap();
                     let mut byte = [0u8; 5];
                     recv.read_exact(&mut byte).await.unwrap();
@@ -384,44 +368,25 @@ mod tests {
 
                     conn2.closed().await;
                     drop(slot2);
-
-                    // The gate reopens after the replacement exits.
-                    let conn3 = agent
-                        .accept()
-                        .await
-                        .unwrap()
-                        .accept()
-                        .unwrap()
-                        .await
-                        .unwrap();
-                    let slot3 = admit_controller(&gate, &conn3);
-                    drop(slot3);
-                    conn3.close(VarInt::from_u32(0), b"");
+                    assert!(!gate.is_held());
                 }
             });
 
             let conn1 = within(first.connect(addr(), ALPN_TERMINAL)).await.unwrap();
 
             let conn2 = within(second.connect(addr(), ALPN_TERMINAL)).await.unwrap();
-            let reason = within(conn1.closed()).await.to_string();
-            assert!(
-                reason.contains("CONTROLLER_REPLACED"),
-                "the replacement must carry the close reason, got: {reason}"
-            );
+            assert!(gate.is_held());
 
-            // The second controller can work immediately after replacement.
             let (mut send, mut recv) = within(conn2.open_bi()).await.unwrap();
             send.write_all(b"newer").await.unwrap();
             let mut echo = [0u8; 5];
             within(recv.read_exact(&mut echo)).await.unwrap();
             assert_eq!(&echo, b"newer");
             conn2.close(VarInt::from_u32(0), b"bye");
-
-            let conn3 = within(third.connect(addr(), ALPN_TERMINAL)).await.unwrap();
-            within(conn3.closed()).await;
+            conn1.close(VarInt::from_u32(0), b"bye");
 
             within(agent_side).await.unwrap();
-            for endpoint in [agent, first, second, third] {
+            for endpoint in [agent, first, second] {
                 endpoint.close().await;
             }
         });

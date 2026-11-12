@@ -35,4 +35,6 @@ pub enum AgentError {
     Transfer(String),
     #[error("SESSION_LIMIT_REACHED: at most {0} concurrent sessions")]
     SessionLimitReached(usize),
+    #[error("WORKDIR_IN_USE: {0}")]
+    WorkDirInUse(String),
 }
