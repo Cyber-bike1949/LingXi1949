@@ -2,12 +2,22 @@ name: Real Obsidian UI
 
 on:
   workflow_dispatch:
+    inputs:
+      target:
+        description: Where to run the UI suite
+        required: true
+        default: hosted
+        type: choice
+        options:
+          - hosted
+          - lab
 
 permissions:
   contents: read
 
 jobs:
   ui:
+    if: inputs.target != 'lab'
     strategy:
       fail-fast: false
       matrix:
@@ -73,5 +83,58 @@ jobs:
         if: always()
         with:
           name: obsidian-ui-${{ runner.os }}
+          path: test-results/obsidian
+          if-no-files-found: error
+
+  # The persistent Windows lab is intentionally opt-in.  It has a real
+  # interactive desktop, so it is the place to reproduce GUI-only failures;
+  # regular CI remains independent of a machine someone may have powered off.
+  ui-lab:
+    if: inputs.target == 'lab'
+    runs-on: [self-hosted, windows, lingxi-ui]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.4
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            packages/obsidian-plugin/rust-servers
+            packages/remote/agent
+      - name: Install plugin dependencies
+        run: pnpm install --frozen-lockfile --ignore-workspace
+        working-directory: packages/obsidian-plugin
+      - name: Install remote dependencies
+        run: pnpm install --frozen-lockfile --ignore-workspace
+        working-directory: packages/remote
+      - run: pnpm build
+        working-directory: packages/obsidian-plugin
+      - run: pnpm build:rust
+        working-directory: packages/obsidian-plugin
+      - run: pnpm package
+        working-directory: packages/obsidian-plugin
+      - run: cargo build --locked --manifest-path packages/remote/agent/Cargo.toml
+      - run: npm ci --prefix packages/obsidian-plugin/e2e/obsidian --ignore-scripts --no-audit --no-fund
+      - name: Windows real application
+        shell: pwsh
+        run: |
+          $installer = Join-Path $env:RUNNER_TEMP 'Obsidian.exe'
+          $app = Join-Path $env:RUNNER_TEMP 'ObsidianUI'
+          Invoke-WebRequest https://github.com/obsidianmd/obsidian-releases/releases/download/v1.14.5/Obsidian-1.14.5.exe -OutFile $installer
+          Start-Process $installer -ArgumentList '/S',"/D=$app" -Wait
+          node packages/obsidian-plugin/e2e/obsidian/run.mjs --obsidian "$app/Obsidian.exe" --agent "$env:GITHUB_WORKSPACE/packages/remote/agent/target/debug/lingxi1949.exe" --plugin packages/obsidian-plugin/plugin-package
+          if ($LASTEXITCODE -ne 0) { throw 'UI test failed' }
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: obsidian-ui-lab-windows
           path: test-results/obsidian
           if-no-files-found: error
