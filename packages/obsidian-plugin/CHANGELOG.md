@@ -1,3 +1,7 @@
+## [5.0.6] - 2026-11-12
+
+- Prepared the plugin release metadata for 5.0.6.
+
 ## [5.0.3] - 2026-11-10
 
 - Fixed Linux Agent installation on hosts where `/tmp` is mounted with `noexec` by staging the verified download in the invoking user's cache directory.
