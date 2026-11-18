@@ -91,9 +91,7 @@ try {
     const trustPrompt = page.getByText(/Do you trust the author of this vault/i).last();
     const trustButton = page.getByText(/Trust author and enable plugins/i).last();
     await trustButton.waitFor({ state: 'visible' });
-    const bounds = await trustButton.boundingBox();
-    if (bounds) await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
-    else await trustButton.click({ force: true });
+    await trustButton.click();
     await trustPrompt.waitFor({ state: 'hidden', timeout: 10000 });
     logs.push('accepted the first-run vault trust prompt');
   }
@@ -155,8 +153,16 @@ try {
         if (!leaf || typeof leaf.view.openAddDeviceModal !== 'function') {
           return { opened: false, leaves: window.app.workspace.getLeavesOfType('termesh-device-home').length };
         }
+        const method = String(leaf.view.openAddDeviceModal);
         leaf.view.openAddDeviceModal();
-        return { opened: true, viewType: leaf.view.getViewType() };
+        return {
+          opened: true,
+          viewType: leaf.view.getViewType(),
+          activeLeaf: window.app.workspace.activeLeaf === leaf,
+          modalCount: document.querySelectorAll('.modal-container').length,
+          addModalCount: document.querySelectorAll('.termesh-add-device-modal').length,
+          method: method.slice(0, 240),
+        };
       }, manifest.id);
       logs.push(`home view pairing action: ${JSON.stringify(pairingView)}`);
     }
