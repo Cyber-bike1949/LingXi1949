@@ -29,6 +29,7 @@ const record = async (index, fn) => {
     cases[index].status = 'failed'; cases[index].durationMs = Date.now() - start;
     cases[index].error = error.stack ?? String(error);
     logs.push(`${cases[index].name} failed: ${cases[index].error}`);
+    logs.push(`${cases[index].name} page: ${await page.locator('body').innerText().catch(() => '<unavailable>')}`);
     await page.screenshot({ path: join(output, `${index + 1}-failed.png`) }).catch(() => {});
   }
 };
@@ -46,6 +47,16 @@ try {
   report.pluginVersion = manifest.version;
   const pluginDir = join(vault, '.obsidian', 'plugins', manifest.id);
   await cp(plugin, pluginDir, { recursive: true, dereference: true });
+  const nativeRuntime = process.platform === 'win32'
+    ? ['iroh-win32-x64-msvc', 'iroh.win32-x64-msvc.node']
+    : ['iroh-linux-x64-gnu', 'iroh.linux-x64-gnu.node'];
+  const runtimeDir = join(pluginDir, 'native', 'iroh');
+  await mkdir(runtimeDir, { recursive: true });
+  await cp(
+    join(pluginDir, 'node_modules', '@number0', nativeRuntime[0], nativeRuntime[1]),
+    join(runtimeDir, 'iroh-runtime.node'),
+  );
+  await writeFile(join(runtimeDir, 'version.json'), JSON.stringify({ version: manifest.version }));
   await writeFile(join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify([manifest.id]));
   await writeFile(join(vault, '.obsidian', 'app.json'), JSON.stringify({ safeMode: false }));
   await writeFile(join(vault, '.obsidian', 'core-plugins.json'), JSON.stringify(['command-palette']));
