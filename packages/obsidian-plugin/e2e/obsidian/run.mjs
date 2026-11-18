@@ -121,8 +121,9 @@ try {
     await page.keyboard.type(shellCommand);
     await page.keyboard.press('Enter');
     // Read the real renderer buffer; commands are sent only through keyboard events.
-    await page.waitForFunction(({id,marker}) => {
-      const terminals = window.app.plugins.plugins[id].getTerminalService().getAllTerminals();
+    await page.waitForFunction(async ({id,marker}) => {
+      const service = await window.app.plugins.plugins[id].getTerminalService();
+      const terminals = service.getAllTerminals();
       return terminals.some(instance => {
         const buffer = instance.getXterm().buffer.active;
         for (let i = 0; i < buffer.length; i++) if (buffer.getLine(i)?.translateToString(true).trim() === marker) return true;
