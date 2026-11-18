@@ -159,7 +159,9 @@ try {
           opened: true,
           viewType: leaf.view.getViewType(),
           activeLeaf: window.app.workspace.activeLeaf === leaf,
-          modalCount: document.querySelectorAll('.modal-container').length,
+          activeModal: window.app.activeModal?.constructor?.name ?? null,
+          activeModalElement: window.app.activeModal?.modalEl?.outerHTML?.slice(0, 200) ?? null,
+          modalCount: document.querySelectorAll('.modal').length,
           addModalCount: document.querySelectorAll('.termesh-add-device-modal').length,
           method: method.slice(0, 240),
         };
