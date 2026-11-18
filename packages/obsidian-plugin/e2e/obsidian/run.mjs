@@ -1,4 +1,4 @@
-import { _electron as electron } from 'playwright';
+import { chromium } from 'playwright';
 import { parseArgs } from 'node:util';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile, readFile, cp } from 'node:fs/promises';
@@ -7,13 +7,14 @@ import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
+import { createServer } from 'node:net';
 
 const { values: args } = parseArgs({ options: Object.fromEntries(['obsidian','agent','plugin','output'].map(k => [k,{type:'string'}])) });
 const output = resolve(args.output ?? 'test-results/obsidian');
 await mkdir(output, { recursive: true });
 const cases = ['插件加载','打开本地终端','界面输入命令与输出','连接远程设备','断开后重连','研发任务进度与测试报告'].map(name => ({ name, status: 'not-run' }));
 const report = { platform: process.platform, arch: process.arch, node: process.version, startedAt: new Date().toISOString(), cases };
-let application, page, agent;
+let application, page, agent, obsidianProcess;
 let current = 0;
 const logs = [];
 const record = async (index, fn) => {
@@ -55,11 +56,31 @@ try {
     agent.once('error', error => { clearTimeout(timer); rej(error); });
     agent.once('exit', code => { clearTimeout(timer); rej(new Error(`Test Agent exited ${code}`)); });
   });
-  application = await electron.launch({ executablePath: resolve(args.obsidian),
-    args: [`--user-data-dir=${userData}`, '--no-sandbox', '--disable-gpu'],
-    env: { ...process.env, XDG_CONFIG_HOME: config, APPDATA: config }, timeout: 60000 });
-  application.on('window', p => p.on('console', message => logs.push(`console: ${message.text()}`)));
-  page = await application.firstWindow();
+  const portServer = createServer();
+  await new Promise((res, rej) => portServer.listen(0, '127.0.0.1', res).once('error', rej));
+  const debugPort = portServer.address().port;
+  await new Promise((res, rej) => portServer.close(error => error ? rej(error) : res()));
+  obsidianProcess = spawn(resolve(args.obsidian), [
+    `--user-data-dir=${userData}`, `--remote-debugging-port=${debugPort}`,
+    '--remote-allow-origins=*', '--no-sandbox', '--disable-gpu',
+  ], { env: { ...process.env, XDG_CONFIG_HOME: config, APPDATA: config }, stdio: ['ignore', 'pipe', 'pipe'] });
+  obsidianProcess.stdout.on('data', b => logs.push(`obsidian: ${b}`));
+  obsidianProcess.stderr.on('data', b => logs.push(`obsidian: ${b}`));
+  const endpoint = `http://127.0.0.1:${debugPort}`;
+  const deadline = Date.now() + 90000;
+  let browser;
+  while (!browser && Date.now() < deadline) {
+    if (obsidianProcess.exitCode !== null) throw new Error(`Obsidian exited ${obsidianProcess.exitCode}: ${logs.join('\n')}`);
+    try {
+      const response = await fetch(`${endpoint}/json/version`);
+      if (response.ok) browser = await chromium.connectOverCDP(endpoint, { timeout: 10000 });
+    } catch { await new Promise(res => setTimeout(res, 500)); }
+  }
+  if (!browser) throw new Error(`Obsidian DevTools endpoint did not start: ${logs.join('\n')}`);
+  const context = browser.contexts()[0];
+  page = context.pages()[0];
+  if (!page) throw new Error('Obsidian opened without a renderer page');
+  application = { close: async () => browser.close() };
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => logs.push(`pageerror: ${error.message}`));
   const home = async () => {
@@ -86,7 +107,7 @@ try {
   };
   await record(0, async () => {
     await page.waitForFunction(id => !!window.app?.plugins?.plugins?.[id], manifest.id);
-    report.obsidianVersion = await application.evaluate(({ app }) => app.getVersion());
+    report.obsidianVersion = await page.evaluate(() => process.versions.electron).catch(() => 'unknown');
     await home();
   });
   await record(1, async () => {
@@ -164,6 +185,10 @@ try {
   process.exitCode = 1;
 } finally {
   if (application) await application.close().catch(error => logs.push(`close: ${error.message}`));
+  if (obsidianProcess && obsidianProcess.exitCode === null) {
+    obsidianProcess.kill('SIGTERM');
+    await Promise.race([once(obsidianProcess, 'exit'), new Promise(resolve => setTimeout(() => { obsidianProcess.kill('SIGKILL'); resolve(); }, 3000))]);
+  }
   if (agent && agent.exitCode === null) {
     const exited = once(agent, 'exit'); agent.kill('SIGTERM');
     await Promise.race([exited, new Promise(resolve => setTimeout(() => { agent.kill('SIGKILL'); resolve(); }, 3000))]);
