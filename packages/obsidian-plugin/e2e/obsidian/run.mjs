@@ -83,6 +83,8 @@ try {
   application = { close: async () => browser.close() };
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => logs.push(`pageerror: ${error.message}`));
+  const trustButton = page.getByRole('button', { name: /Trust author and enable plugins/i });
+  if (await trustButton.isVisible().catch(() => false)) await trustButton.click();
   const home = async () => {
     const name = await page.evaluate(id => window.app.commands.commands[`${id}:open-terminal`].name, manifest.id);
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+p' : 'Control+p');
