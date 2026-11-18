@@ -245,6 +245,9 @@ try {
     await task.getByText('用例 8 项，通过 8 项，失败 0 项。').waitFor();
     await task.getByText('打开交接报告').waitFor();
     await task.getByText('Web Demo CI · success').waitFor();
+    // Keep the rendered snapshot visible while ensuring screenshots contain no absolute paths.
+    await tasksView.locator('input').fill('');
+    await tasksView.locator('input').blur();
   });
 } catch (error) {
   cases[current].status = 'failed'; cases[current].error = error.stack ?? String(error);
