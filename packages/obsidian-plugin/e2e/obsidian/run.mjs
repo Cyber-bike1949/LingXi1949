@@ -147,12 +147,18 @@ try {
     const pairingModal = page.locator('.termesh-add-device-modal');
     await addDeviceCard.click();
     if (!await pairingModal.isVisible().catch(() => false)) {
-      // Obsidian's workspace keeps the home card mounted while the terminal leaf is active; invoke its action if the inactive leaf swallows the click.
-      await page.evaluate(() => {
+      // Ensure the home leaf is active before dispatching its pairing action in split-workspace UI runs.
+      const pairingView = await page.evaluate(async id => {
+        const plugin = window.app.plugins.plugins[id];
+        await plugin.activateDeviceHome();
         const leaf = window.app.workspace.getLeavesOfType('termesh-device-home')[0];
-        leaf?.view.openAddDeviceModal();
-      });
-      logs.push('opened pairing modal through the home view action after the inactive leaf swallowed the card click');
+        if (!leaf || typeof leaf.view.openAddDeviceModal !== 'function') {
+          return { opened: false, leaves: window.app.workspace.getLeavesOfType('termesh-device-home').length };
+        }
+        leaf.view.openAddDeviceModal();
+        return { opened: true, viewType: leaf.view.getViewType() };
+      }, manifest.id);
+      logs.push(`home view pairing action: ${JSON.stringify(pairingView)}`);
     }
     await pairingModal.waitFor({ state: 'visible' });
     await page.locator('.termesh-add-device-modal input').fill('UI test target');
