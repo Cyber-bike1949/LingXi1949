@@ -13,7 +13,7 @@ import { createServer } from 'node:net';
 const { values: args } = parseArgs({ options: Object.fromEntries(['obsidian','agent','plugin','output'].map(k => [k,{type:'string'}])) });
 const output = resolve(args.output ?? 'test-results/obsidian');
 await mkdir(output, { recursive: true });
-const cases = ['插件加载','打开本地终端','界面输入命令与输出','连接远程设备','断开后重连','研发任务进度与测试报告'].map(name => ({ name, status: 'not-run' }));
+const cases = ['插件加载','打开本地终端','界面输入命令与输出','连接远程设备','断开后重连','研发任务进度与测试报告','历史操作弹窗回归'].map(name => ({ name, status: 'not-run' }));
 const report = { platform: process.platform, arch: process.arch, node: process.version, startedAt: new Date().toISOString(), cases };
 let application, page, agent, obsidianProcess;
 let current = 0;
@@ -268,6 +268,12 @@ try {
     await task.getByText('用例 8 项，通过 8 项，失败 0 项。').waitFor();
     await task.getByText('打开交接报告').waitFor();
     await task.getByText('Web Demo CI · success').waitFor();
+  });
+  await record(6, async () => {
+    await page.locator('.terminal-history-action:visible').last().click();
+    await page.locator('.modal').getByText('历史操作与命令组').waitFor({ state: 'visible' });
+    await page.keyboard.press('Escape');
+    await page.locator('.modal').waitFor({ state: 'hidden' });
   });
 } catch (error) {
   cases[current].status = 'failed'; cases[current].error = error.stack ?? String(error);
