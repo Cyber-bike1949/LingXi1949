@@ -9,6 +9,21 @@ import type {
 import type { IrohModule } from './irohStreams.ts';
 
 type ModuleLoader = (modulePath: string) => unknown;
+type PathApi = Pick<typeof path, 'isAbsolute' | 'join' | 'resolve'>;
+
+/** Resolve Obsidian's vault-relative plugin directory without stripping an absolute root. */
+export function resolvePluginDirectory(
+  vaultPath: string,
+  configDir: string,
+  pluginId: string,
+  manifestDir?: string,
+  pathApi: PathApi = path,
+): string {
+  const configuredDir = manifestDir?.trim() || pathApi.join(configDir, 'plugins', pluginId);
+  return pathApi.resolve(pathApi.isAbsolute(configuredDir)
+    ? configuredDir
+    : pathApi.join(vaultPath, configuredDir));
+}
 
 interface IrohLoaderOptions {
   version: string;

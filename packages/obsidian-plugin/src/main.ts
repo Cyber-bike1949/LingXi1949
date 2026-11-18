@@ -23,7 +23,7 @@ import { RemoteService } from './services/remote/remoteService';
 import { RelayClient } from './services/remote/relayClient';
 import { PairedDeviceStore } from './services/remote/pairedDeviceStore';
 import { DeviceConnectionManager } from './services/remote/deviceConnections';
-import { createIrohLoader } from './services/remote/irohRuntime';
+import { createIrohLoader, resolvePluginDirectory } from './services/remote/irohRuntime';
 import type { IrohRuntimeInstallProgress } from './services/remote/irohRuntimeInstaller';
 import type { IrohModule } from './services/remote/irohStreams';
 import { normalizeControllerIdentitySeed } from './services/remote/controllerIdentity';
@@ -3800,21 +3800,12 @@ export default class TerminalPlugin extends Plugin {
     if (!(adapter instanceof FileSystemAdapter)) {
       throw new Error('FileSystemAdapter is not available');
     }
-    const vaultPath = normalizePath(adapter.getBasePath());
-    const configDir = normalizePath(this.app.vault.configDir);
-    const manifestDir = this.manifest.dir
-      ? normalizePath(this.manifest.dir)
-      : normalizePath(`${configDir}/plugins/${this.manifest.id}`);
-
-    if (this.isAbsolutePath(manifestDir)) {
-      return manifestDir;
-    }
-
-    return normalizePath(`${vaultPath}/${manifestDir}`);
-  }
-
-  private isAbsolutePath(path: string): boolean {
-    return path.startsWith('/') || /^[A-Za-z]:\//.test(path);
+    return resolvePluginDirectory(
+      adapter.getBasePath(),
+      this.app.vault.configDir,
+      this.manifest.id,
+      this.manifest.dir,
+    );
   }
 }
 

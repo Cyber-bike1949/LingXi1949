@@ -2,8 +2,31 @@ import * as assert from 'node:assert/strict';
 import path from 'node:path';
 import test from 'node:test';
 
-import { createIrohLoader } from './irohRuntime.ts';
+import { createIrohLoader, resolvePluginDirectory } from './irohRuntime.ts';
 import type { IrohModule } from './irohStreams.ts';
+
+test('resolves plugin directory as absolute on POSIX when the manifest path is vault-relative', () => {
+  assert.equal(
+    resolvePluginDirectory('/tmp/vault', '.obsidian', 'lingxi-bridge', '.obsidian/plugins/lingxi-bridge'),
+    '/tmp/vault/.obsidian/plugins/lingxi-bridge',
+  );
+});
+
+test('resolves plugin directory as absolute on Windows when the manifest path is vault-relative', () => {
+  assert.equal(
+    resolvePluginDirectory(
+      'C:\\Vault', '.obsidian', 'lingxi-bridge', '.obsidian/plugins/lingxi-bridge', path.win32,
+    ),
+    'C:\\Vault\\.obsidian\\plugins\\lingxi-bridge',
+  );
+});
+
+test('preserves an absolute plugin path supplied by Obsidian', () => {
+  assert.equal(
+    resolvePluginDirectory('/tmp/vault', '.obsidian', 'lingxi-bridge', '/custom/plugins/lingxi-bridge'),
+    '/custom/plugins/lingxi-bridge',
+  );
+});
 
 test('loads iroh from the plugin-local node_modules directory', async () => {
   const expected = {} as IrohModule;
