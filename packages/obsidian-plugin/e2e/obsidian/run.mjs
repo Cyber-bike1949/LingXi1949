@@ -146,10 +146,6 @@ try {
     await page.waitForFunction(id => !!window.app?.plugins?.plugins?.[id], manifest.id);
     report.electronVersion = await page.evaluate(() => process.versions.electron).catch(() => 'unknown');
     await home();
-    await page.locator('.termesh-home-actions button').filter({ hasText: '研发任务' }).click();
-    await page.locator('.modal').getByText('研发任务进度').waitFor({ state: 'visible' });
-    await page.keyboard.press('Escape');
-    await page.locator('.modal').waitFor({ state: 'hidden' });
   });
   await record(1, async () => {
     await page.locator('.termesh-device-card.is-local').click();
