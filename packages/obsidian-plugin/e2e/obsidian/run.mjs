@@ -98,14 +98,20 @@ try {
     logs.push('accepted the first-run vault trust prompt');
   }
   const home = async () => {
-    const name = await page.evaluate(id => window.app.commands.commands[`${id}:open-terminal`].name, manifest.id);
-    const launcher = page.getByText(name, { exact: true }).last();
-    if (await launcher.isVisible().catch(() => false)) {
-      await launcher.click();
-    } else {
-      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+p' : 'Control+p');
-      await page.locator('.prompt-input').fill(name);
-      await page.locator('.suggestion-item').first().click();
+    const commandId = `${manifest.id}:open-terminal`;
+    const name = await page.evaluate(id => window.app.commands.commands[id].name, commandId);
+    const launchers = page.getByText(name, { exact: true });
+    let launched = false;
+    for (let index = 0; index < await launchers.count(); index += 1) {
+      const launcher = launchers.nth(index);
+      if (await launcher.isVisible().catch(() => false)) {
+        await launcher.click();
+        launched = true;
+        break;
+      }
+    }
+    if (!launched) {
+      await page.evaluate(id => window.app.commands.executeCommandById(id), commandId);
     }
     await page.locator('.termesh-device-card.is-local').waitFor({ state: 'visible' });
   };
