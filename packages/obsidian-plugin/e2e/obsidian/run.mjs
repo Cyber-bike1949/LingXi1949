@@ -156,6 +156,18 @@ try {
   await record(0, async () => {
     await page.waitForFunction(id => !!window.app?.plugins?.plugins?.[id], manifest.id);
     report.electronVersion = await page.evaluate(() => process.versions.electron).catch(() => 'unknown');
+    const runtimePath = await page.evaluate(id => {
+      const plugin = window.app.plugins.plugins[id];
+      const directory = plugin.getPluginDir();
+      const runtime = `${directory}/native/iroh/iroh-runtime.node`;
+      return {
+        directory,
+        manifestDirectory: plugin.manifest.dir,
+        runtime,
+        exists: require('node:fs').existsSync(runtime),
+      };
+    }, manifest.id);
+    report.electronPluginRuntime = runtimePath;
     await home();
   });
   await record(1, async () => {
