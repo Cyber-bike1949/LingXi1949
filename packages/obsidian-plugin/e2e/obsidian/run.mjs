@@ -133,7 +133,7 @@ try {
   };
   await record(0, async () => {
     await page.waitForFunction(id => !!window.app?.plugins?.plugins?.[id], manifest.id);
-    report.obsidianVersion = await page.evaluate(() => process.versions.electron).catch(() => 'unknown');
+    report.electronVersion = await page.evaluate(() => process.versions.electron).catch(() => 'unknown');
     await home();
   });
   await record(1, async () => {
@@ -143,7 +143,10 @@ try {
   await record(2, async () => { await command(`LINGXI_LOCAL_${randomBytes(6).toString('hex')}`); });
   await record(3, async () => {
     await home();
-    await page.locator('.termesh-device-card.is-add').click();
+    const addDeviceCard = page.locator('.termesh-device-card.is-add');
+    await addDeviceCard.focus();
+    await page.keyboard.press('Enter');
+    await page.locator('.termesh-add-device-modal').waitFor({ state: 'visible' });
     await page.locator('.termesh-add-device-modal input').fill('UI test target');
     await page.locator('.termesh-add-device-modal textarea').fill(ticket);
     await page.locator('.termesh-add-device-modal .mod-cta').click();
