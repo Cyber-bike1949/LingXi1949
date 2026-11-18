@@ -248,6 +248,11 @@ try {
     // Keep the rendered snapshot visible while ensuring screenshots contain no absolute paths.
     await tasksView.locator('input').fill('');
     await tasksView.locator('input').blur();
+    await tasksView.locator('input').evaluate(input => input.setAttribute('placeholder', ''));
+    await page.evaluate(() => {
+      for (const leaf of window.app.workspace.getLeavesOfType('terminal-view')) leaf.detach();
+    });
+    await tasksView.waitFor({ state: 'visible' });
   });
 } catch (error) {
   cases[current].status = 'failed'; cases[current].error = error.stack ?? String(error);
