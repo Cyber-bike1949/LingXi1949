@@ -177,6 +177,7 @@ try {
   await record(2, async () => { await command(`LINGXI_LOCAL_${randomBytes(6).toString('hex')}`); });
   await record(3, async () => {
     await home();
+    await page.bringToFront();
     const addDeviceCard = page.locator('.termesh-device-card.is-add');
     const pairingModal = page.locator('.termesh-add-device-modal');
     await addDeviceCard.click();
@@ -203,6 +204,13 @@ try {
         };
       }, manifest.id);
       logs.push(`home view pairing action: ${JSON.stringify(pairingView)}`);
+      await page.waitForTimeout(250);
+      const modalState = await page.evaluate(() => ({
+        activeModal: window.app.activeModal?.constructor?.name ?? null,
+        modalCount: document.querySelectorAll('.modal').length,
+        addModalCount: document.querySelectorAll('.termesh-add-device-modal').length,
+      }));
+      logs.push(`pairing modal state after render: ${JSON.stringify(modalState)}`);
     }
     await pairingModal.waitFor({ state: 'visible' });
     await page.locator('.termesh-add-device-modal input').fill('UI test target');
@@ -256,7 +264,16 @@ try {
     const script = `const fs=require('fs');const p=Buffer.from('${encodedPath}','base64').toString();fs.mkdirSync(require('path').dirname(p),{recursive:true});fs.writeFileSync(p,Buffer.from('${encodedSnapshot}','base64'));console.log('LINGXI_TASK_FIXTURE_READY')`;
     await command('LINGXI_TASK_FIXTURE_READY', `node -e "${script}"`);
     await home();
+    await page.bringToFront();
+    await page.evaluate(() => window.focus());
     await page.locator('.termesh-home-actions button').filter({ hasText: '研发任务' }).click();
+    await page.waitForTimeout(250);
+    const modalState = await page.evaluate(() => ({
+      activeModal: window.app.activeModal?.constructor?.name ?? null,
+      modalCount: document.querySelectorAll('.modal').length,
+      visibility: document.visibilityState,
+    }));
+    logs.push(`task modal state after click: ${JSON.stringify(modalState)}`);
     const modal = page.locator('.modal');
     await modal.getByText('研发任务进度').waitFor();
     await modal.locator('input').fill(fixturePath);
@@ -270,6 +287,7 @@ try {
     await task.getByText('Web Demo CI · success').waitFor();
   });
   await record(6, async () => {
+    await page.bringToFront();
     await page.locator('.terminal-history-action:visible').last().click();
     await page.locator('.modal').getByText('历史操作与命令组').waitFor({ state: 'visible' });
     await page.keyboard.press('Escape');
