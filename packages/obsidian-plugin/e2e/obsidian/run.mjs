@@ -3,7 +3,7 @@ import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile, readFile, cp } from 'node:fs/promises';
-import { join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
@@ -228,11 +228,9 @@ try {
         events: [],
       }],
     };
-    const encodedSnapshot = Buffer.from(JSON.stringify(snapshot)).toString('base64');
     const fixturePath = join(work, 'orchestrator-status', 'tasks.json');
-    const encodedPath = Buffer.from(fixturePath).toString('base64');
-    const script = `const fs=require('fs');const p=Buffer.from('${encodedPath}','base64').toString();fs.mkdirSync(require('path').dirname(p),{recursive:true});fs.writeFileSync(p,Buffer.from('${encodedSnapshot}','base64'));console.log('LINGXI_TASK_FIXTURE_READY')`;
-    await command('LINGXI_TASK_FIXTURE_READY', `node -e "${script}"`);
+    await mkdir(dirname(fixturePath), { recursive: true });
+    await writeFile(fixturePath, JSON.stringify(snapshot));
     await home();
     await page.bringToFront();
     await page.locator('.termesh-home-actions button').filter({ hasText: '研发任务' }).click();
