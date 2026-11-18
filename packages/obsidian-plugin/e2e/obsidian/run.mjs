@@ -144,8 +144,7 @@ try {
   await record(3, async () => {
     await home();
     const addDeviceCard = page.locator('.termesh-device-card.is-add');
-    await addDeviceCard.focus();
-    await page.keyboard.press('Enter');
+    await addDeviceCard.evaluate(card => card.click());
     await page.locator('.termesh-add-device-modal').waitFor({ state: 'visible' });
     await page.locator('.termesh-add-device-modal input').fill('UI test target');
     await page.locator('.termesh-add-device-modal textarea').fill(ticket);
