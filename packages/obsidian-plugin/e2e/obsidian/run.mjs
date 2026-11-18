@@ -83,11 +83,8 @@ try {
   application = { close: async () => browser.close() };
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => logs.push(`pageerror: ${error.message}`));
-  const trustButton = page.getByText(/Trust author and enable plugins/i).last();
-  if (await trustButton.count()) {
-    await trustButton.click();
-    await trustButton.waitFor({ state: 'hidden', timeout: 10000 });
-  }
+  const trustButton = page.locator('.mod-cta').filter({ hasText: /Trust author and enable plugins/i }).last();
+  if (await trustButton.count()) await trustButton.click({ force: true });
   const home = async () => {
     const name = await page.evaluate(id => window.app.commands.commands[`${id}:open-terminal`].name, manifest.id);
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+p' : 'Control+p');
@@ -186,6 +183,7 @@ try {
   });
 } catch (error) {
   cases[current].status = 'failed'; cases[current].error = error.stack ?? String(error);
+  if (page) logs.push(`page text: ${await page.locator('body').innerText().catch(() => '<unavailable>')}`);
   if (page) await page.screenshot({ path: join(output, 'failure.png') }).catch(() => {});
   process.exitCode = 1;
 } finally {
