@@ -8,6 +8,8 @@
 
 4.0 新增：让 B 上的 Codex / Claude 通过 MCP 在已选远程设备上读写文件和执行命令。[A、B、C 三端首次使用指南](docs/remote-tasks-first-run.zh-CN.md) · [工具参数与限制](REMOTE_TASKS.md) · [验收记录](IMPLEMENTATION_4.0.md)。
 
+研发编排 MVP：使用控制端服务创建经人工批准的需求/用例任务，由 LingXi、AI CLI 和 GitHub Actions 分阶段执行；可在 Obsidian 的“研发任务”面板查看被控设备上的脱敏状态镜像。[第一次使用指南](../../docs/研发编排-新手使用指南.md) · [技术架构说明](../../docs/研发编排-技术架构说明.md)。
+
 **告别上下文搬运：笔记一键交给 Agent。**
 
 <table>

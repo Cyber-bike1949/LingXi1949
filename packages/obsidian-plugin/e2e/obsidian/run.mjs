@@ -11,7 +11,7 @@ import { once } from 'node:events';
 const { values: args } = parseArgs({ options: Object.fromEntries(['obsidian','agent','plugin','output'].map(k => [k,{type:'string'}])) });
 const output = resolve(args.output ?? 'test-results/obsidian');
 await mkdir(output, { recursive: true });
-const cases = ['插件加载','打开本地终端','界面输入命令与输出','连接远程设备','断开后重连'].map(name => ({ name, status: 'not-run' }));
+const cases = ['插件加载','打开本地终端','界面输入命令与输出','连接远程设备','断开后重连','研发任务进度与测试报告'].map(name => ({ name, status: 'not-run' }));
 const report = { platform: process.platform, arch: process.arch, node: process.version, startedAt: new Date().toISOString(), cases };
 let application, page, agent;
 let current = 0;
@@ -69,10 +69,10 @@ try {
     await page.locator('.suggestion-item').first().click();
     await page.locator('.termesh-device-card.is-local').waitFor({ state: 'visible' });
   };
-  const command = async marker => {
+  const command = async (marker, shellCommand = `echo ${marker}`) => {
     const input = page.locator('.xterm-helper-textarea:visible').last();
     await input.focus();
-    await page.keyboard.type(`echo ${marker}`);
+    await page.keyboard.type(shellCommand);
     await page.keyboard.press('Enter');
     // Read the real renderer buffer; commands are sent only through keyboard events.
     await page.waitForFunction(({id,marker}) => {
@@ -111,6 +111,52 @@ try {
     await page.locator('.termesh-device-card.is-remote:not(.status-connected)').waitFor();
     await page.locator('.termesh-device-card.is-remote').click();
     await command(`LINGXI_RECONNECTED_${randomBytes(6).toString('hex')}`);
+  });
+  await record(5, async () => {
+    const snapshot = {
+      schemaVersion: 1,
+      source: 'lingxi-orchestrator',
+      repository: 'example/web-app',
+      updatedAt: new Date().toISOString(),
+      tasks: [{
+        id: 'RND-UI-001',
+        title: '任务列表支持状态筛选',
+        state: 'CI_VERIFYING',
+        branch: 'feat/ai-RND-UI-001',
+        updatedAt: new Date().toISOString(),
+        currentNode: 'e2e',
+        nodes: [
+          { kind: 'develop', state: 'SUCCEEDED', data: { deliverySha: 'a'.repeat(40) } },
+          { kind: 'test', state: 'SUCCEEDED', data: { passed: true } },
+          { kind: 'ci', state: 'SUCCEEDED', data: { passed: true } },
+          { kind: 'e2e', state: 'RUNNING', data: {} },
+        ],
+        workflows: [
+          { name: 'Web Demo CI', status: 'completed', conclusion: 'success', url: 'https://github.com/example/web-app/actions/runs/1' },
+        ],
+        artifacts: [{ kind: 'test-report', sha: 'b'.repeat(64) }],
+        testReport: { url: 'https://github.com/example/web-app/blob/main/TEST-HANDOFF.md', results: '用例 8 项，通过 8 项，失败 0 项。' },
+        events: [],
+      }],
+    };
+    const encodedSnapshot = Buffer.from(JSON.stringify(snapshot)).toString('base64');
+    const fixturePath = join(work, 'orchestrator-status', 'tasks.json');
+    const encodedPath = Buffer.from(fixturePath).toString('base64');
+    const script = `const fs=require('fs');const p=Buffer.from('${encodedPath}','base64').toString();fs.mkdirSync(require('path').dirname(p),{recursive:true});fs.writeFileSync(p,Buffer.from('${encodedSnapshot}','base64'));console.log('LINGXI_TASK_FIXTURE_READY')`;
+    await command('LINGXI_TASK_FIXTURE_READY', `node -e "${script}"`);
+    await home();
+    await page.locator('.termesh-home-actions button').filter({ hasText: '研发任务' }).click();
+    const modal = page.locator('.modal');
+    await modal.getByText('研发任务进度').waitFor();
+    await modal.locator('input').fill(fixturePath);
+    await modal.getByRole('button', { name: '刷新任务' }).click();
+    const task = modal.locator('details').filter({ hasText: 'RND-UI-001' });
+    await task.waitFor();
+    await task.locator('summary').click();
+    await task.getByText('端到端测试：执行中').waitFor();
+    await task.getByText('用例 8 项，通过 8 项，失败 0 项。').waitFor();
+    await task.getByText('打开交接报告').waitFor();
+    await task.getByText('Web Demo CI · success').waitFor();
   });
 } catch (error) {
   cases[current].status = 'failed'; cases[current].error = error.stack ?? String(error);

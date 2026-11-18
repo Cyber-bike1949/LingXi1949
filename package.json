@@ -1,6 +1,6 @@
 {
   "name": "lingxi-monorepo",
-  "version": "5.0.6",
+  "version": "5.0.7",
   "private": true,
   "packageManager": "pnpm@10.33.4",
   "scripts": {
@@ -10,7 +10,9 @@
     "build:remote": "pnpm --dir packages/remote build",
     "test:remote": "pnpm --dir packages/remote test",
     "test:e2e:remote": "pnpm --dir packages/remote test:e2e",
-    "build": "pnpm build:plugin && pnpm build:remote",
-    "test": "pnpm test:plugin && pnpm test:remote"
+    "build:orchestrator": "pnpm --dir packages/orchestrator build",
+    "test:orchestrator": "pnpm --dir packages/orchestrator test",
+    "build": "pnpm build:plugin && pnpm build:remote && pnpm build:orchestrator",
+    "test": "pnpm test:plugin && pnpm test:remote && pnpm test:orchestrator"
   }
 }

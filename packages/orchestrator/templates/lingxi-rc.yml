@@ -1,0 +1,50 @@
+name: LingXi RC Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Exact verified delivery commit SHA
+        required: true
+        type: string
+      version:
+        description: Candidate version (x.y.z-rc.N)
+        required: true
+        type: string
+      artifact_path:
+        description: Build output path relative to the repository root
+        required: true
+        default: dist
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: LingXi RC Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate RC request
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "${{ inputs.sha }}" =~ ^[0-9a-fA-F]{40}$ ]]
+          [[ "${{ inputs.version }}" =~ ^[0-9]+\.[0-9]+\.[0-9]+-rc\.[0-9]+$ ]]
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.sha }}
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.33.4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test
+      - run: pnpm build
+      - uses: actions/upload-artifact@v7
+        with:
+          name: rc-${{ inputs.version }}-${{ github.sha }}
+          path: ${{ inputs.artifact_path }}
+          if-no-files-found: error

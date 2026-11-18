@@ -1,3 +1,9 @@
+## [5.0.7] - 2026-11-19
+
+- Added an Obsidian “研发任务” view for task progress, CI/E2E results, test handoff reports, and artifact summaries from a paired device.
+- Added a first-run orchestration guide and a detailed architecture/data-flow guide.
+- Added real Obsidian UI E2E coverage for the task progress view, including sanitized synthetic test evidence.
+
 ## [5.0.6] - 2026-11-12
 
 - Prepared the plugin release metadata for 5.0.6.

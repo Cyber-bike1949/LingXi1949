@@ -7,7 +7,7 @@ on:
         description: Semantic version tag matching packages/remote/package.json
         required: true
         type: string
-        default: 'remote-5.0.5'
+        default: 'remote-5.0.7'
   push:
     tags: ['remote-*']
 
@@ -42,6 +42,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$RELEASE_VERSION" =~ ^remote-[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Formal release tag must be stable'; exit 1; }
           package_version="$(node -p "require('./package.json').version")"
           test "$RELEASE_VERSION" = "remote-$package_version"
       - uses: pnpm/action-setup@v5

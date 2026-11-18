@@ -911,6 +911,9 @@ export default class TerminalPlugin extends Plugin {
       deviceShortcutGroups: Array.isArray(loaded?.deviceShortcutGroups)
         ? loaded.deviceShortcutGroups.filter((group) => group && group.schemaVersion === 1)
         : [],
+      orchestratorStatusPaths: loaded?.orchestratorStatusPaths && typeof loaded.orchestratorStatusPaths === 'object' && !Array.isArray(loaded.orchestratorStatusPaths)
+        ? Object.fromEntries(Object.entries(loaded.orchestratorStatusPaths).filter((entry): entry is [string, string] => typeof entry[1] === 'string'))
+        : {},
     };
   }
 

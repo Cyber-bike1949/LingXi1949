@@ -1509,14 +1509,17 @@ mod tests {
         (controller, connection)
     }
 
-    async fn open_session(connection: &Connection) -> (TestStream, OpenedPayload) {
+    async fn open_session_at(
+        connection: &Connection,
+        work_dir: Option<&str>,
+    ) -> (TestStream, OpenedPayload) {
         let (send, recv) = within(connection.open_bi()).await.unwrap();
         let mut stream = TestStream::new(send, recv);
         stream
             .send_frame(Frame::Open(OpenPayload {
                 cols: 80,
                 rows: 24,
-                work_dir: None,
+                work_dir: work_dir.map(str::to_owned),
                 shell: None,
             }))
             .await;
@@ -1524,6 +1527,10 @@ mod tests {
             Frame::Opened(payload) => (stream, payload),
             other => panic!("expected opened, got {other:?}"),
         }
+    }
+
+    async fn open_session(connection: &Connection) -> (TestStream, OpenedPayload) {
+        open_session_at(connection, None).await
     }
 
     /// Opens an fs-list-and-watch bi-stream (the `FsList`-first counterpart
@@ -1972,10 +1979,17 @@ mod tests {
     fn a_full_terminal_session_works_over_loopback_quic() {
         let runtime = tokio::runtime::Runtime::new().unwrap();
         runtime.block_on(async {
-            let (agent, code, serve_task, _receive_root) = start_agent(4).await;
+            let (agent, code, serve_task, receive_root) = start_agent(4).await;
             let (controller, connection) = connect_controller(&code).await;
 
-            let (mut stream, opened) = open_session(&connection).await;
+            // Parallel test cases may also open PTYs. Give this test its own
+            // work directories so the process-wide worktree claim cannot race.
+            let first_work = receive_root.path().join("full-session-first");
+            let second_work = receive_root.path().join("full-session-second");
+            std::fs::create_dir_all(&first_work).unwrap();
+            std::fs::create_dir_all(&second_work).unwrap();
+            let (mut stream, opened) =
+                open_session_at(&connection, Some(first_work.to_str().unwrap())).await;
             assert_eq!(opened.shell, "/bin/sh");
 
             // Real shell echo round-trip.
@@ -2006,7 +2020,8 @@ mod tests {
 
             // A second concurrent session on the same connection (doc 4
             // decision 4), fully independent.
-            let (mut second, second_opened) = open_session(&connection).await;
+            let (mut second, second_opened) =
+                open_session_at(&connection, Some(second_work.to_str().unwrap())).await;
             assert_ne!(second_opened.session_id, opened.session_id);
             second
                 .send_frame(Frame::Data(b"echo second-session-marker\n".to_vec()))

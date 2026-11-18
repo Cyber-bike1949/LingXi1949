@@ -7,7 +7,7 @@ on:
         description: Semantic version tag matching packages/obsidian-plugin/manifest.json
         required: true
         type: string
-        default: '5.0.3'
+        default: '5.0.7'
   push:
     tags: ['5.*.*']
 
@@ -40,7 +40,7 @@ jobs:
           const versions = JSON.parse(fs.readFileSync('packages/obsidian-plugin/versions.json', 'utf8'));
           const packageJson = JSON.parse(fs.readFileSync('packages/obsidian-plugin/package.json', 'utf8'));
           const changelog = fs.readFileSync('packages/obsidian-plugin/CHANGELOG.md', 'utf8');
-          if (!/^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/.test(version)) throw new Error('Invalid semantic version tag');
+          if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error('Formal release tag must be a stable semantic version');
           if (JSON.stringify(rootManifest) !== JSON.stringify(manifest)) throw new Error('Root manifest.json must match packages/obsidian-plugin/manifest.json');
           if (JSON.stringify(rootVersions) !== JSON.stringify(versions)) throw new Error('Root versions.json must match packages/obsidian-plugin/versions.json');
           if (manifest.version !== version || packageJson.version !== version) throw new Error(`Version mismatch: tag=${version}, manifest=${manifest.version}, package=${packageJson.version}`);
@@ -87,6 +87,9 @@ jobs:
         with:
           toolchain: 1.97.1
           targets: ${{ matrix.target }}
+      - name: Install Linux PTY build dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -qq && sudo apt-get install -y pkg-config libssl-dev
       - run: pnpm install --frozen-lockfile --ignore-workspace
       - run: cargo build --release --target ${{ matrix.target }} --manifest-path rust-servers/Cargo.toml
       - name: Stage native PTY binary

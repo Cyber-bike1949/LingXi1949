@@ -40,6 +40,8 @@ export interface PlatformCustomShellPaths {
  * Terminal settings interface
  */
 export interface TerminalSettings {
+  /** Per-device path of a LingXi orchestrator status mirror on the remote device. */
+  orchestratorStatusPaths?: Record<string, string>;
   // Default shell program type for each platform (stored separately)
   platformShells: PlatformShellConfig;
 
@@ -413,6 +415,7 @@ export function setCurrentPlatformCustomShellPath(
  * Default terminal settings
  */
 export const DEFAULT_TERMINAL_SETTINGS: TerminalSettings = {
+  orchestratorStatusPaths: {},
   platformShells: { ...DEFAULT_PLATFORM_SHELLS },
   platformCustomShellPaths: { ...DEFAULT_PLATFORM_CUSTOM_SHELL_PATHS },
   shellArgs: [],

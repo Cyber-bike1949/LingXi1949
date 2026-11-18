@@ -1,0 +1,63 @@
+{
+  "repository": "owner/example-web",
+  "defaultBranch": "main",
+  "developmentBranchPattern": "feat/ai-{taskId}",
+  "commands": ["pnpm test", "pnpm build"],
+  "runtime": {
+    "remotes": {
+      "development": {
+        "lingxiCli": "/absolute/path/to/packages/remote/packages/lingxi-mcp/cli.mjs",
+        "session": "linux-development-session-id",
+        "resourceId": "controlled-device-01",
+        "worktreeRoot": "/worktrees/development"
+      },
+      "test": {
+        "lingxiCli": "/absolute/path/to/packages/remote/packages/lingxi-mcp/cli.mjs",
+        "session": "linux-test-session-id",
+        "resourceId": "controlled-device-01",
+        "worktreeRoot": "/worktrees/test"
+      }
+    },
+    "agent": {
+      "executable": "codex",
+      "args": ["exec", "--ignore-user-config", "--sandbox", "read-only", "--ephemeral", "-"],
+      "target": "local",
+      "mcp": {
+        "name": "lingxi-orchestrator",
+        "command": "/absolute/path/to/node",
+        "serverArgs": ["/absolute/path/to/packages/remote/packages/lingxi-mcp/cli.mjs", "serve", "--home", "/absolute/path/to/lingxi-mcp-home", "--session", "existing-session-id"],
+        "defaultToolsApprovalMode": "approve"
+      },
+      "timeoutMs": 3600000
+    },
+    "tester": {
+      "executable": "codex",
+      "args": ["exec", "--ignore-user-config", "--sandbox", "read-only", "--ephemeral", "-"],
+      "target": "local",
+      "mcp": {
+        "name": "lingxi-orchestrator",
+        "command": "/absolute/path/to/node",
+        "serverArgs": ["/absolute/path/to/packages/remote/packages/lingxi-mcp/cli.mjs", "serve", "--home", "/absolute/path/to/lingxi-mcp-home", "--session", "existing-session-id"],
+        "defaultToolsApprovalMode": "approve"
+      },
+      "timeoutMs": 3600000
+    },
+    "workflows": {
+      "required": ["CI"],
+      "e2eRequired": ["Real UI"],
+      "e2eDispatch": {
+        "workflow": "ui.yml",
+        "inputs": { "target": "hosted" }
+      },
+      "rc": {
+        "workflow": "lingxi-rc.yml",
+        "required": ["LingXi RC Build"],
+        "inputs": { "artifact_path": "dist" }
+      }
+    },
+    "taskMirror": {
+      "remotePath": ".lingxi-orchestrator\\tasks.json",
+      "remoteFinalPath": "/var/lib/lingxi/orchestrator-status/tasks.json"
+    }
+  }
+}

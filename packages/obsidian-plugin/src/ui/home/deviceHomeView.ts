@@ -11,6 +11,7 @@ import { pairDevice, type PairDeviceResult } from '../../services/remote/deviceP
 import type { Disposable } from '../../services/remote/transport';
 import { ShortcutGroupStore, type ShortcutGroup } from '../../services/terminal/shortcutGroupStore';
 import { OperationHistoryModal } from '../terminal/operationHistoryModal';
+import { RemoteTasksModal } from '../terminal/remoteTasksModal';
 import { AddDeviceModal } from './addDeviceModal';
 import { RemoveDeviceModal } from './removeDeviceModal';
 
@@ -98,7 +99,12 @@ export class DeviceHomeView extends ItemView {
     refreshButton.addEventListener('click', () => { void this.refreshDevices(); });
 
     const connections = this.plugin.getDeviceConnectionManager();
-    const cards = buildDeviceHomeCards(this.plugin.getPairedDeviceStore().list(), connections);
+    const pairedDevices = this.plugin.getPairedDeviceStore().list();
+    const taskButton = actions.createEl('button', { text: '研发任务' });
+    taskButton.setAttribute('aria-label', '查看被控设备的研发任务进度');
+    taskButton.disabled = !pairedDevices.some(device => connections.isConnected(device.nodeId));
+    taskButton.addEventListener('click', () => { new RemoteTasksModal(this.plugin).open(); });
+    const cards = buildDeviceHomeCards(pairedDevices, connections);
     const grid = container.createDiv({ cls: 'termesh-device-grid' });
     for (const card of cards) this.renderCard(grid, card);
   }

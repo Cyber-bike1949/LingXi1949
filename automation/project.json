@@ -1,0 +1,22 @@
+{
+  "repository": "Cyber-bike1949/LingXi1949",
+  "defaultBranch": "main",
+  "developmentBranchPattern": "feat/ai-{taskId}",
+  "releaseUnits": {
+    "obsidian-plugin": {
+      "paths": ["packages/obsidian-plugin/**", "packages/core/**", "manifest.json", "versions.json"],
+      "commands": ["pnpm build:plugin", "pnpm lint:plugin", "pnpm test:plugin"],
+      "requiredWorkflows": ["Monorepo CI", "Real Obsidian UI"]
+    },
+    "remote": {
+      "paths": ["packages/remote/**", "packages/core/**"],
+      "commands": ["pnpm build:remote", "pnpm test:remote", "pnpm test:e2e:remote"],
+      "requiredWorkflows": ["Monorepo CI"]
+    },
+    "core": {
+      "paths": ["packages/core/**"],
+      "consumerVerification": ["obsidian-plugin", "remote"]
+    }
+  },
+  "commands": ["pnpm test", "pnpm build"]
+}
