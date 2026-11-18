@@ -1,5 +1,6 @@
 import { chromium } from 'playwright';
 import { parseArgs } from 'node:util';
+import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdir, mkdtemp, writeFile, readFile, cp } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
@@ -20,9 +21,16 @@ const logs = [];
 const record = async (index, fn) => {
   current = index;
   const start = Date.now();
-  await fn();
-  cases[index].status = 'passed'; cases[index].durationMs = Date.now() - start;
-  await page.screenshot({ path: join(output, `${index + 1}-passed.png`) });
+  try {
+    await fn();
+    cases[index].status = 'passed'; cases[index].durationMs = Date.now() - start;
+    await page.screenshot({ path: join(output, `${index + 1}-passed.png`) });
+  } catch (error) {
+    cases[index].status = 'failed'; cases[index].durationMs = Date.now() - start;
+    cases[index].error = error.stack ?? String(error);
+    logs.push(`${cases[index].name} failed: ${cases[index].error}`);
+    await page.screenshot({ path: join(output, `${index + 1}-failed.png`) }).catch(() => {});
+  }
 };
 
 try {
@@ -56,6 +64,11 @@ try {
     agent.once('error', error => { clearTimeout(timer); rej(error); });
     agent.once('exit', code => { clearTimeout(timer); rej(new Error(`Test Agent exited ${code}`)); });
   });
+  const iroh = createRequire(join(plugin, 'package.json'))('@number0/iroh');
+  const nodeId = iroh.EndpointTicket.fromString(ticket).endpointAddr().id().toString();
+  const pluginSettings = JSON.parse(await readFile(join(pluginDir, 'data.json'), 'utf8'));
+  pluginSettings.pairedDevices = [{ name: 'UI test target', ticket, nodeId, lastConnectedAt: null, lastKnownOnline: false }];
+  await writeFile(join(pluginDir, 'data.json'), JSON.stringify(pluginSettings));
   const portServer = createServer();
   await new Promise((res, rej) => portServer.listen(0, '127.0.0.1', res).once('error', rej));
   const debugPort = portServer.address().port;
@@ -181,6 +194,9 @@ try {
   });
   await record(4, async () => {
     await home();
+    const remoteCard = page.locator('.termesh-device-card.is-remote').first();
+    await remoteCard.click();
+    await page.locator('.termesh-device-card.is-remote.status-connected').waitFor({ state: 'visible' });
     await page.locator('.termesh-device-card.is-remote.status-connected .termesh-device-more').click();
     // The disconnect action is the first menu item when connected.
     await page.locator('.menu .menu-item').first().click();
