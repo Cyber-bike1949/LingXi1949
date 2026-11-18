@@ -7,12 +7,9 @@ import { ItemView, Menu, Notice, setIcon, setTooltip } from 'obsidian';
 import type TerminalPlugin from '../../main';
 import { t, i18n } from '../../i18n';
 import { buildDeviceHomeCards, getRefreshNodeIds, type DeviceHomeCard } from '../../services/remote/deviceHomeModel';
-import { pairDevice, type PairDeviceResult } from '../../services/remote/devicePairing';
 import type { Disposable } from '../../services/remote/transport';
 import { ShortcutGroupStore, type ShortcutGroup } from '../../services/terminal/shortcutGroupStore';
 import { OperationHistoryModal } from '../terminal/operationHistoryModal';
-import { RemoteTasksModal } from '../terminal/remoteTasksModal';
-import { AddDeviceModal } from './addDeviceModal';
 import { RemoveDeviceModal } from './removeDeviceModal';
 
 export const DEVICE_HOME_VIEW_TYPE = 'termesh-device-home';
@@ -65,6 +62,10 @@ export class DeviceHomeView extends ItemView {
     return Promise.resolve();
   }
 
+  refreshView(): void {
+    this.render();
+  }
+
   private render(): void {
     const container = this.contentEl;
     container.empty();
@@ -103,7 +104,7 @@ export class DeviceHomeView extends ItemView {
     const taskButton = actions.createEl('button', { text: '研发任务' });
     taskButton.setAttribute('aria-label', '查看被控设备的研发任务进度');
     taskButton.disabled = !pairedDevices.some(device => connections.isConnected(device.nodeId));
-    taskButton.addEventListener('click', () => { new RemoteTasksModal(this.plugin).open(); });
+    taskButton.addEventListener('click', () => { void this.plugin.activateRemoteTasksView(); });
     const cards = buildDeviceHomeCards(pairedDevices, connections);
     const grid = container.createDiv({ cls: 'termesh-device-grid' });
     for (const card of cards) this.renderCard(grid, card);
@@ -112,7 +113,7 @@ export class DeviceHomeView extends ItemView {
   private renderCard(grid: HTMLElement, card: DeviceHomeCard): void {
     if (card.kind === 'add') {
       const cardEl = this.createInteractiveCard(grid, 'termesh-device-card is-add', t('home.addDevice'), () => {
-        this.openAddDeviceModal();
+        void this.plugin.activateDevicePairingView();
       });
       const icon = cardEl.createDiv({ cls: 'termesh-device-icon' });
       setIcon(icon, 'plus');
@@ -294,30 +295,6 @@ export class DeviceHomeView extends ItemView {
     const status = parent.createDiv({ cls: `termesh-device-status status-${state}` });
     status.createSpan({ cls: 'termesh-status-dot' });
     status.createSpan({ text: label });
-  }
-
-  private openAddDeviceModal(): void {
-    new AddDeviceModal(this.app, {
-      addDevice: (code, name) => this.addDevice(code, name),
-      onAdded: () => {
-        new Notice(t('home.deviceAdded'));
-        this.render();
-      },
-    }).open();
-  }
-
-  private async addDevice(code: string, name: string): Promise<PairDeviceResult> {
-    const module = await this.plugin.loadIroh();
-    const result = pairDevice(
-      this.plugin.getPairedDeviceStore(),
-      (normalizedCode) => ({
-        nodeId: module.EndpointTicket.fromString(normalizedCode).endpointAddr().id().toString(),
-      }),
-      code,
-      name,
-    );
-    if (result.ok) await this.plugin.saveSettings();
-    return result;
   }
 
   private async openRemoteTerminal(nodeId: string): Promise<void> {

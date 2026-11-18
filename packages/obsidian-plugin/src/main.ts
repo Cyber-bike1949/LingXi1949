@@ -1,5 +1,6 @@
 import { BuiltinShortcutModal } from './ui/terminal/builtinShortcutModal';
-import { RemoteTasksModal } from './ui/terminal/remoteTasksModal';
+import { REMOTE_TASKS_VIEW_TYPE, RemoteTasksView } from './ui/terminal/remoteTasksView';
+import { DEVICE_PAIRING_VIEW_TYPE, AddDeviceView } from './ui/home/addDeviceView';
 import type { View, WorkspaceLeaf } from 'obsidian';
 import { addIcon, FileSystemAdapter, MarkdownView, Modal, Notice, Plugin, TFile, normalizePath, requestUrl, setIcon, setTooltip } from 'obsidian';
 import * as nodeFs from 'fs';
@@ -680,6 +681,14 @@ export default class TerminalPlugin extends Plugin {
       DEVICE_HOME_VIEW_TYPE,
       (leaf: WorkspaceLeaf) => new DeviceHomeView(leaf, this),
     );
+    this.registerView(
+      DEVICE_PAIRING_VIEW_TYPE,
+      (leaf: WorkspaceLeaf) => new AddDeviceView(leaf, this),
+    );
+    this.registerView(
+      REMOTE_TASKS_VIEW_TYPE,
+      (leaf: WorkspaceLeaf) => new RemoteTasksView(leaf, this),
+    );
 
     // Register all commands
     this.registerCommands();
@@ -1137,7 +1146,25 @@ export default class TerminalPlugin extends Plugin {
     const leaf = existingLeaf ?? targetLeaf ?? workspace.getLeaf('tab');
     if (!existingLeaf) {
       await leaf.setViewState({ type: DEVICE_HOME_VIEW_TYPE, active: true });
+    } else {
+      (existingLeaf.view as DeviceHomeView).refreshView();
     }
+    workspace.setActiveLeaf(leaf, { focus: true });
+  }
+
+  async activateDevicePairingView(targetLeaf?: WorkspaceLeaf): Promise<void> {
+    const { workspace } = this.app;
+    const existingLeaf = workspace.getLeavesOfType(DEVICE_PAIRING_VIEW_TYPE)[0];
+    const leaf = existingLeaf ?? targetLeaf ?? workspace.getLeaf('tab');
+    if (!existingLeaf) await leaf.setViewState({ type: DEVICE_PAIRING_VIEW_TYPE, active: true });
+    workspace.setActiveLeaf(leaf, { focus: true });
+  }
+
+  async activateRemoteTasksView(targetLeaf?: WorkspaceLeaf): Promise<void> {
+    const { workspace } = this.app;
+    const existingLeaf = workspace.getLeavesOfType(REMOTE_TASKS_VIEW_TYPE)[0];
+    const leaf = existingLeaf ?? targetLeaf ?? workspace.getLeaf('tab');
+    if (!existingLeaf) await leaf.setViewState({ type: REMOTE_TASKS_VIEW_TYPE, active: true });
     workspace.setActiveLeaf(leaf, { focus: true });
   }
 
@@ -1786,7 +1813,7 @@ export default class TerminalPlugin extends Plugin {
     this.addCommand({
       id: 'remote-model-tasks',
       name: '远程模型任务',
-      callback: () => { new RemoteTasksModal(this).open(); },
+      callback: () => { void this.activateRemoteTasksView(); },
     });
     // Open terminal
     this.addCommand({

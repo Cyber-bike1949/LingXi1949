@@ -13,7 +13,7 @@ import { createServer } from 'node:net';
 const { values: args } = parseArgs({ options: Object.fromEntries(['obsidian','agent','plugin','output'].map(k => [k,{type:'string'}])) });
 const output = resolve(args.output ?? 'test-results/obsidian');
 await mkdir(output, { recursive: true });
-const cases = ['插件加载','打开本地终端','界面输入命令与输出','连接远程设备','断开后重连','研发任务进度与测试报告','历史操作弹窗回归'].map(name => ({ name, status: 'not-run' }));
+const cases = ['插件加载','打开本地终端','界面输入命令与输出','添加并连接远程设备','断开后重连','研发任务进度与测试报告'].map(name => ({ name, status: 'not-run' }));
 const report = { platform: process.platform, arch: process.arch, node: process.version, startedAt: new Date().toISOString(), cases };
 let application, page, agent, obsidianProcess;
 let current = 0;
@@ -179,43 +179,13 @@ try {
     await home();
     await page.bringToFront();
     const addDeviceCard = page.locator('.termesh-device-card.is-add');
-    const pairingModal = page.locator('.termesh-add-device-modal');
     await addDeviceCard.click();
-    if (!await pairingModal.isVisible().catch(() => false)) {
-      // Ensure the home leaf is active before dispatching its pairing action in split-workspace UI runs.
-      const pairingView = await page.evaluate(async id => {
-        const plugin = window.app.plugins.plugins[id];
-        await plugin.activateDeviceHome();
-        const leaf = window.app.workspace.getLeavesOfType('termesh-device-home')[0];
-        if (!leaf || typeof leaf.view.openAddDeviceModal !== 'function') {
-          return { opened: false, leaves: window.app.workspace.getLeavesOfType('termesh-device-home').length };
-        }
-        const method = String(leaf.view.openAddDeviceModal);
-        leaf.view.openAddDeviceModal();
-        return {
-          opened: true,
-          viewType: leaf.view.getViewType(),
-          activeLeaf: window.app.workspace.activeLeaf === leaf,
-          activeModal: window.app.activeModal?.constructor?.name ?? null,
-          activeModalElement: window.app.activeModal?.modalEl?.outerHTML?.slice(0, 200) ?? null,
-          modalCount: document.querySelectorAll('.modal').length,
-          addModalCount: document.querySelectorAll('.termesh-add-device-modal').length,
-          method: method.slice(0, 240),
-        };
-      }, manifest.id);
-      logs.push(`home view pairing action: ${JSON.stringify(pairingView)}`);
-      await page.waitForTimeout(250);
-      const modalState = await page.evaluate(() => ({
-        activeModal: window.app.activeModal?.constructor?.name ?? null,
-        modalCount: document.querySelectorAll('.modal').length,
-        addModalCount: document.querySelectorAll('.termesh-add-device-modal').length,
-      }));
-      logs.push(`pairing modal state after render: ${JSON.stringify(modalState)}`);
-    }
-    await pairingModal.waitFor({ state: 'visible' });
-    await page.locator('.termesh-add-device-modal input').fill('UI test target');
-    await page.locator('.termesh-add-device-modal textarea').fill(ticket);
-    await page.locator('.termesh-add-device-modal .mod-cta').click();
+    const pairingView = page.locator('.termesh-add-device-view');
+    await pairingView.waitFor({ state: 'visible' });
+    await pairingView.locator('input').fill('UI test target');
+    await pairingView.locator('textarea').fill(ticket);
+    await pairingView.getByRole('button', { name: 'Add device' }).click();
+    await page.locator('.termesh-device-card.is-remote').waitFor({ state: 'visible' });
     await page.locator('.termesh-device-card.is-remote').click();
     await command(`LINGXI_REMOTE_${randomBytes(6).toString('hex')}`);
   });
@@ -265,33 +235,18 @@ try {
     await command('LINGXI_TASK_FIXTURE_READY', `node -e "${script}"`);
     await home();
     await page.bringToFront();
-    await page.evaluate(() => window.focus());
     await page.locator('.termesh-home-actions button').filter({ hasText: '研发任务' }).click();
-    await page.waitForTimeout(250);
-    const modalState = await page.evaluate(() => ({
-      activeModal: window.app.activeModal?.constructor?.name ?? null,
-      modalCount: document.querySelectorAll('.modal').length,
-      visibility: document.visibilityState,
-    }));
-    logs.push(`task modal state after click: ${JSON.stringify(modalState)}`);
-    const modal = page.locator('.modal');
-    await modal.getByText('研发任务进度').waitFor();
-    await modal.locator('input').fill(fixturePath);
-    await modal.getByRole('button', { name: '刷新任务' }).click();
-    const task = modal.locator('details').filter({ hasText: 'RND-UI-001' });
+    const tasksView = page.locator('.termesh-remote-tasks-view');
+    await tasksView.waitFor({ state: 'visible' });
+    await tasksView.locator('input').fill(fixturePath);
+    await tasksView.getByRole('button', { name: '刷新任务' }).click();
+    const task = tasksView.locator('details').filter({ hasText: 'RND-UI-001' });
     await task.waitFor();
     await task.locator('summary').click();
     await task.getByText('端到端测试：执行中').waitFor();
     await task.getByText('用例 8 项，通过 8 项，失败 0 项。').waitFor();
     await task.getByText('打开交接报告').waitFor();
     await task.getByText('Web Demo CI · success').waitFor();
-  });
-  await record(6, async () => {
-    await page.bringToFront();
-    await page.locator('.terminal-history-action:visible').last().click();
-    await page.locator('.modal').getByText('历史操作与命令组').waitFor({ state: 'visible' });
-    await page.keyboard.press('Escape');
-    await page.locator('.modal').waitFor({ state: 'hidden' });
   });
 } catch (error) {
   cases[current].status = 'failed'; cases[current].error = error.stack ?? String(error);

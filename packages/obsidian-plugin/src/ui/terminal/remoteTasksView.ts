@@ -1,22 +1,35 @@
-import { Modal, Setting } from 'obsidian';
+import type { WorkspaceLeaf } from 'obsidian';
+import { ItemView, Setting } from 'obsidian';
 import type TerminalPlugin from '../../main';
+
+export const REMOTE_TASKS_VIEW_TYPE = 'termesh-remote-tasks';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-/** Reads task snapshots from a paired LingXi device over its authenticated connection. */
-export class RemoteTasksModal extends Modal {
+/** Persistent read-only task snapshot view backed by an authenticated device connection. */
+export class RemoteTasksView extends ItemView {
   private deviceId = '';
   private snapshotPath = '';
   private source: 'orchestrator' | 'mcp' = 'orchestrator';
   private busy = false;
 
-  constructor(private readonly plugin: TerminalPlugin) { super(plugin.app); }
+  private readonly plugin: TerminalPlugin;
 
-  onOpen(): void {
+  constructor(leaf: WorkspaceLeaf, plugin: TerminalPlugin) {
+    super(leaf);
+    this.plugin = plugin;
+  }
+
+  getViewType(): string { return REMOTE_TASKS_VIEW_TYPE; }
+  getDisplayText(): string { return '研发任务进度'; }
+  getIcon(): string { return 'workflow'; }
+
+  onOpen(): Promise<void> {
     this.contentEl.empty();
-    this.titleEl.setText('研发任务进度');
+    this.contentEl.addClass('termesh-remote-tasks-view');
+    this.contentEl.createEl('h2', { text: '研发任务进度' });
     this.contentEl.createEl('p', { text: '通过已配对设备连接读取任务状态镜像；任务执行及模型登录仍由控制端负责。' });
     const devices = this.plugin.getPairedDeviceStore().list();
     const connections = this.plugin.getDeviceConnectionManager();
@@ -49,6 +62,7 @@ export class RemoteTasksModal extends Modal {
     const results = this.contentEl.createDiv();
     new Setting(this.contentEl).addButton(button => button.setButtonText('刷新任务').onClick(() => { void this.refresh(results); }));
     this.contentEl.createEl('p', { text: '此视图只读。服务断开或镜像时间过旧时，页面会保留时间戳供你判断，不会把旧状态当作实时成功。' });
+    return Promise.resolve();
   }
 
   private async refresh(container: HTMLElement): Promise<void> {
@@ -158,5 +172,8 @@ export class RemoteTasksModal extends Modal {
     if (!tasks.length) container.createEl('p', { text: '暂无研发任务。' });
   }
 
-  onClose(): void { this.contentEl.empty(); }
+  onClose(): Promise<void> {
+    this.contentEl.empty();
+    return Promise.resolve();
+  }
 }
