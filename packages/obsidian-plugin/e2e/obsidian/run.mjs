@@ -263,6 +263,7 @@ try {
   }
   report.finishedAt = new Date().toISOString();
   report.passed = cases.every(c => c.status === 'passed');
+  if (!report.passed) process.exitCode = 1;
   await writeFile(join(output, 'report.json'), JSON.stringify(report, null, 2));
   await writeFile(join(output, 'runtime.log'), logs.join('\n'));
   console.log(JSON.stringify(report, null, 2));
