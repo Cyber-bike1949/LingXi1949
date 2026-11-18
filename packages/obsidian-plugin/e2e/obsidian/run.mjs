@@ -83,12 +83,19 @@ try {
   application = { close: async () => browser.close() };
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => logs.push(`pageerror: ${error.message}`));
-  const trustPromptVisible = (await page.locator('body').innerText()).includes('Trust author and enable plugins');
-  if (trustPromptVisible) {
-    const viewport = page.viewportSize() ?? await page.evaluate(() => ({ width: innerWidth, height: innerHeight }));
-    // Obsidian's first-run trust prompt is part of the desktop bootstrap. Its primary action is right-aligned in the centered modal.
-    await page.mouse.click(Math.round(viewport.width * 0.645), Math.round(viewport.height * 0.672));
-    logs.push(`accepted vault trust with mouse at ${Math.round(viewport.width * 0.645)},${Math.round(viewport.height * 0.672)}`);
+  const startupState = await Promise.race([
+    page.waitForFunction(id => !!window.app?.plugins?.plugins?.[id], manifest.id, { timeout: 30000 }).then(() => 'plugin-loaded'),
+    page.getByText(/Do you trust the author of this vault/i).waitFor({ state: 'visible', timeout: 30000 }).then(() => 'vault-trust'),
+  ]);
+  if (startupState === 'vault-trust') {
+    const trustPrompt = page.getByText(/Do you trust the author of this vault/i).last();
+    const trustButton = page.getByText(/Trust author and enable plugins/i).last();
+    await trustButton.waitFor({ state: 'visible' });
+    const bounds = await trustButton.boundingBox();
+    if (bounds) await page.mouse.click(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2);
+    else await trustButton.click({ force: true });
+    await trustPrompt.waitFor({ state: 'hidden', timeout: 10000 });
+    logs.push('accepted the first-run vault trust prompt');
   }
   const home = async () => {
     const name = await page.evaluate(id => window.app.commands.commands[`${id}:open-terminal`].name, manifest.id);
