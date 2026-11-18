@@ -83,8 +83,21 @@ try {
   application = { close: async () => browser.close() };
   page.setDefaultTimeout(30000);
   page.on('pageerror', error => logs.push(`pageerror: ${error.message}`));
-  const trustButton = page.locator('.mod-cta').filter({ hasText: /Trust author and enable plugins/i }).last();
-  if (await trustButton.count()) await trustButton.click({ force: true });
+  const trustControl = await page.evaluate(() => {
+    const label = 'Trust author and enable plugins';
+    const candidates = [...document.querySelectorAll('body *')].filter(element =>
+      element.children.length === 0 && element.textContent.trim().includes(label));
+    const visible = candidates.filter(element => {
+      const rect = element.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    });
+    const labelElement = visible.at(-1);
+    if (!labelElement) return null;
+    const control = labelElement.closest('button, [role="button"], .mod-cta') ?? labelElement;
+    control.click();
+    return { tag: control.tagName, className: String(control.className), text: control.textContent.trim() };
+  });
+  if (trustControl) logs.push(`accepted vault trust: ${JSON.stringify(trustControl)}`);
   const home = async () => {
     const name = await page.evaluate(id => window.app.commands.commands[`${id}:open-terminal`].name, manifest.id);
     await page.keyboard.press(process.platform === 'darwin' ? 'Meta+p' : 'Control+p');
