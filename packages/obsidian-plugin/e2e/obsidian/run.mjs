@@ -99,9 +99,14 @@ try {
   }
   const home = async () => {
     const name = await page.evaluate(id => window.app.commands.commands[`${id}:open-terminal`].name, manifest.id);
-    await page.keyboard.press(process.platform === 'darwin' ? 'Meta+p' : 'Control+p');
-    await page.locator('.prompt-input').fill(name);
-    await page.locator('.suggestion-item').first().click();
+    const launcher = page.getByText(name, { exact: true }).last();
+    if (await launcher.isVisible().catch(() => false)) {
+      await launcher.click();
+    } else {
+      await page.keyboard.press(process.platform === 'darwin' ? 'Meta+p' : 'Control+p');
+      await page.locator('.prompt-input').fill(name);
+      await page.locator('.suggestion-item').first().click();
+    }
     await page.locator('.termesh-device-card.is-local').waitFor({ state: 'visible' });
   };
   const command = async (marker, shellCommand = `echo ${marker}`) => {
