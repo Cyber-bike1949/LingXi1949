@@ -1,3 +1,9 @@
+## [5.0.8] - 2026-11-19
+
+### Fixed
+- Use Obsidian's network request path for native runtime downloads so configured proxy access works.
+- Install each version of the remote terminal runtime to a separate file, avoiding Windows `EPERM` errors when an older native module is locked.
+
 ## [5.0.7] - 2026-11-19
 
 - Added an Obsidian “研发任务” view for task progress, CI/E2E results, test handoff reports, and artifact summaries from a paired device.

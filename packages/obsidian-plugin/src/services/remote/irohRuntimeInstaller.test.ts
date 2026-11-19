@@ -71,7 +71,7 @@ test('rejects a runtime with a mismatched checksum', async (context) => {
   const installer = new IrohRuntimeInstaller(pluginDir, '1.5.0', fetchAsset);
 
   await assert.rejects(installer.ensureInstalled(), /checksum mismatch/);
-  assert.equal(fs.existsSync(path.join(pluginDir, 'native', 'iroh', 'iroh-runtime.node')), false);
+  assert.equal(fs.existsSync(path.join(pluginDir, 'native', 'iroh', 'iroh-runtime-1.5.0.node')), false);
 });
 
 test('falls back after the primary network path fails', async (context) => {

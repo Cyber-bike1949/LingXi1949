@@ -54,7 +54,7 @@ try {
   await mkdir(runtimeDir, { recursive: true });
   await cp(
     join(pluginDir, 'node_modules', '@number0', nativeRuntime[0], nativeRuntime[1]),
-    join(runtimeDir, 'iroh-runtime.node'),
+    join(runtimeDir, `iroh-runtime-${manifest.version}.node`),
   );
   await writeFile(join(runtimeDir, 'version.json'), JSON.stringify({ version: manifest.version }));
   await writeFile(join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify([manifest.id]));
@@ -159,7 +159,7 @@ try {
     const runtimePath = await page.evaluate(id => {
       const plugin = window.app.plugins.plugins[id];
       const directory = plugin.getPluginDir();
-      const runtime = `${directory}/native/iroh/iroh-runtime.node`;
+      const runtime = `${directory}/native/iroh/iroh-runtime-${plugin.manifest.version}.node`;
       return {
         directory,
         manifestDirectory: plugin.manifest.dir,

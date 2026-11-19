@@ -28,6 +28,7 @@ export function resolvePluginDirectory(
 interface IrohLoaderOptions {
   version: string;
   isOffline: () => boolean;
+  fetchAsset?: IrohRuntimeAssetFetcher;
   installRuntime?: (
     onProgress?: (progress: IrohRuntimeInstallProgress) => void,
   ) => Promise<IrohRuntimePaths>;
@@ -42,7 +43,7 @@ export function createIrohLoader(
 ): () => Promise<IrohModule> {
   const modulePath = path.join(pluginDir, 'node_modules', '@number0', 'iroh');
   const installer = options
-    ? new IrohRuntimeInstaller(pluginDir, options.version, undefined, options.fallbackFetchAsset)
+    ? new IrohRuntimeInstaller(pluginDir, options.version, options.fetchAsset, options.fallbackFetchAsset)
     : null;
   const installRuntime = options?.installRuntime ?? ((onProgress) => installer!.ensureInstalled(onProgress));
   let loadedModule: IrohModule | null = null;

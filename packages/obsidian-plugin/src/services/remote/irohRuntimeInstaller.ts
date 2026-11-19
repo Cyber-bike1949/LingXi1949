@@ -157,7 +157,9 @@ export class IrohRuntimeInstaller {
 
   private getRuntimePaths(): IrohRuntimePaths {
     return {
-      nativePath: path.join(this.runtimeDir, 'iroh-runtime.node'),
+      // Keep each plugin version at a distinct path. Windows cannot unlink a
+      // native addon after Node has mapped it into the process.
+      nativePath: path.join(this.runtimeDir, `iroh-runtime-${this.pluginVersion}.node`),
     };
   }
 

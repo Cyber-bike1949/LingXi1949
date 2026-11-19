@@ -276,7 +276,7 @@ export default class TerminalPlugin extends Plugin {
       this._loadIroh = createIrohLoader(this.getPluginDir(), require, {
         version: this.manifest.version,
         isOffline: () => this.settings.serverConnection.offlineMode,
-        fallbackFetchAsset: async (url, onProgress) => {
+        fetchAsset: async (url, onProgress) => {
           let timeoutId: number | null = null;
           const response = await Promise.race([
             requestUrl({ url, method: 'GET', throw: false }),
