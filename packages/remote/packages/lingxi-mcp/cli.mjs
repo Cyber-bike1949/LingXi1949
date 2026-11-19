@@ -12,6 +12,7 @@ import { serveStdio } from './protocol.mjs';
 import { runManual, shell } from './manual.mjs';
 import { createInterface } from 'node:readline/promises';
 import { launchStrictAi } from './strict-ai.mjs';
+import { announceAiBinding, clearAiBinding } from './terminal-binding.mjs';
 
 const args = process.argv.slice(2);
 const command = args.shift();
@@ -221,7 +222,12 @@ async function main() {
   }
   if (command === 'codex' || command === 'claude') {
     const binding = activeBinding();
-    await launchStrictAi({ kind: command, home, session: binding.session, cli: fileURLToPath(import.meta.url) });
+    announceAiBinding(process.stdout, binding);
+    try {
+      await launchStrictAi({ kind: command, home, session: binding.session, cli: fileURLToPath(import.meta.url) });
+    } finally {
+      clearAiBinding(process.stdout);
+    }
     return;
   }
   if (['serve', 'shell', 'exec', 'list', 'upload', 'download'].includes(command)) {

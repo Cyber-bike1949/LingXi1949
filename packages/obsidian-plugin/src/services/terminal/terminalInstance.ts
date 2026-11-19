@@ -36,6 +36,7 @@ import {
   extractWslPromptCwd,
 } from './promptCwdParsers';
 import { shell } from 'electron';
+import { decodeAiCliBindingOsc, type AiCliFileBinding } from '../remote/aiCliBinding';
 import type { OperationHistory } from './operationHistory';
 import { normalizeReplayOutput as normalizeOutputForReplay, outputAfterShellEcho } from './replayOutputMatcher';
 import {
@@ -204,6 +205,8 @@ export class TerminalInstance {
   private currentFontSize: number;
   private fontSizeChangeCallbacks: Set<FontSizeChangeCallback> = new Set();
   private connectionStatusCallbacks = new Set<(status: TerminalConnectionStatus) => void>();
+  private aiCliFileBinding: AiCliFileBinding | null = null;
+  private readonly aiCliFileBindingListeners = new Set<(binding: AiCliFileBinding | null) => void>();
   private connectionStatus: TerminalConnectionStatus = 'disconnected';
   private readonly minFontSize = 8;
   private readonly maxFontSize = 32;
@@ -918,6 +921,13 @@ export class TerminalInstance {
       }),
       this.xterm.parser.registerOscHandler(52, (data) => {
         return this.handleOsc52ClipboardData(data, 'OSC 52');
+      }),
+      this.xterm.parser.registerOscHandler(1949, (data) => {
+        const binding = decodeAiCliBindingOsc(data);
+        if (binding === undefined) return false;
+        this.aiCliFileBinding = binding;
+        for (const listener of this.aiCliFileBindingListeners) listener(binding);
+        return true;
       }),
       this.xterm.parser.registerCsiHandler({ prefix: '>', final: 'm' }, (params) => {
         if (params[0] !== 4) {
@@ -1926,6 +1936,10 @@ export class TerminalInstance {
         exitCode: event.exitCode,
       });
       this.activeCommandStart = null;
+      if (this.aiCliFileBinding) {
+        this.aiCliFileBinding = null;
+        for (const listener of this.aiCliFileBindingListeners) listener(null);
+      }
     }
 
     this.shellEventCallback?.(event);
@@ -1942,6 +1956,15 @@ export class TerminalInstance {
   addShellEventListener(callback: (event: ShellEvent) => void): () => void {
     this.shellEventListeners.add(callback);
     return () => this.shellEventListeners.delete(callback);
+  }
+
+  getAiCliFileBinding(): AiCliFileBinding | null {
+    return this.aiCliFileBinding;
+  }
+
+  onAiCliFileBindingChange(listener: (binding: AiCliFileBinding | null) => void): () => void {
+    this.aiCliFileBindingListeners.add(listener);
+    return () => this.aiCliFileBindingListeners.delete(listener);
   }
 
   attachOperationHistory(history: OperationHistory, deviceKey: string): () => void {

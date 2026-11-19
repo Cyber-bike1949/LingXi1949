@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-VERSION="${LINGXI_REMOTE_VERSION:-5.0.7}"
+VERSION="${LINGXI_REMOTE_VERSION:-5.0.8}"
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo 'Invalid LINGXI_REMOTE_VERSION' >&2; exit 1; }
 [[ "$(uname -s)" == Linux && "$(uname -m)" == x86_64 ]] || { echo '仅支持 Linux x64；Windows 请使用 install-remote.ps1。' >&2; exit 1; }
 for tool in curl tar sha256sum mktemp xz; do
@@ -52,11 +52,12 @@ if [[ "$VERSION" == 5.0.0 ]]; then
     printf '%s  %s\n' "$HASH" "$PATCH" | sha256sum -c -
     mv -f -- "$PATCH" "$DEST/$FILE"
   done <<'LINGXI_FIXES'
-eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a package-lock.json
+b041884a67e66704245efb74d54610ee4160217f5162fe7dae381b12f6082fbe package-lock.json
 af91aada3fcb31985cdce0a607f6ad39d754bc339ded986762a72be4745a5f90 scripts/setup.sh
 745548a7c7203658ba4e05c4e7f9f0a93beb2b1a820ac2b4604b2d8fc1ef934a control.sh
-e388a20ba975ab81ef8a7d83c42f48c0f652042634e235b3800fd08fd2d0b5a8 packages/lingxi-mcp/cli.mjs
+d568a57615a60479cce48f76da2f557ae8a38126a366bc60ef0f3649019951a2 packages/lingxi-mcp/cli.mjs
 c3658b2d1a0faf1ba9bdf862e1738b9235c690396a964f427ac78a4551822d63 packages/lingxi-mcp/strict-ai.mjs
+b8cb10aaa46faed3413b2d0f7ec67a58b8d3e25e800c7392cee0c55d03a69d03 packages/lingxi-mcp/terminal-binding.mjs
 30a738482add2281aad9c095bdd70b1d26cd5dba9543bf8ba8301e900f8082ec packages/lingxi-mcp/ai-bridge.mjs
 e8a9f261238f46515ce07efb85dab98df7d2db73e271e4b4634552e09d3d4bd0 packages/lingxi-mcp/mcp-socket-proxy.mjs
 LINGXI_FIXES

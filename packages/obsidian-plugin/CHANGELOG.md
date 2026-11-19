@@ -1,3 +1,8 @@
+## [5.0.9] - 2026-11-19
+
+### Added
+- Show the bound remote device's working directory in the local AI CLI terminal and route note transfers to that device for the duration of the AI session.
+
 ## [5.0.8] - 2026-11-19
 
 ### Fixed

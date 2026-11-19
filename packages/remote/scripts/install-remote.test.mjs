@@ -24,7 +24,7 @@ test('bootstrap verifies downloads, reuses installs, preserves config and fails 
     }
     await writeFile(join(pack, control), await readFile(control));
     await writeFile(join(fixture, 'cli.mjs'), await readFile('packages/lingxi-mcp/cli.mjs'));
-    for (const file of ['strict-ai.mjs', 'ai-bridge.mjs', 'mcp-socket-proxy.mjs']) {
+    for (const file of ['strict-ai.mjs', 'ai-bridge.mjs', 'mcp-socket-proxy.mjs', 'terminal-binding.mjs']) {
       await writeFile(join(fixture, file), await readFile(join('packages/lingxi-mcp', file)));
     }
     await writeFile(join(pack, 'bin', windows ? 'lingxi1949.exe' : 'lingxi1949'), 'fixture');

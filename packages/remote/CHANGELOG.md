@@ -1,5 +1,10 @@
 # Remote Product Changelog
 
+## [5.0.8] - 2026-11-19
+
+- Emit a hidden terminal marker while a bound Codex or Claude session is active so Obsidian can show and transfer files to the selected remote working directory.
+- Include the terminal binding protocol in published Remote and MCP packages.
+
 ## [5.0.7] - 2026-11-19
 
 - Keep strict Codex sessions compatible with current Codex CLI versions by removing the unsupported `--no-daemon` argument.

@@ -2,7 +2,7 @@ param([Parameter(ValueFromRemainingArguments=$true)][string[]]$SetupArgs)
 # PowerShell 7 can pass its module path to Windows PowerShell 5.1.
 $env:PSModulePath = (Join-Path $PSHOME 'Modules') + [IO.Path]::PathSeparator + $env:PSModulePath
 $ErrorActionPreference = 'Stop'
-$Version = if ($env:LINGXI_REMOTE_VERSION) { $env:LINGXI_REMOTE_VERSION } else { '5.0.7' }
+$Version = if ($env:LINGXI_REMOTE_VERSION) { $env:LINGXI_REMOTE_VERSION } else { '5.0.8' }
 if ($Version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid LINGXI_REMOTE_VERSION' }
 if ($env:OS -ne 'Windows_NT' -or -not [Environment]::Is64BitOperatingSystem -or $env:PROCESSOR_ARCHITECTURE -notin @('AMD64','x86')) { throw 'Only Windows x64 is supported.' }
 if (-not (Get-Command tar.exe -ErrorAction SilentlyContinue)) { throw 'tar.exe is required (included in current Windows versions).' }
@@ -45,10 +45,11 @@ try {
     if ($Version -eq '5.0.0') {
         $FixUrl = 'https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/remote'
         $Fixes = [ordered]@{
-            'package-lock.json' = 'eb6e6d5b4803c063e91d887dbf27859da0e205b94d7e2624fc610a2cad29559a'
+            'package-lock.json' = 'b041884a67e66704245efb74d54610ee4160217f5162fe7dae381b12f6082fbe'
             'scripts/setup.ps1' = 'ba7b45dd6e431e3b692853b0c94aa1d3f6c338e32035c82f434563e2f291db0e'
-            'control.cmd' = 'f1aaa8c1101b7735f36439b24f0c0259797f16492bac6dd48f1bce19a7ef2171'
-            'packages/lingxi-mcp/cli.mjs' = 'e388a20ba975ab81ef8a7d83c42f48c0f652042634e235b3800fd08fd2d0b5a8'
+            'control.cmd' = '5b21499e121ef1e3b90058badad716dde5538ac7ead020cf29b2e1f37ba8bb0a'
+            'packages/lingxi-mcp/cli.mjs' = 'd568a57615a60479cce48f76da2f557ae8a38126a366bc60ef0f3649019951a2'
+            'packages/lingxi-mcp/terminal-binding.mjs' = 'b8cb10aaa46faed3413b2d0f7ec67a58b8d3e25e800c7392cee0c55d03a69d03'
             'packages/lingxi-mcp/strict-ai.mjs' = 'c3658b2d1a0faf1ba9bdf862e1738b9235c690396a964f427ac78a4551822d63'
             'packages/lingxi-mcp/ai-bridge.mjs' = '30a738482add2281aad9c095bdd70b1d26cd5dba9543bf8ba8301e900f8082ec'
             'packages/lingxi-mcp/mcp-socket-proxy.mjs' = 'e8a9f261238f46515ce07efb85dab98df7d2db73e271e4b4634552e09d3d4bd0'

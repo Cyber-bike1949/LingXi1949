@@ -156,10 +156,10 @@ export class DeviceConnectionManager {
    * fresh bi-stream - it has no terminal-specific behavior baked in - so
    * this reuses it as-is rather than needing an `fsStreamFactory` twin.
    */
-  createDirectoryTreeSource(nodeId: string): RemoteDirectoryTreeSource {
+  createDirectoryTreeSource(nodeId: string, allowedRoot: string | null = null): RemoteDirectoryTreeSource {
     const active = this.connections.get(nodeId);
     if (!active) throw new Error('connect to the device before browsing its filesystem');
-    return new RemoteDirectoryTreeSource(terminalStreamFactory(active.connection));
+    return new RemoteDirectoryTreeSource(terminalStreamFactory(active.connection), 10_000, allowedRoot);
   }
 
   /**

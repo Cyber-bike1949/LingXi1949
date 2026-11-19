@@ -281,3 +281,18 @@ test('a stream that opens after timeout is closed without sending a request', as
   resolveOpen(client);
   assert.equal(await peer.read(), null);
 });
+
+test('a bound AI directory source refuses navigation outside its work directory', async () => {
+  const source = new RemoteDirectoryTreeSource(async () => {
+    throw new Error('an out-of-scope path must be rejected before opening a stream');
+  }, 10_000, '/workspace/demo');
+
+  await assert.rejects(source.list('/workspace/demo/../../etc'), /OUTSIDE_BOUND_WORKDIR/);
+  await assert.rejects(source.stat('/workspace/other/file.md'), /OUTSIDE_BOUND_WORKDIR/);
+
+  const windowsSource = new RemoteDirectoryTreeSource(async () => {
+    throw new Error('an out-of-scope path must be rejected before opening a stream');
+  }, 10_000, 'C:\\workspace\\demo');
+  await assert.rejects(windowsSource.list('C:\\workspace\\demo2'), /OUTSIDE_BOUND_WORKDIR/);
+  await assert.rejects(windowsSource.list('..\\..\\Windows'), /OUTSIDE_BOUND_WORKDIR/);
+});

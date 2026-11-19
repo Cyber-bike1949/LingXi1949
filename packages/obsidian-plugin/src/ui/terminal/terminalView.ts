@@ -103,6 +103,7 @@ export class TerminalView extends ItemView {
   private titleChangeCleanup: (() => void) | null = null;
   private searchStateCleanup: (() => void) | null = null;
   private connectionStatusCleanup: (() => void) | null = null;
+  private aiCliFileBindingCleanup: (() => void) | null = null;
   private historyCleanup: (() => void) | null = null;
   private historyActivityCleanup: (() => void) | null = null;
   private historyActionEl: HTMLElement | null = null;
@@ -123,6 +124,7 @@ export class TerminalView extends ItemView {
   private terminalBody: HTMLElement | null = null;
   private directoryTreePanel: DirectoryTreePanel | null = null;
   private directoryTreeVisible = false;
+  private directoryTreeOpenGeneration = 0;
 
   private readonly fs: FsModule;
   private readonly path: PathModule;
@@ -350,6 +352,8 @@ export class TerminalView extends ItemView {
     this.searchStateCleanup = null;
     this.connectionStatusCleanup?.();
     this.connectionStatusCleanup = null;
+    this.aiCliFileBindingCleanup?.();
+    this.aiCliFileBindingCleanup = null;
     this.historyCleanup?.();
     this.historyCleanup = null;
     this.historyActivityCleanup?.();
@@ -433,7 +437,7 @@ export class TerminalView extends ItemView {
     if (this.directoryTreePanel) {
       const wasVisible = this.directoryTreeVisible;
       this.closeDirectoryTree();
-      if (wasVisible) this.openDirectoryTree();
+      if (wasVisible) void this.openDirectoryTree();
     }
     this.renderRemoteToolbar();
   }
@@ -515,6 +519,12 @@ export class TerminalView extends ItemView {
       this.connectionStatus = status;
       this.renderRemoteToolbar();
     });
+    this.aiCliFileBindingCleanup = terminal.onAiCliFileBindingChange(() => {
+      const wasVisible = this.directoryTreeVisible;
+      this.updateDropHintText();
+      this.closeDirectoryTree();
+      if (wasVisible) void this.openDirectoryTree();
+    });
     const plugin = this.getTerminalPlugin();
     if (plugin) {
       const deviceKey = this.getRemoteNodeId() ?? 'local';
@@ -559,6 +569,8 @@ export class TerminalView extends ItemView {
     this.searchStateCleanup = null;
     this.connectionStatusCleanup?.();
     this.connectionStatusCleanup = null;
+    this.aiCliFileBindingCleanup?.();
+    this.aiCliFileBindingCleanup = null;
   }
 
   /**
@@ -663,7 +675,7 @@ export class TerminalView extends ItemView {
     // inserts a reference (`handleRemoteDrop`/`handleDirectoryTreeEntryDropToInput`)
     // rather than typing raw text, so warn about that up front instead of
     // showing the LocalMode-oriented paste hint, which never applies here.
-    if (this.remoteState === 'Connected') {
+    if (this.remoteState === 'Connected' || this.terminalInstance?.getAiCliFileBinding()) {
       return t('remote.dropSingleMarkdown');
     }
     return t('terminal.dropHintPasteFilePath');
@@ -757,7 +769,7 @@ export class TerminalView extends ItemView {
       return;
     }
 
-    if (this.remoteState === 'Connected') {
+    if (this.remoteState === 'Connected' || this.terminalInstance?.getAiCliFileBinding()) {
       await this.handleRemoteDrop(dataTransfer);
       return;
     }
@@ -802,11 +814,16 @@ export class TerminalView extends ItemView {
     // riding (e.g. the local tree docked next to a remote terminal tab) -
     // referencing a path from a device this terminal's shell can't see
     // would insert a path the agent can never actually open.
-    if (entry.nodeId !== this.getRemoteNodeId()) {
+    if (entry.nodeId !== this.getDirectoryTreeNodeId()) {
       new Notice(t('remote.dropCrossDeviceNotSupported'));
       return;
     }
 
+    const binding = this.terminalInstance?.getAiCliFileBinding();
+    if (binding) {
+      await this.writeInputToTerminal(this.formatAiCliRemotePaths([entry.path], binding), false);
+      return;
+    }
     const platform = entry.nodeId ? this.guessRemotePathPlatform(entry.path) : undefined;
     const reference = this.formatAgentReferencePaths([entry.path], { platform });
     if (reference) {
@@ -835,7 +852,8 @@ export class TerminalView extends ItemView {
     // relay-based `RemoteService` - so the transfer must go out over the
     // same `DeviceConnectionManager` connection, matching how the directory
     // tree already sends dropped vault entries (`sendVaultEntriesToRemote`).
-    const nodeId = this.getRemoteNodeId();
+    const binding = this.terminalInstance?.getAiCliFileBinding();
+    const nodeId = binding?.deviceId ?? this.getRemoteNodeId();
     const connections = nodeId ? this.getTerminalPlugin()?.getDeviceConnectionManager() : null;
     if (!nodeId || !connections) {
       new Notice(t('remote.notConnected'));
@@ -895,7 +913,9 @@ export class TerminalView extends ItemView {
       });
 
       if (landedPaths.length > 0) {
-        const reference = this.formatAgentReferencePaths(landedPaths, { platform });
+      const reference = binding
+        ? this.formatAiCliRemotePaths(landedPaths, binding)
+        : this.formatAgentReferencePaths(landedPaths, { platform });
         if (reference) {
           await this.writeInputToTerminal(reference, false);
         }
@@ -1004,6 +1024,8 @@ export class TerminalView extends ItemView {
    * receive a drop on.
    */
   getRemoteDropTargetPath(): string {
+    const binding = this.terminalInstance?.getAiCliFileBinding();
+    if (binding) return binding.workDir;
     const terminal = this.terminalInstance;
     if (!terminal) return '~';
     const cwd = terminal.getCwd();
@@ -1082,7 +1104,7 @@ export class TerminalView extends ItemView {
     if (this.directoryTreeVisible) {
       this.closeDirectoryTree();
     } else {
-      this.openDirectoryTree();
+      void this.openDirectoryTree();
     }
   }
 
@@ -1092,11 +1114,17 @@ export class TerminalView extends ItemView {
     return this.getTerminalPlugin()?.getRemoteNodeId(this.terminalInstance) ?? null;
   }
 
+  /** The device whose files this terminal's current AI session operates on. */
+  private getDirectoryTreeNodeId(): string | null {
+    return this.terminalInstance?.getAiCliFileBinding()?.deviceId ?? this.getRemoteNodeId();
+  }
+
   private buildDirectoryTreeSource(): DirectoryTreeSource {
-    const nodeId = this.getRemoteNodeId();
+    const binding = this.terminalInstance?.getAiCliFileBinding();
+    const nodeId = binding?.deviceId ?? this.getRemoteNodeId();
     const connections = nodeId ? this.getTerminalPlugin()?.getDeviceConnectionManager() : null;
     if (nodeId && connections) {
-      return connections.createDirectoryTreeSource(nodeId);
+      return connections.createDirectoryTreeSource(nodeId, binding?.workDir ?? null);
     }
     return new LocalDirectoryTreeSource(this.fs, async request => {
       const plugin = this.getTerminalPlugin();
@@ -1107,14 +1135,29 @@ export class TerminalView extends ItemView {
     });
   }
 
-  private openDirectoryTree(): void {
+  private async openDirectoryTree(): Promise<void> {
     if (!this.terminalBody) return;
+    const generation = ++this.directoryTreeOpenGeneration;
+
+    const nodeId = this.getDirectoryTreeNodeId();
+    const connections = nodeId ? this.getTerminalPlugin()?.getDeviceConnectionManager() : null;
+    if (nodeId && connections && !connections.isConnected(nodeId)) {
+      try {
+        await connections.connect(nodeId);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        new Notice(t('remote.notConnected'), 5000);
+        errorLog('[TerminalView] Could not connect the directory tree target:', message);
+        return;
+      }
+    }
+    if (generation !== this.directoryTreeOpenGeneration || !this.terminalBody) return;
 
     if (!this.directoryTreePanel) {
       const plugin = this.getTerminalPlugin();
       this.directoryTreePanel = new DirectoryTreePanel(
         this.buildDirectoryTreeSource(),
-        this.buildDirectoryTreePathApi(this.getRemoteNodeId() !== null),
+        this.buildDirectoryTreePathApi(this.getDirectoryTreeNodeId() !== null),
         {
           confirmDelete: (path, type) => FileDeleteModal.confirm(this.app, path, type),
           onActivateDirectory: (path) => this.activateDirectoryFromTree(path),
@@ -1123,7 +1166,7 @@ export class TerminalView extends ItemView {
           onCopyToVault: (path, isDirectory, baseName) => void this.handleCopyToVault(path, isDirectory, baseName),
           onRequestClose: () => this.closeDirectoryTree(),
           modificationStore: this.modificationStore,
-          deviceKey: this.getRemoteNodeId() ?? 'local',
+          deviceKey: this.getDirectoryTreeNodeId() ?? 'local',
           onDockSideChange: (side) => {
             const current = this.getTerminalPlugin();
             if (!current) return;
@@ -1132,7 +1175,7 @@ export class TerminalView extends ItemView {
           },
         },
         plugin?.settings.directoryTreeDockSide ?? 'right',
-        this.getRemoteNodeId(),
+        this.getDirectoryTreeNodeId(),
       );
     }
 
@@ -1144,14 +1187,16 @@ export class TerminalView extends ItemView {
     this.renderRemoteToolbar();
 
     const terminal = this.terminalInstance;
-    const nodeId = this.getRemoteNodeId();
+    const binding = this.terminalInstance?.getAiCliFileBinding();
     let rootPath = terminal?.getCwd() ?? getHomeDir();
+
+    if (binding) rootPath = binding.workDir;
 
     // Remote terminals can only browse the agent's filesystem, so avoid
     // falling back to the local vault path when no remote cwd has been
     // detected yet. Use the remote home sentinel instead; the agent expands
     // it to the real home directory.
-    if (nodeId && terminal) {
+    if (nodeId && terminal && !binding) {
       const initialCwd = terminal.getInitialCwd();
       if (!terminal.getCwd() || rootPath === initialCwd) {
         rootPath = '~';
@@ -1162,6 +1207,7 @@ export class TerminalView extends ItemView {
   }
 
   private closeDirectoryTree(): void {
+    this.directoryTreeOpenGeneration += 1;
     this.directoryTreePanel?.destroy();
     this.directoryTreePanel = null;
     this.directoryTreeVisible = false;
@@ -1171,11 +1217,15 @@ export class TerminalView extends ItemView {
   private activateDirectoryFromTree(path: string): void {
     const terminal = this.terminalInstance;
     if (!terminal) return;
+    if (terminal.getAiCliFileBinding()) {
+      void this.directoryTreePanel?.setRootPath(path);
+      return;
+    }
     const quoted = /\s/.test(path) ? `"${path}"` : path;
     // A remote terminal's OS can differ from the local machine's, so the
     // path's own shape decides which `cd` syntax to send, not `isWindows()`
     // (that only describes the machine running Obsidian).
-    const targetIsWindows = this.getRemoteNodeId() !== null ? isWindowsStylePath(path) : isWindows();
+    const targetIsWindows = this.getDirectoryTreeNodeId() !== null ? isWindowsStylePath(path) : isWindows();
     const command = targetIsWindows ? `cd /d ${quoted}` : `cd ${quoted}`;
     terminal.sendText(`${command}\r`);
     terminal.focus();
@@ -1192,7 +1242,13 @@ export class TerminalView extends ItemView {
    * mismatch to guard against here.
    */
   private activateFileFromTree(path: string): void {
-    const nodeId = this.getRemoteNodeId();
+    const binding = this.terminalInstance?.getAiCliFileBinding();
+    const nodeId = binding?.deviceId ?? this.getRemoteNodeId();
+    if (binding) {
+      const remotePathApi = isWindowsStylePath(binding.workDir) ? this.path.win32 : this.path.posix;
+      void this.writeInputToTerminal(remotePathApi.relative(binding.workDir, path) || '.', false);
+      return;
+    }
     const platform = nodeId ? this.guessRemotePathPlatform(path) : undefined;
     const reference = this.formatAgentReferencePaths([path], { platform });
     if (reference) {
@@ -1207,7 +1263,7 @@ export class TerminalView extends ItemView {
       return;
     }
 
-    const nodeId = this.getRemoteNodeId();
+    const nodeId = this.getDirectoryTreeNodeId();
     // Keys on the exact drop (source paths + destination), not just the
     // source, so the same note can still be dropped onto two different
     // target folders at once - only a second drop onto the *same* target
@@ -1331,6 +1387,11 @@ export class TerminalView extends ItemView {
     }
   }
 
+  private formatAiCliRemotePaths(paths: string[], binding: { workDir: string }): string {
+    const remotePathApi = isWindowsStylePath(binding.workDir) ? this.path.win32 : this.path.posix;
+    return this.quoteDroppedPaths(paths.map((path) => remotePathApi.relative(binding.workDir, path) || '.'));
+  }
+
   /**
    * The right-click "复制到 Vault" entry point. Dragging a row out to a
    * folder in Obsidian's real file explorer is the other entry point to
@@ -1344,7 +1405,7 @@ export class TerminalView extends ItemView {
       path: absolutePath,
       isDirectory,
       baseName,
-      nodeId: this.getRemoteNodeId(),
+      nodeId: this.getDirectoryTreeNodeId(),
     };
     await this.getTerminalPlugin()?.copyDirectoryTreeEntryToVaultWithPicker(entry);
   }
@@ -2145,7 +2206,7 @@ export class TerminalView extends ItemView {
   }
 
   receiveRemoteTransferCommits(targetPath: string, receipts: TransferFileResult[]): void {
-    const nodeId = this.getRemoteNodeId();
+    const nodeId = this.getDirectoryTreeNodeId();
     if (!nodeId) return;
     const platform = this.guessRemotePathPlatform(targetPath);
     for (const receipt of receipts) {

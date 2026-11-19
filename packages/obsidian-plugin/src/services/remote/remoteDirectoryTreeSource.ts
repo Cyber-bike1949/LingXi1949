@@ -63,17 +63,20 @@ async function readOneFrame(stream: ByteStream, decoder: TerminalStreamFrameDeco
 export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
   private readonly openStream: () => Promise<ByteStream>;
   private readonly requestTimeoutMs: number;
+  private readonly allowedRoot: string | null;
   private readonly lastListings = new Map<string, DirectoryEntry[]>();
 
-  constructor(openStream: () => Promise<ByteStream>, requestTimeoutMs = 10_000) {
+  constructor(openStream: () => Promise<ByteStream>, requestTimeoutMs = 10_000, allowedRoot: string | null = null) {
     this.openStream = openStream;
     if (!Number.isFinite(requestTimeoutMs) || requestTimeoutMs <= 0) {
       throw new RangeError('requestTimeoutMs must be positive');
     }
     this.requestTimeoutMs = requestTimeoutMs;
+    this.allowedRoot = allowedRoot;
   }
 
   async operate(request: FileOperationRequest): Promise<FileOperationResponse> {
+    this.assertWithinAllowedRoot(request.root);
     const listing = await this.requestList({path:request.root});
     if (listing.mutationVersion !== 1) return {status:'failed',code:'UNSUPPORTED',mutationVersion:1};
     let stream: ByteStream | undefined;
@@ -122,6 +125,7 @@ export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
   }
 
   private async requestList(payload: FsListPayload): Promise<FsListResultPayload> {
+    this.assertWithinAllowedRoot(payload.path);
     let expired = false;
     let activeStream: ByteStream | undefined;
     const timeoutError = new RemoteDirectoryTreeError('TIMEOUT: directory request timed out');
@@ -162,6 +166,7 @@ export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
     let activeStream: ByteStream | null = null;
 
     void (async () => {
+      this.assertWithinAllowedRoot(path);
       const stream = await this.openStream();
       if (disposed) {
         stream.finishWrite();
@@ -208,5 +213,18 @@ export class RemoteDirectoryTreeSource implements DirectoryTreeSource {
       disposed = true;
       activeStream?.finishWrite();
     });
+  }
+
+  private assertWithinAllowedRoot(targetPath: string): void {
+    if (!this.allowedRoot) return;
+    const pathApi = isWindowsStylePath(this.allowedRoot) ? win32 : posix;
+    const root = pathApi.resolve(this.allowedRoot);
+    const target = pathApi.isAbsolute(targetPath)
+      ? pathApi.resolve(targetPath)
+      : pathApi.resolve(root, targetPath);
+    const relative = pathApi.relative(root, target);
+    if (relative === '..' || relative.startsWith(`..${pathApi.sep}`) || pathApi.isAbsolute(relative)) {
+      throw new RemoteDirectoryTreeError('OUTSIDE_BOUND_WORKDIR: path is outside the AI CLI working directory');
+    }
   }
 }
