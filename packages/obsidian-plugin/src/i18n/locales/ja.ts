@@ -127,6 +127,7 @@ export const ja: TranslationKeys = {
     dropCopyDoneWithSkips: '{{path}} にコピーしました（無効なパスのため {{count}} 件をスキップしました。詳細はログを参照）。',
     dropCopyFailed: 'コピーに失敗しました：{{message}}',
     remoteAgentTooOldForFolderTransfer: '接続先デバイスのagentが古く、フォルダ転送に対応していません。agentを更新してから再度お試しください。',
+    connectFailed: 'ディレクトリツリーのデバイスに接続できませんでした：{{message}}',
     dropRejectedNotVaultItem: 'このVault内のノート、添付ファイル、フォルダをドロップしてください。',
     openInFileManager: 'ファイルマネージャーで開く',
     openInFileManagerFailed: 'ファイルマネージャーを開けませんでした：{{message}}',

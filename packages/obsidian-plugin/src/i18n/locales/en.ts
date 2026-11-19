@@ -126,6 +126,7 @@ export const en: TranslationKeys = {
     dropCopyDoneWithSkips: 'Copied to {{path}} (skipped {{count}} entries with invalid paths - see the debug log).',
     dropCopyFailed: 'Copy failed: {{message}}',
     remoteAgentTooOldForFolderTransfer: "The connected device's agent is too old to support folder transfers. Please update the agent and try again.",
+    connectFailed: 'Could not connect to the directory tree device: {{message}}',
     dropRejectedNotVaultItem: 'Drop a note, attachment, or folder from this vault.',
     openInFileManager: 'Open in file manager',
     openInFileManagerFailed: 'Failed to open file manager: {{message}}',

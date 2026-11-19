@@ -127,6 +127,7 @@ export const ru: TranslationKeys = {
     dropCopyDoneWithSkips: 'Скопировано в {{path}} (пропущено {{count}} записей с недопустимыми путями - см. журнал отладки).',
     dropCopyFailed: 'Не удалось скопировать: {{message}}',
     remoteAgentTooOldForFolderTransfer: 'Агент на подключённом устройстве слишком старый и не поддерживает передачу папок. Обновите агента и повторите попытку.',
+    connectFailed: 'Не удалось подключиться к устройству дерева каталогов: {{message}}',
     dropRejectedNotVaultItem: 'Перетащите заметку, вложение или папку из этого хранилища.',
     openInFileManager: 'Открыть в файловом менеджере',
     openInFileManagerFailed: 'Не удалось открыть файловый менеджер: {{message}}',

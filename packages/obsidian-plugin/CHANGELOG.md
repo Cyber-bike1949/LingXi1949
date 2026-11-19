@@ -1,3 +1,9 @@
+## [5.0.10] - 2026-11-19
+
+### Fixed
+- Connect the directory tree with the active AI session ticket even when the target is absent from the plugin pairing list; preserve existing device identities and configuration.
+- Wait for concurrent connection attempts and report directory connection errors without the unrelated send-note prompt.
+
 ## [5.0.9] - 2026-11-19
 
 ### Added

@@ -126,6 +126,7 @@ export const zhCN: TranslationKeys = {
     dropCopyDoneWithSkips: '已复制到 {{path}}（另有 {{count}} 个因路径非法被跳过，详见日志）。',
     dropCopyFailed: '复制失败：{{message}}',
     remoteAgentTooOldForFolderTransfer: '该设备的 agent 版本过旧，不支持文件夹传输，请升级后重试。',
+    connectFailed: '连接目录树设备失败：{{message}}',
     dropRejectedNotVaultItem: '请从当前仓库拖入笔记、附件或文件夹。',
     openInFileManager: '在文件管理器中打开',
     openInFileManagerFailed: '打开文件管理器失败：{{message}}',

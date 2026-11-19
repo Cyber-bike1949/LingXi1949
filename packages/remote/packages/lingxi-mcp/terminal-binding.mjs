@@ -6,6 +6,7 @@ export function aiBindingStartSequence(binding) {
     session: binding.session,
     deviceId: binding.deviceId,
     workDir: binding.workDir,
+    ticket: binding.ticket,
   })).toString('base64url');
   return `${PREFIX}${payload}\u0007`;
 }

@@ -1143,10 +1143,10 @@ export class TerminalView extends ItemView {
     const connections = nodeId ? this.getTerminalPlugin()?.getDeviceConnectionManager() : null;
     if (nodeId && connections && !connections.isConnected(nodeId)) {
       try {
-        await connections.connect(nodeId);
+        await connections.connect(nodeId, this.terminalInstance?.getAiCliFileBinding()?.ticket);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        new Notice(t('remote.notConnected'), 5000);
+        new Notice(t('directoryTree.connectFailed', { message }), 8000);
         errorLog('[TerminalView] Could not connect the directory tree target:', message);
         return;
       }

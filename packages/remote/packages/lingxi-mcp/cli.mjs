@@ -222,7 +222,9 @@ async function main() {
   }
   if (command === 'codex' || command === 'claude') {
     const binding = activeBinding();
-    announceAiBinding(process.stdout, binding);
+    const device = devices.get(binding.deviceId);
+    if (!device) throw new Error('INVALID_SESSION: AI binding device is missing');
+    announceAiBinding(process.stdout, { ...binding, ticket: device.ticket });
     try {
       await launchStrictAi({ kind: command, home, session: binding.session, cli: fileURLToPath(import.meta.url) });
     } finally {

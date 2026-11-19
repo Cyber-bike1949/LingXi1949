@@ -17,3 +17,11 @@ test('AI binding markers are emitted only to an interactive terminal', () => {
   clearAiBinding(stream);
   assert.equal(stream.read(), null);
 });
+
+
+test('AI binding sends the connection ticket without controller credentials', () => {
+  const binding = { session: 'session-1', deviceId: 'device-123', workDir: '/workspace/demo', ticket: 'endpoint-example' };
+  const start = aiBindingStartSequence({ ...binding, seed: [1, 2, 3], shell: '/bin/sh' });
+  const encoded = start.split(';').at(-1).slice(0, -1);
+  assert.deepEqual(JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')), binding);
+});

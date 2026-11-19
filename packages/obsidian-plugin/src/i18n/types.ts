@@ -184,6 +184,7 @@ export interface TranslationKeys {
     dropCopyDoneWithSkips: string;
     dropCopyFailed: string;
     remoteAgentTooOldForFolderTransfer: string;
+    connectFailed: string;
     dropRejectedNotVaultItem: string;
     openInFileManager: string;
     openInFileManagerFailed: string;

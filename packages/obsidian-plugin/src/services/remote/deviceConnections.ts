@@ -68,6 +68,7 @@ export class DeviceConnectionManager {
   private endpoint: IrohEndpoint | null = null;
   private endpointBinding: Promise<IrohEndpoint> | null = null;
   private readonly connections = new Map<string, ActiveConnection>();
+  private readonly pendingConnections = new Map<string, Promise<void>>();
   private readonly statuses = new Map<string, DeviceConnectionStatus>();
   private readonly listeners = new Set<() => void>();
   private generation = 0;
@@ -90,20 +91,32 @@ export class DeviceConnectionManager {
     return toDisposable(() => this.listeners.delete(listener));
   }
 
-  /** Connects to a paired device by its `nodeId`. Idempotent while already
-   * connected or connecting. */
-  async connect(nodeId: string): Promise<void> {
+  /** Connects using a paired device or an AI session ticket without persisting
+   * the session target. Concurrent callers wait for the same connection. */
+  async connect(nodeId: string, sessionTicket?: string): Promise<void> {
     if (this.disposed) throw new Error('the connection manager is disposed');
-    const device = this.deps.store.get(nodeId);
-    if (!device) throw new Error(`unknown device ${nodeId}; pair it first`);
+    const pending = this.pendingConnections.get(nodeId);
+    if (pending) return pending;
+    if (this.isConnected(nodeId)) return;
+    const attempt = this.connectDevice(nodeId, sessionTicket);
+    this.pendingConnections.set(nodeId, attempt);
+    try {
+      await attempt;
+    } finally {
+      this.pendingConnections.delete(nodeId);
+    }
+  }
 
-    const current = this.status(nodeId).state;
-    if (current === 'connected' || current === 'connecting') return;
+  private async connectDevice(nodeId: string, sessionTicket?: string): Promise<void> {
+    const device = this.deps.store.get(nodeId);
+    const ticket = sessionTicket ?? device?.ticket;
+    if (!ticket) throw new Error(`unknown device ${nodeId}; pair it first or update the controller to provide an AI session ticket`);
 
     this.setStatus(nodeId, { state: 'connecting' });
     try {
       const [module, endpoint] = await this.ensureEndpoint();
-      const addr = module.EndpointTicket.fromString(device.ticket).endpointAddr();
+      const addr = module.EndpointTicket.fromString(ticket).endpointAddr();
+      if (addr.id().toString() !== nodeId) throw new Error('TICKET_ID_MISMATCH');
       const connection = await endpoint.connect(
         addr,
         Array.from(new TextEncoder().encode(ALPN_TERMINAL)),

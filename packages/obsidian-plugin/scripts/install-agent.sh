@@ -2,7 +2,7 @@
 # Install the standalone LingXi1949 Agent for Obsidian pairing.
 set -euo pipefail
 
-AGENT_VERSION='5.0.1'
+AGENT_VERSION='5.0.9'
 RELEASE_REPOSITORY='Cyber-bike1949/LingXi1949'
 SERVICE_USER='lingxi1949'
 SERVICE_NAME='lingxi1949-agent.service'

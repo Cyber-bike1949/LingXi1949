@@ -190,7 +190,7 @@ function makeFakeWorld() {
     EndpointTicket: {
       fromString(s: string) {
         assert.equal(s, TICKET, 'must dial the stored ticket');
-        return { endpointAddr: () => ({ id: () => ({ toString: () => 'remote-id' }) }) };
+        return { endpointAddr: () => ({ id: () => ({ toString: () => NODE_ID }) }) };
       },
     },
     RelayMode: { disabled: () => 'disabled', defaultMode: () => 'default' },
@@ -414,4 +414,33 @@ test('disconnect and dispose tear things down', async () => {
   await manager.dispose();
   assert.equal(world.calls.closedEndpoints, 1);
   await assert.rejects(manager.connect(NODE_ID), /disposed/);
+});
+
+
+test('AI session ticket browses an unpaired device without changing stored configuration', async () => {
+  const world = makeFakeWorld();
+  world.store.remove(NODE_ID);
+  const before = world.store.toJSON();
+  const { manager } = makeManager(world, { identitySeed: [1, 2, 3] });
+  try {
+    await Promise.all([manager.connect(NODE_ID, TICKET), manager.connect(NODE_ID, TICKET)]);
+    assert.equal(world.calls.connects.length, 1);
+    const source = manager.createDirectoryTreeSource(NODE_ID, '/workspace/demo');
+    assert.deepEqual(await source.list('/workspace/demo'), [{ name: 'readme.md', isDirectory: false }]);
+    assert.deepEqual(world.store.toJSON(), before);
+    assert.equal(world.calls.generatedSeeds, 0);
+  } finally {
+    await manager.dispose();
+  }
+});
+
+test('AI session ticket cannot substitute a different device identity', async () => {
+  const world = makeFakeWorld();
+  const { manager } = makeManager(world);
+  try {
+    await assert.rejects(manager.connect('other-device', TICKET), /TICKET_ID_MISMATCH/);
+    assert.equal(world.calls.connects.length, 0);
+  } finally {
+    await manager.dispose();
+  }
 });
