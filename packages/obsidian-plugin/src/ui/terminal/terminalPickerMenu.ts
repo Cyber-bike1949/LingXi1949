@@ -29,9 +29,9 @@ export function listConnectedTerminals(app: App, plugin: TerminalPlugin): Connec
     if (!(view instanceof TerminalView)) continue;
 
     const terminal = view.getTerminalInstance();
-    if (!terminal || !plugin.isRemoteTerminal(terminal)) continue;
+    if (!terminal) continue;
 
-    const nodeId = plugin.getRemoteNodeId(terminal);
+    const nodeId = terminal.getAiCliFileBinding()?.deviceId ?? plugin.getRemoteNodeId(terminal);
     if (!nodeId || !connections.isConnected(nodeId)) continue;
 
     const device = plugin.getPairedDeviceStore().get(nodeId);

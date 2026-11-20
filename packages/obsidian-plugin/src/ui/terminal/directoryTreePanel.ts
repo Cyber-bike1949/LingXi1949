@@ -93,6 +93,7 @@ export class DirectoryTreePanel {
 
   /** One watch subscription per directory currently rendered as expanded. */
   private readonly watches = new Map<string, Disposable>();
+  private readonly directoryLoadTokens = new Map<string, symbol>();
   private readonly expandedPaths = new Set<string>();
   private destroyed = false;
   private modificationCleanup?: () => void;
@@ -244,6 +245,12 @@ export class DirectoryTreePanel {
     closeBtn.addEventListener('click', () => this.callbacks.onRequestClose());
   }
 
+  /** Reload after a transfer without clearing its modification markers. */
+  async refreshAfterTransfer(): Promise<void> {
+    if (this.destroyed || !this.rootPath) return;
+    await this.setRootPath(this.rootPath, { keepExpanded: true });
+  }
+
   private async refreshWithBarrier(path: string): Promise<void> {
     try {
       const snapshot = await this.source.snapshot?.(path);
@@ -340,15 +347,21 @@ export class DirectoryTreePanel {
   private async renderChildrenInto(dirPath: string, container: HTMLElement, depth: number): Promise<void> {
     if (this.destroyed) return;
     const generation = this.rootGeneration;
+    const token = Symbol();
+    this.directoryLoadTokens.set(dirPath, token);
+    const isCurrent = (): boolean => !this.destroyed
+      && generation === this.rootGeneration
+      && this.directoryLoadTokens.get(dirPath) === token;
     let entries: DirectoryEntry[];
     try {
       entries = await this.source.list(dirPath);
     } catch (error) {
+      if (!isCurrent()) return;
       const message = error instanceof Error ? error.message : String(error);
       container.createDiv({ cls: 'directory-tree-panel__error', text: message });
       return;
     }
-    if (this.destroyed || generation !== this.rootGeneration) return;
+    if (!isCurrent()) return;
 
     container.empty();
     this.watchDirectory(dirPath, container, depth);
@@ -363,11 +376,16 @@ export class DirectoryTreePanel {
 
   private watchDirectory(dirPath: string, container: HTMLElement, depth: number): void {
     this.watches.get(dirPath)?.dispose();
+    const generation = this.rootGeneration;
+    let active = true;
     const disposable = this.source.watch(dirPath, () => {
-      if (this.destroyed) return;
+      if (!active || this.destroyed || generation !== this.rootGeneration) return;
       void this.renderChildrenInto(dirPath, container, depth);
     });
-    this.watches.set(dirPath, disposable);
+    this.watches.set(dirPath, { dispose: () => {
+      active = false;
+      disposable.dispose();
+    } });
   }
 
   private async renderNode(entry: DirectoryEntry, parentPath: string, container: HTMLElement, depth: number): Promise<void> {
@@ -633,6 +651,11 @@ export class DirectoryTreePanel {
   }
 
   private disposeWatchesUnder(path: string): void {
+    for (const pendingPath of this.directoryLoadTokens.keys()) {
+      if (pendingPath === path || pendingPath.startsWith(`${path}${pendingPath.includes('\\') ? '\\' : '/'}`)) {
+        this.directoryLoadTokens.delete(pendingPath);
+      }
+    }
     for (const [watchedPath, disposable] of Array.from(this.watches.entries())) {
       if (watchedPath === path || watchedPath.startsWith(`${path}${watchedPath.includes('\\') ? '\\' : '/'}`)) {
         disposable.dispose();
@@ -642,6 +665,7 @@ export class DirectoryTreePanel {
   }
 
   private disposeAllWatches(): void {
+    this.directoryLoadTokens.clear();
     for (const disposable of this.watches.values()) disposable.dispose();
     this.watches.clear();
   }

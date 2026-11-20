@@ -1,3 +1,10 @@
+## [5.0.11] - 2026-11-20
+
+### Fixed
+- Send notes from the note toolbar to the device bound to the active AI CLI session, including local terminals with a remote binding.
+- Refresh the directory tree after confirmed transfers while preserving expanded folders and modification markers.
+- Discard stale directory responses and callbacks from disposed watchers so older listings cannot overwrite newer results.
+
 ## [5.0.10] - 2026-11-19
 
 ### Fixed

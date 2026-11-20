@@ -905,6 +905,7 @@ export class TerminalView extends ItemView {
               this.modificationStore.markPath(nodeId, path);
             }
           }
+          if (receipts.length > 0) void this.directoryTreePanel?.refreshAfterTransfer();
           if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
           landedPaths.push(joinTerminalPaths(targetPath, file.name, platform));
           filesDone += 1;
@@ -1378,6 +1379,7 @@ export class TerminalView extends ItemView {
           this.modificationStore.markPath(nodeId, path);
         }
       }
+      if (receipts.length > 0 || outcome.success) void this.directoryTreePanel?.refreshAfterTransfer();
       if (!outcome.success) throw new Error(outcome.message || 'Transfer failed');
       // The wire transfer already ran the whole entry (folder or file) as
       // one unit by the time `run()` resolves, so the only progress
@@ -2224,6 +2226,7 @@ export class TerminalView extends ItemView {
         this.modificationStore.markPath(nodeId, path);
       }
     }
+    if (receipts.length > 0) void this.directoryTreePanel?.refreshAfterTransfer();
   }
 
   removeDeviceState(deviceKey: string): void {
