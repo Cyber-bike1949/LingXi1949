@@ -2472,9 +2472,10 @@ export default class TerminalPlugin extends Plugin {
 
   private async sendNoteToPickedTerminal(file: TFile, terminal: ConnectedTerminal): Promise<void> {
     const connections = this.getDeviceConnectionManager();
-    const targetPath = terminal.view.getRemoteDropTargetPath();
+    const targetPath = terminal.targetPath;
     try {
       const result = await sendNoteRecursively(this.app, file, terminal.nodeId, connections, targetPath, {
+        sessionTicket: terminal.ticket,
         includeBacklinks: this.settings.sendBacklinkedNotes,
         confirmBeforeSend: (files) => {
           const totalBytes = files.reduce((sum, f) => sum + f.size, 0);

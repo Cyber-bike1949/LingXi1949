@@ -12,6 +12,7 @@ class TestView {
     this.terminal = { getAiCliFileBinding: () => binding, getTitle: () => 'Example', remote };
   }
   getTerminalInstance() { return this.terminal; }
+  getRemoteDropTargetPath() { return this.terminal.getAiCliFileBinding()?.workDir ?? "/example"; }
 }
 globalThis.PickerTestView = TestView;
 await build({
@@ -45,3 +46,32 @@ for (const [binding, remote, expected] of [
     assert.equal(terminals[0].nodeId, expected);
   });
 }
+
+for (const remote of ['controller', null]) {
+  test(`AI binding remains selectable before a direct target connection from ${remote}`, () => {
+    const binding = { deviceId: 'controlled', workDir: 'D:\\example', ticket: 'session-ticket' };
+    const leaf = { view: new TestView(binding, remote) };
+    const plugin = {
+      getDeviceConnectionManager: () => ({ isConnected: id => id === 'controller' }),
+      getRemoteNodeId: terminal => terminal.remote,
+      getPairedDeviceStore: () => new Map(),
+    };
+    const terminals = listConnectedTerminals({ workspace: { getLeavesOfType: () => [leaf] } }, plugin);
+    assert.equal(terminals.length, 1);
+    assert.equal(terminals[0].nodeId, 'controlled');
+    assert.equal(terminals[0].targetPath, 'D:\\example');
+    assert.equal(terminals[0].ticket, 'session-ticket');
+    binding.workDir = 'D:\\different-session';
+    assert.equal(terminals[0].targetPath, 'D:\\example');
+  });
+}
+
+test('unbound disconnected terminals remain excluded', () => {
+  const leaves = [null, 'controller'].map(remote => ({ view: new TestView(null, remote) }));
+  const plugin = {
+    getDeviceConnectionManager: () => ({ isConnected: () => false }),
+    getRemoteNodeId: terminal => terminal.remote,
+    getPairedDeviceStore: () => new Map(),
+  };
+  assert.deepEqual(listConnectedTerminals({ workspace: { getLeavesOfType: () => leaves } }, plugin), []);
+});

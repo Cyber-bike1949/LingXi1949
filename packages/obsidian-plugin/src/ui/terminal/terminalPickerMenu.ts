@@ -16,10 +16,12 @@ export interface ConnectedTerminal {
   leaf: WorkspaceLeaf;
   view: TerminalView;
   nodeId: string;
+  targetPath: string;
+  ticket?: string;
   label: string;
 }
 
-/** Open terminal tabs whose device connection is currently live. */
+/** Open terminal tabs with a live connection or an AI-bound transfer target. */
 export function listConnectedTerminals(app: App, plugin: TerminalPlugin): ConnectedTerminal[] {
   const connections = plugin.getDeviceConnectionManager();
   const terminals: ConnectedTerminal[] = [];
@@ -31,12 +33,15 @@ export function listConnectedTerminals(app: App, plugin: TerminalPlugin): Connec
     const terminal = view.getTerminalInstance();
     if (!terminal) continue;
 
-    const nodeId = terminal.getAiCliFileBinding()?.deviceId ?? plugin.getRemoteNodeId(terminal);
-    if (!nodeId || !connections.isConnected(nodeId)) continue;
+    const binding = terminal.getAiCliFileBinding();
+    const nodeId = binding?.deviceId ?? plugin.getRemoteNodeId(terminal);
+    if (!nodeId || (!binding && !connections.isConnected(nodeId))) continue;
 
     const device = plugin.getPairedDeviceStore().get(nodeId);
     const label = device ? `${device.name} — ${terminal.getTitle()}` : terminal.getTitle();
-    terminals.push({ leaf, view, nodeId, label });
+    // Capture the device and path together so a later binding change cannot
+    // pair the selected device with another session's working directory.
+    terminals.push({ leaf, view, nodeId, label, targetPath: view.getRemoteDropTargetPath(), ticket: binding?.ticket });
   }
 
   return terminals;

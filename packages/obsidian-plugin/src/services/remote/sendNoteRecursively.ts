@@ -38,6 +38,8 @@ export interface SendNoteRecursivelyResult {
 }
 
 export interface SendNoteRecursivelyOptions {
+  /** Ephemeral AI-session connection address; never persisted as a pairing. */
+  sessionTicket?: string;
   /** `sendBacklinkedNotes` setting (R-02-2); false reproduces v1.8 forward-only collection. */
   includeBacklinks: boolean;
   /**
@@ -82,6 +84,8 @@ export async function sendNoteRecursively(
     }
   }
 
+  // A bound AI target need not have a plugin connection until the first send.
+  await connections.connect(nodeId, options.sessionTicket);
   const outcome = await connections
     .createTransferSender(nodeId, crypto.randomUUID(), collected.files, (path) => readVaultFile(app, path), null, targetPath)
     .run();
