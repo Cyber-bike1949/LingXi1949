@@ -4,6 +4,8 @@
 - Keep AI-bound terminals available in the note send picker before the plugin has connected directly to the bound device.
 - Connect using the active AI session ticket before transferring notes and linked notes; report connection failures without sending to the controller instead.
 - Capture the selected target device and working directory together to prevent mismatches if the AI binding changes while the picker is open.
+- Allow the Linux Agent service installer to reuse the invoking user when projects are stored in that user's home, avoiding a mismatched dedicated service account.
+- Clarify the persistent service account selected by the installer.
 
 ## [5.0.11] - 2026-11-20
 

@@ -44,7 +44,7 @@
 
 ## AI 会话中的远程目录树
 
-在插件终端中运行控制端的 `control.sh ai`（Windows 为 `control.cmd ai`）选择被控设备和目录，再运行 `control.sh codex` 或 `control.sh claude`（Windows 使用对应的 `control.cmd` 命令） 启动绑定的 AI 会话。此时点击终端的“目录树”，会显示被控设备的工作目录；设备不需要在插件内重复配对。此流程需要插件 5.0.10 及以上版本、Remote 5.0.9 及以上版本的控制端和 Agent。更新后请重新启动 AI 会话，让插件收到新的绑定信息。
+在插件终端中运行控制端的 `control.sh ai`（Windows 为 `control.cmd ai`）选择被控设备和目录，再运行 `control.sh codex` 或 `control.sh claude`（Windows 使用对应的 `control.cmd` 命令） 启动绑定的 AI 会话。此时点击终端的“目录树”，会显示被控设备的工作目录；设备不需要在插件内重复配对。此流程需要插件 5.0.10 及以上版本、Remote 5.0.10 及以上版本的控制端和 Agent。更新后请重新启动 AI 会话，让插件收到新的绑定信息。
 
 ## 安装
 
@@ -74,9 +74,13 @@ Agent 的发布版本与 Obsidian 插件版本彼此独立。例如插件 5.0.3 
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```
 
-该一键安装会创建专用的 `lingxi1949` 系统用户，安装 `lingxi1949-agent.service` systemd 服务，并设置为开机自动启动。服务账户中已有的 Agent 身份和配置会保留。输入 `lingxi1949 status` 即可查看连接码；输入 `lingxi1949 run` 会重启并继续后台常驻运行 Agent。随后回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。
+该一键安装默认会创建专用的 `lingxi1949` 系统用户，安装 `lingxi1949-agent.service` systemd 服务，并设置为开机自动启动。服务账户中已有的 Agent 身份和配置会保留。输入 `lingxi1949 status` 即可查看连接码；输入 `lingxi1949 run` 会重启并继续后台常驻运行 Agent。随后回到 Obsidian 运行“LingXi1949：打开终端”，选择添加设备并粘贴。
 
-如需指定专用账户，可在命令末尾加 `--user 名称`。如只想为当前用户临时运行 Agent、不创建账户或服务，去掉 `sudo` 和 `--service` 即可；使用时需保持终端打开，按 `Ctrl-C` 才会停止 Agent。
+如需指定专用账户，可在命令末尾加 `--user 名称`。若项目位于当前登录用户的主目录，且希望服务直接访问这些项目而**不创建新用户**，在命令末尾加 `--current-user`；该选项会复用执行 `sudo` 前的登录账户及其现有身份和配置，并允许服务读取和写入该用户主目录中的项目。不要使用 root 作为 Agent 账户。如只想为当前用户临时运行 Agent、不创建账户或服务，去掉 `sudo` 和 `--service` 即可；使用时需保持终端打开，按 `Ctrl-C` 才会停止 Agent。
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service --current-user
+```
 
 Windows Agent、AI CLI 与故障排查说明见 [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote)。不要使用旧的 `agent/packaging/install-linux.sh` 或已废弃的 4.0 安装命令。
 

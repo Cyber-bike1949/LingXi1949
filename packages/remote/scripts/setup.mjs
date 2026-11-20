@@ -101,11 +101,14 @@ try {
   console.log('1/4 检查并启动 Agent');
   await startAgent();
   mkdirSync(home, { recursive: true, mode: 0o700 });
+  const agentStatus = run(agent, ['status']);
   if (role === 'target') {
     save('setup-result.json', { status: 'ready', role });
-    console.log(run(agent, ['status']));
+    console.log(agentStatus);
     console.log('被控制端已就绪。把上面的连接码复制到控制端；关闭此脚本后 Agent 继续运行。');
   } else {
+    console.log(agentStatus);
+    console.log('这是控制端自身的连接码。仅当需要让另一台设备反向连接到本机时才使用；不要把它当作被控制端连接码。');
     console.log('2/4 初始化控制端并配对（保留已有身份）');
     if (!existsSync(join(home, 'profile.json'))) invoke('init');
     const ticket = options['ticket-file'] ? readFileSync(options['ticket-file'], 'utf8').trim() : await ask('ticket', '粘贴被控制端连接码');

@@ -1,5 +1,9 @@
 # Remote Product Changelog
 
+## [5.0.10] - 2026-11-20
+
+- Show the controller Agent's connection code during first-run setup, with guidance that normal pairing still uses the target's code.
+
 ## [5.0.9] - 2026-11-19
 
 - Include the selected device connection ticket in the AI binding marker so the plugin can browse the remote workspace without pairing the device again.

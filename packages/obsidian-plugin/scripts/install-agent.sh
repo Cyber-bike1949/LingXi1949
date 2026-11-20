@@ -2,19 +2,22 @@
 # Install the standalone LingXi1949 Agent for Obsidian pairing.
 set -euo pipefail
 
-AGENT_VERSION='5.0.9'
+AGENT_VERSION='5.0.10'
 RELEASE_REPOSITORY='Cyber-bike1949/LingXi1949'
 SERVICE_USER='lingxi1949'
 SERVICE_NAME='lingxi1949-agent.service'
 MODE='foreground'
+USE_CURRENT_USER=0
 
 usage() {
   cat <<'EOF'
-Usage: install-agent.sh [--service [--user NAME]]
+Usage: install-agent.sh [--service [--user NAME | --current-user]]
 
 Without options, install the Agent for the current user and run it in this terminal.
 --service creates a dedicated system user and a persistent systemd service.
 --user NAME selects the dedicated system user (default: lingxi1949; only with --service).
+--current-user runs the persistent service as the invoking non-root user instead of
+creating an account. Use this when the projects to control are in that user's home.
 EOF
 }
 
@@ -26,13 +29,18 @@ while (($#)); do
       SERVICE_USER="$2"
       shift 2
       ;;
+    --current-user) USE_CURRENT_USER=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage >&2; exit 1 ;;
   esac
 done
 
-[[ "$MODE" == 'service' || "$SERVICE_USER" == 'lingxi1949' ]] || {
-  echo '--user can only be used with --service.' >&2
+[[ "$MODE" == 'service' || ( "$SERVICE_USER" == 'lingxi1949' && "$USE_CURRENT_USER" == 0 ) ]] || {
+  echo '--user and --current-user can only be used with --service.' >&2
+  exit 1
+}
+[[ "$USE_CURRENT_USER" == 0 || "$SERVICE_USER" == 'lingxi1949' ]] || {
+  echo '--user and --current-user cannot be used together.' >&2
   exit 1
 }
 [[ "$SERVICE_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ && "$SERVICE_USER" != 'root' ]] || {
@@ -67,7 +75,16 @@ if [[ "$MODE" == 'service' ]]; then
       echo 'Download this script to a file, then run: sudo bash <file> --service' >&2
       exit 1
     }
-    exec sudo bash "${BASH_SOURCE[0]}" --service --user "$SERVICE_USER"
+    current_user_args=()
+    [[ "$USE_CURRENT_USER" == 0 ]] || current_user_args=(--current-user)
+    exec sudo bash "${BASH_SOURCE[0]}" --service --user "$SERVICE_USER" "${current_user_args[@]}"
+  fi
+  if [[ "$USE_CURRENT_USER" == 1 ]]; then
+    [[ -n "${SUDO_USER:-}" && "$SUDO_USER" != 'root' ]] || {
+      echo '--current-user must be run by a non-root user through sudo.' >&2
+      exit 1
+    }
+    SERVICE_USER="$SUDO_USER"
   fi
 fi
 
@@ -110,6 +127,10 @@ unit_path="/etc/systemd/system/$SERVICE_NAME"
 launcher_path='/usr/local/bin/lingxi1949'
 
 if ! getent passwd "$SERVICE_USER" >/dev/null; then
+  [[ "$USE_CURRENT_USER" == 0 ]] || {
+    echo "The invoking user does not exist: $SERVICE_USER" >&2
+    exit 1
+  }
   useradd --system --create-home --home-dir "/var/lib/$SERVICE_USER" --shell /usr/sbin/nologin "$SERVICE_USER"
 fi
 service_entry="$(getent passwd "$SERVICE_USER")"
@@ -117,6 +138,11 @@ IFS=: read -r _ _ service_uid _ _ service_home _ <<< "$service_entry"
 [[ "$service_uid" != '0' ]] || { echo 'Refusing to run the Agent as root.' >&2; exit 1; }
 [[ "$service_home" == /* && "$service_home" != '/' ]] || { echo 'The service user has an invalid home directory.' >&2; exit 1; }
 service_group="$(id -gn "$SERVICE_USER")"
+protect_home='true'
+if [[ "$USE_CURRENT_USER" == 1 ]]; then
+  # The agent must be able to access projects in the invoking user's home.
+  protect_home='false'
+fi
 # umask is intentionally restrictive while downloading the release, but the
 # unprivileged service user must be able to traverse the installed binary path.
 install -d -o root -g root -m 0755 /usr/local/lib/lingxi1949-agent "$install_dir"
@@ -176,7 +202,7 @@ RestartSec=5
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectSystem=strict
-ProtectHome=true
+ProtectHome=$protect_home
 ReadWritePaths=$service_home
 
 [Install]
@@ -189,6 +215,10 @@ systemctl is-active --quiet "$SERVICE_NAME" || {
   echo "The service did not start. Inspect: journalctl -u $SERVICE_NAME -n 100 --no-pager" >&2
   exit 1
 }
-echo "Agent service is running as $SERVICE_USER and will start automatically after reboot."
+if [[ "$USE_CURRENT_USER" == 1 ]]; then
+  echo "Agent service is running as the existing user $SERVICE_USER and will start automatically after reboot."
+else
+  echo "Agent service is running as the dedicated user $SERVICE_USER and will start automatically after reboot."
+fi
 echo 'Show the connection code: lingxi1949 status'
 echo 'Restart the persistent Agent service: lingxi1949 run'

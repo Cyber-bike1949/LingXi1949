@@ -71,9 +71,13 @@ The Agent release version is independent from the Obsidian plugin version. For e
 curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service
 ```
 
-This one-command installation creates the dedicated `lingxi1949` system user, installs a `lingxi1949-agent.service` systemd service, and enables it to start automatically after reboot. It preserves the service account's existing Agent identity and configuration. Run `lingxi1949 status` to show its connection code; `lingxi1949 run` restarts the persistent Agent service. Then in Obsidian run **LingXi1949: Open terminal**, choose to add a device, and paste the code.
+This one-command installation creates the dedicated `lingxi1949` system user by default, installs a `lingxi1949-agent.service` systemd service, and enables it to start automatically after reboot. It preserves the service account's existing Agent identity and configuration. Run `lingxi1949 status` to show its connection code; `lingxi1949 run` restarts the persistent Agent service. Then in Obsidian run **LingXi1949: Open terminal**, choose to add a device, and paste the code.
 
-To use a different dedicated account, append `--user NAME`. To run the Agent only for the current user without creating an account or service, omit `sudo` and `--service`; keep that terminal open while using it and press **Ctrl-C** to stop it.
+To use a different dedicated account, append `--user NAME`. If projects are in the current user's home directory, append `--current-user` to reuse that user without creating an account; the service can then access those projects. Do not run an Agent as root. To run the Agent only for the current user without creating an account or service, omit `sudo` and `--service`; keep that terminal open while using it and press **Ctrl-C** to stop it.
+
+```bash
+curl --proto '=https' --tlsv1.2 -fsSL https://raw.githubusercontent.com/Cyber-bike1949/LingXi1949/main/packages/obsidian-plugin/scripts/install-agent.sh | sudo bash -s -- --service --current-user
+```
 
 See [LingXiRemote](https://github.com/Cyber-bike1949/LingXiRemote) for the Windows Agent, AI CLI setup, and troubleshooting. Do not use the legacy `agent/packaging/install-linux.sh` or the retired 4.0 installer command.
 
