@@ -26,6 +26,7 @@ import { qualityCommand, worktreeCommand } from './pipeline.mjs';
 import { powershellCommand, powershellLiteral } from './shell.mjs';
 import { publishTaskSnapshot } from './taskSnapshot.mjs';
 import { quotaFailure, quotaRetryAt } from './quota.mjs';
+import { checkRootlessDocker, runDockerAgent } from './dockerSandbox.mjs';
 import { flushNotificationOutbox, notificationConfig } from './notifications.mjs';
 
 const [command, ...argv] = process.argv.slice(2);
@@ -41,7 +42,7 @@ const store = new OrchestratorStore(databasePath);
 chmodSync(databasePath, 0o600);
 const print = value => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 const required = key => { if (!options[key]) throw new Error(`MISSING_${key.toUpperCase().replaceAll('-', '_')}`); return options[key]; };
-async function executeConfiguredAgent({ agent, prompt, remote, taskId, role }) {
+async function executeConfiguredAgent({ agent, prompt, remote, taskId, role, sandbox }) {
   const previous = [...store.events(taskId)].reverse().find(event => event.type === 'AGENT_SESSION' && event.data?.role === role)?.data?.sessionId;
   const args = resumeAgentArgs(agent, previous);
   const onSession = sessionId => store.event(taskId, 'AGENT_SESSION', { role, sessionId, capturedAt: new Date().toISOString() });
@@ -58,7 +59,10 @@ async function executeConfiguredAgent({ agent, prompt, remote, taskId, role }) {
         ]
       }
     } : prompt;
-    return { ...(await runAgent({ executable: agent.executable, args, mcp: agent.mcp, prompt: localPrompt, onSession })), target: 'local' };
+    const result = sandbox?.enabled === true
+      ? await runDockerAgent({ config: sandbox, agent, args, prompt: localPrompt, remote, stateRoot: home, taskId, role, onSession })
+      : await runAgent({ executable: agent.executable, args, mcp: agent.mcp, prompt: localPrompt, onSession });
+    return { ...result, target: 'local' };
   }
   const command = remoteAgentCommand({ executable: agent.executable, args, prompt, worktree: prompt.worktree, shellKind: remote.shellKind });
   const controller = await runLingxiCommand({ cli: remote.lingxiCli, session: remote.session, command, timeoutMs: agent.timeoutMs ?? 3600000 });
@@ -78,6 +82,10 @@ function releaseWorktree(task, remote, worktree) {
 }
 async function validateProjectRuntime(project) {
   const runtime = runtimeConfig(project); const plan = preflightPlan({ project, runtime }); const checks = [];
+  if (runtime.sandbox?.enabled === true) {
+    try { await checkRootlessDocker(runtime.sandbox); checks.push({ kind: 'rootless-docker', exitCode: 0 }); }
+    catch (error) { checks.push({ kind: 'rootless-docker', exitCode: 1, stderr: error.message }); }
+  }
   for (const remote of plan.remotes) {
     const config = await runProcess(process.execPath, [remote.cli, 'config', '--session', remote.session]);
     checks.push({ kind: `lingxi-session:${remote.role}`, ...safeSummary(config) });
@@ -264,7 +272,8 @@ try {
       const remote = runtime.remotes.development; const worktree = joinRemotePath(remote, task.id);
       leaseWorktree(task, remote, worktree);
       const prompt = { ...taskPrompt(task, 'developer', project, store.approvedDocuments(task.id)), worktree };
-      const result = await executeConfiguredAgent({ agent: runtime.agent, prompt, remote, taskId: task.id, role: 'developer' });
+      store.node(task.id, action.kind, 'RUNNING', { worktree, role: 'developer' });
+      const result = await executeConfiguredAgent({ agent: runtime.agent, prompt, remote, sandbox: runtime.sandbox, taskId: task.id, role: 'developer' });
       store.event(task.id, 'AGENT_FINISHED', { role: 'developer', ...result });
       const quota = quotaFailure(result);
       if (quota) {
@@ -296,7 +305,8 @@ try {
     } else if (action.kind === 'test') {
       const remote = runtime.remotes.test; const worktree = joinRemotePath(remote, task.id); const deliverySha = store.deliverySha(task.id);
       leaseWorktree(task, remote, worktree);
-      const result = await executeConfiguredAgent({ agent: runtime.tester, remote, taskId: task.id, role: 'tester', prompt: { ...taskPrompt(task, 'tester', project, store.approvedDocuments(task.id)), worktree, deliverySha } });
+      store.node(task.id, action.kind, 'RUNNING', { worktree, role: 'tester', deliverySha });
+      const result = await executeConfiguredAgent({ agent: runtime.tester, remote, sandbox: runtime.sandbox, taskId: task.id, role: 'tester', prompt: { ...taskPrompt(task, 'tester', project, store.approvedDocuments(task.id)), worktree, deliverySha } });
       store.event(task.id, 'AGENT_FINISHED', { role: 'tester', deliverySha, ...result });
       const quota = quotaFailure(result);
       if (quota) {

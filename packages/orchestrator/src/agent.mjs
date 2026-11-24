@@ -74,6 +74,7 @@ export function runAgent({ executable, args = [], prompt, mcp, onSession }) {
       if (found && found !== sessionId) { sessionId = found; if (onSession) onSession(sessionId); }
       resolve({ exitCode: exitCode ?? 1, stdout, stderr, ...(sessionId ? { sessionId } : {}) });
     });
+    child.stdin.on('error', error => { if (error.code !== 'EPIPE') reject(error); });
     child.stdin.end(`${JSON.stringify(prompt, null, 2)}\n`);
   });
 }

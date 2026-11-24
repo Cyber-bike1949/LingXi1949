@@ -166,6 +166,38 @@ node packages/orchestrator/src/cli.mjs serve --project ./project.json --port 431
 
 Open `http://127.0.0.1:43194/`. Authenticated routes require a Bearer token; the UI keeps it in the current browser tab's session storage. The service binds to loopback by default. Binding to a non-loopback address is refused unless both an auth token and `--tls-terminated true` are supplied; prefer keeping this service loopback-only behind an HTTPS tunnel/reverse proxy. Never expose the task runner over unauthenticated HTTP. `GET /health`, `GET /meta`, `GET /tasks`, and `GET /tasks/:id` are available; authenticated `POST /tasks` requires an explicit approval checkbox and `POST /tasks/:id/run` starts only a task in the configured repository.
 
+## Optional rootless Docker runner
+
+On a Linux controller with rootless Docker, set `runtime.sandbox` to enable
+containerized local Codex for the configured development and test stages.
+
+```json
+{
+  "enabled": true,
+  "provider": "docker",
+  "trustedProject": true,
+  "dockerExecutable": "/home/lingxi-orchestrator/bin/docker",
+  "image": "sha256:<64 lowercase hexadecimal digits>",
+  "authFile": "/home/lingxi-orchestrator/.codex/auth.json"
+}
+```
+
+Build or provision a trusted Linux image with `/usr/local/bin/codex`,
+`/usr/local/bin/codex-code-mode-host`, `/usr/local/bin/node`, and the CA
+certificates required by Codex. Reference
+the local image ID or an immutable registry digest. Use a controller-managed
+Codex login file. The container mounts that file read-only, so renew the
+login on the controller if it expires. Each stage starts a fresh container.
+Disposable workspace state lives in the container, and Codex session state
+is retained under the Orchestrator task home by task and role. Keep native
+resume enabled for roles that must restore prior Codex sessions.
+
+The configured remote session stays on the controller. The container connects
+to it through a task-scoped Unix socket using the existing LingXi bridge.
+The controller pairing profile, worker GitHub credential and Feishu webhook
+stay on the controller. Enable this mode for approved trusted projects.
+Enforce controlled-device isolation and least-privilege separately on Windows.
+
 ## Local worker
 
 Run the scheduler as a local foreground service on the controller when continuous progression is wanted. Configure `runtime.notifications.feishuWebhookEnv` with the name of an environment variable holding the Feishu/Lark HTTPS webhook URL; the URL itself is never saved in project configuration. The worker persists notification delivery attempts in its outbox and retries failures with backoff:

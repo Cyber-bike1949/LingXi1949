@@ -55,3 +55,5 @@ The Obsidian task mirror carries event IDs, timestamps, inferred stage duration,
 
 
 Controller-local Codex sessions can be checkpointed when JSONL events expose the native thread ID. The Orchestrator writes each session ID to the task event log as it arrives and can substitute it into project-configured resume arguments on a later attempt. Native resume is opt-in and cannot be combined with ephemeral execution; approved documents and durable task events remain the fallback checkpoint. Remote AI processes still return one final LingXi result and do not stream native session identifiers.
+
+On Linux, an approved trusted project may opt into a rootless Docker runner for local Codex stages. Each stage uses a fresh container from a pinned image. A private per-task and per-role directory retains Codex state across containers. A task-scoped Unix socket connects to the existing controller-side LingXi MCP session. The worker's GitHub and Feishu credentials and the LingXi pairing profile stay on the controller.

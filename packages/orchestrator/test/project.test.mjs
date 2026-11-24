@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+import { validateDockerSandbox } from '../src/dockerSandbox.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
@@ -55,4 +57,15 @@ test('includes the exact approved documents in the agent prompt and verifies the
 
 test('requires explicit persistent Codex resume arguments and rejects ephemeral sessions', () => { const base = { runtime: { remote: remote('resume'), agent: { ...agent, resumeNativeSession: true }, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } } } }; assert.throws(() => runtimeConfig(base), /AGENT_RESUME_ARGS_REQUIRED/); assert.throws(() => runtimeConfig({ runtime: { ...base.runtime, agent: { ...agent, args: ['exec', '--ephemeral', '-'], resumeNativeSession: true, resumeArgs: ['exec', 'resume', '{sessionId}', '-'] } } }), /INCOMPATIBLE_WITH_EPHEMERAL/); const config = runtimeConfig({ runtime: { ...base.runtime, agent: { ...agent, resumeNativeSession: true, resumeArgs: ['exec', 'resume', '{sessionId}', '-'] } } }); assert.equal(config.agent.resumeNativeSession, true); });
 
-test('refuses an enabled sandbox until an enforcing sandbox provider is implemented', () => { assert.throws(() => runtimeConfig({ runtime: { remote: remote('sandbox'), agent, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } }, sandbox: { enabled: true, provider: 'docker' } } }), /SANDBOX_NOT_IMPLEMENTED/); });
+test('refuses to enable Docker without a trusted project and pinned image', () => { assert.throws(() => runtimeConfig({ runtime: { remote: remote('sandbox'), agent, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } }, sandbox: { enabled: true, provider: 'docker' } } }), /DOCKER_SANDBOX_REQUIRES_(?:LINUX|TRUSTED_PROJECT)/); });
+
+test('Docker sandbox requires a pinned image and validates absolute host paths', () => {
+  const config = {
+    enabled: true, provider: 'docker', trustedProject: true,
+    image: 'sha256:' + 'a'.repeat(64),
+    dockerExecutable: resolve('docker'), authFile: resolve('auth.json'),
+  };
+  assert.doesNotThrow(() => validateDockerSandbox(config, 'linux'));
+  assert.throws(() => validateDockerSandbox({ ...config, image: 'codex:latest' }, 'linux'), /DOCKER_SANDBOX_REQUIRES_PINNED_IMAGE/);
+  assert.throws(() => validateDockerSandbox({ ...config, authFile: 'auth.json' }, 'linux'), /DOCKER_SANDBOX_PATH_REQUIRED/);
+});

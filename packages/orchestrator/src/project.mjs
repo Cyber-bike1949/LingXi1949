@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { posix, win32 } from 'node:path';
+import { validateDockerSandbox } from './dockerSandbox.mjs';
 
 export function sha256File(path) { return createHash('sha256').update(readFileSync(path)).digest('hex'); }
 
@@ -25,7 +26,7 @@ export function taskPrompt(task, role, project, documents) {
 
 export function runtimeConfig(project) {
   const runtime = project.runtime;
-  if (runtime?.sandbox?.enabled === true) throw new Error('PROJECT_RUNTIME_SANDBOX_NOT_IMPLEMENTED');
+  validateDockerSandbox(runtime?.sandbox);
   if (runtime?.release?.autoAfterGate === true && (typeof runtime.release.approvedBy !== 'string' || !runtime.release.approvedBy.trim())) throw new Error('AUTO_RELEASE_APPROVER_REQUIRED');
   if (runtime?.quota !== undefined) {
     if (!runtime.quota || typeof runtime.quota !== 'object' || Array.isArray(runtime.quota)) throw new Error('PROJECT_RUNTIME_QUOTA_INVALID');
@@ -56,5 +57,11 @@ export function runtimeConfig(project) {
     return { ...agent, target };
   };
   const normalizedDevelopment = normalizeRemote(developmentRemote); const normalizedTest = normalizeRemote(testRemote);
-  return { ...runtime, remote: normalizedDevelopment, remotes: { development: normalizedDevelopment, test: normalizedTest }, agent: normalizeAgent(runtime.agent), tester: normalizeAgent(runtime.tester ?? runtime.agent) };
+  const agent = normalizeAgent(runtime.agent);
+  const tester = normalizeAgent(runtime.tester ?? runtime.agent);
+  if (runtime.sandbox?.enabled === true && [agent, tester].some(role =>
+    role.target !== 'local' || !role.mcp || !/(?:^|\/)codex$/.test(role.executable))) {
+    throw new Error('DOCKER_SANDBOX_REQUIRES_LOCAL_CODEX_WITH_LINGXI_MCP');
+  }
+  return { ...runtime, remote: normalizedDevelopment, remotes: { development: normalizedDevelopment, test: normalizedTest }, agent, tester };
 }
