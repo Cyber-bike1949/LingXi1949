@@ -184,7 +184,7 @@ try {
     await pairingView.waitFor({ state: 'visible' });
     await pairingView.locator('input').fill('UI test target');
     await pairingView.locator('textarea').fill(ticket);
-    await pairingView.getByRole('button', { name: 'Add device' }).click();
+    await pairingView.getByRole('button', { name: /添加设备|Add device/i }).click();
     await page.locator('.termesh-device-card.is-remote').waitFor({ state: 'visible' });
     await page.locator('.termesh-device-card.is-remote').click();
     await command(`LINGXI_REMOTE_${randomBytes(6).toString('hex')}`);
