@@ -156,8 +156,15 @@ mod tests {
         let (session, reader) =
             PtySession::spawn("/bin/sh", &[], None, 80, 24).expect("sh should start");
         #[cfg(windows)]
-        let (session, reader) =
+        let (mut session, reader) =
             PtySession::spawn("cmd.exe", &[], None, 80, 24).expect("cmd should start");
+
+        // ConPTY inherits the cursor from the host terminal. These fixtures
+        // have no terminal emulator, so answer the initial cursor query.
+        #[cfg(windows)]
+        session
+            .write_input(b"\x1b[1;1R")
+            .expect("ConPTY should accept a cursor position");
 
         // Drain the pty like the real serve loop's output pump does. An
         // undrained ConPTY pipe can wedge child teardown on Windows - the
