@@ -109,11 +109,11 @@ try {
   page.on('pageerror', error => logs.push(`pageerror: ${error.message}`));
   const startupState = await Promise.race([
     page.waitForFunction(id => !!window.app?.plugins?.plugins?.[id], manifest.id, { timeout: 30000 }).then(() => 'plugin-loaded'),
-    page.getByText(/Do you trust the author of this vault/i).waitFor({ state: 'visible', timeout: 30000 }).then(() => 'vault-trust'),
+    page.getByText(/Do you trust the author of this vault|信任这个仓库的作者/i).waitFor({ state: 'visible', timeout: 30000 }).then(() => 'vault-trust'),
   ]);
   if (startupState === 'vault-trust') {
-    const trustPrompt = page.getByText(/Do you trust the author of this vault/i).last();
-    const trustButton = page.getByText(/Trust author and enable plugins/i).last();
+    const trustPrompt = page.getByText(/Do you trust the author of this vault|信任这个仓库的作者/i).last();
+    const trustButton = page.getByText(/Trust author and enable plugins|信任仓库作者并启用插件/i).last();
     await trustButton.waitFor({ state: 'visible' });
     await trustButton.click();
     await trustPrompt.waitFor({ state: 'hidden', timeout: 10000 });
@@ -121,7 +121,7 @@ try {
   }
   const home = async () => {
     const commandId = `${manifest.id}:open-terminal`;
-    const name = await page.evaluate(id => window.app.commands.commands[id].name, commandId);
+    const name = await (await page.waitForFunction(id => window.app?.commands?.commands?.[id]?.name, commandId)).jsonValue();
     const launchers = page.getByText(name, { exact: true });
     let launched = false;
     for (let index = 0; index < await launchers.count(); index += 1) {
@@ -171,6 +171,11 @@ try {
     await home();
   });
   await record(1, async () => {
+    const settings = page.locator('.mod-settings:visible');
+    if (await settings.isVisible()) {
+      await settings.locator('.modal-close-button').click();
+      await settings.waitFor({ state: 'hidden' });
+    }
     await page.locator('.termesh-device-card.is-local').click();
     await page.locator('.xterm-helper-textarea:visible').last().waitFor();
   });
