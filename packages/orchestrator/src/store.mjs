@@ -1,13 +1,15 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
+import { ApprovedDocumentStore } from './approvedDocuments.mjs';
 
 const taskStates = new Set(['REQUIREMENT_APPROVED', 'TEST_CASES_APPROVED', 'WAITING_QUOTA', 'IMPLEMENTING', 'LOCAL_VERIFYING', 'CI_VERIFYING', 'FIXING', 'RC_BUILDING', 'RC_READY', 'USER_ACCEPTING', 'RELEASE_APPROVED', 'RELEASE_TRIGGERED', 'RELEASED', 'BLOCKED_USER_DECISION', 'CANCELLED']);
 
 export class OrchestratorStore {
   constructor(filename) {
     this.db = new DatabaseSync(filename);
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
-      CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, repository TEXT NOT NULL, branch TEXT NOT NULL UNIQUE, base_sha TEXT NOT NULL, state TEXT NOT NULL, requirement_hash TEXT NOT NULL, test_case_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, requirement_content TEXT, test_case_content TEXT);
+    this.approvedDocumentStore = new ApprovedDocumentStore(filename);
+    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;
+      CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, repository TEXT NOT NULL, branch TEXT NOT NULL UNIQUE, base_sha TEXT NOT NULL, state TEXT NOT NULL, requirement_hash TEXT NOT NULL, test_case_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(task_id, kind));
       CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, kind TEXT NOT NULL, location TEXT NOT NULL, sha TEXT, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workflow_runs (task_id TEXT NOT NULL, sha TEXT NOT NULL, name TEXT NOT NULL, run_id TEXT NOT NULL, url TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, recorded_at TEXT NOT NULL, PRIMARY KEY(task_id, run_id));
@@ -16,14 +18,31 @@ export class OrchestratorStore {
       CREATE TABLE IF NOT EXISTS locks (key TEXT PRIMARY KEY, holder TEXT NOT NULL, expires_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS notification_outbox (id TEXT PRIMARY KEY, dedupe_key TEXT NOT NULL UNIQUE, task_id TEXT NOT NULL, event_type TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL, next_attempt_at TEXT NOT NULL, last_error TEXT, created_at TEXT NOT NULL, sent_at TEXT);`);
     const columns = new Set(this.db.prepare('PRAGMA table_info(tasks)').all().map(column => column.name));
-    if (!columns.has('requirement_content')) this.db.exec('ALTER TABLE tasks ADD COLUMN requirement_content TEXT');
-    if (!columns.has('test_case_content')) this.db.exec('ALTER TABLE tasks ADD COLUMN test_case_content TEXT');
+    const legacyRequirement = columns.has('requirement_content');
+    const legacyTestCases = columns.has('test_case_content');
+    if (legacyRequirement || legacyTestCases) {
+      const requirementColumn = legacyRequirement ? 'requirement_content' : 'NULL AS requirement_content';
+      const testCasesColumn = legacyTestCases ? 'test_case_content' : 'NULL AS test_case_content';
+      const rows = this.db.prepare(`SELECT id,requirement_hash,test_case_hash,${requirementColumn},${testCasesColumn} FROM tasks`).all();
+      for (const row of rows) {
+        if (row.requirement_content === null && row.test_case_content === null) continue;
+        this.approvedDocumentStore.writePair(row.id, row.requirement_content, row.test_case_content, row.requirement_hash, row.test_case_hash, true);
+        const cleared = [];
+        if (legacyRequirement) cleared.push('requirement_content=NULL');
+        if (legacyTestCases) cleared.push('test_case_content=NULL');
+        this.db.prepare(`UPDATE tasks SET ${cleared.join(',')} WHERE id=?`).run(row.id);
+      }
+      if (legacyRequirement) this.db.exec('ALTER TABLE tasks DROP COLUMN requirement_content');
+      if (legacyTestCases) this.db.exec('ALTER TABLE tasks DROP COLUMN test_case_content');
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');
+    }
   }
   createTask(input) {
     const id = input.id ?? `RND-${randomUUID().slice(0, 8).toUpperCase()}`;
     const now = new Date().toISOString();
     const task = { id, title: input.title, repository: input.repository, branch: input.branch, baseSha: input.baseSha, state: 'TEST_CASES_APPROVED', requirementHash: input.requirementHash, testCaseHash: input.testCaseHash, createdAt: now, updatedAt: now };
-    this.db.prepare('INSERT INTO tasks (id,title,repository,branch,base_sha,state,requirement_hash,test_case_hash,created_at,updated_at,requirement_content,test_case_content) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(task.id, task.title, task.repository, task.branch, task.baseSha, task.state, task.requirementHash, task.testCaseHash, now, now, input.requirementContent ?? null, input.testCaseContent ?? null);
+    this.approvedDocumentStore.writePair(id, input.requirementContent, input.testCaseContent, task.requirementHash, task.testCaseHash);
+    this.db.prepare('INSERT INTO tasks (id,title,repository,branch,base_sha,state,requirement_hash,test_case_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(task.id, task.title, task.repository, task.branch, task.baseSha, task.state, task.requirementHash, task.testCaseHash, now, now);
     this.event(id, 'TASK_CREATED', { ...task, approvalFrozen: true, requirementApprovedBy: input.approvedBy ?? null, testCasesApprovedBy: input.approvedBy ?? null, approvedAt: now });
     return task;
   }
@@ -85,10 +104,12 @@ export class OrchestratorStore {
     return { id: row.id, title: row.title, repository: row.repository, branch: row.branch, baseSha: row.base_sha, state: row.state, requirementHash: row.requirement_hash, testCaseHash: row.test_case_hash, createdAt: row.created_at, updatedAt: row.updated_at };
   }
   approvedDocuments(id) {
-    const row = this.db.prepare('SELECT requirement_content,test_case_content FROM tasks WHERE id=?').get(id);
+    const row = this.db.prepare('SELECT requirement_hash,test_case_hash FROM tasks WHERE id=?').get(id);
     if (!row) throw new Error('TASK_NOT_FOUND');
-    if (row.requirement_content === null || row.test_case_content === null) throw new Error('APPROVED_DOCUMENT_CONTENT_MISSING');
-    return { requirementContent: row.requirement_content, testCaseContent: row.test_case_content };
+    return {
+      requirementContent: this.approvedDocumentStore.read(id, 'requirement', row.requirement_hash),
+      testCaseContent: this.approvedDocumentStore.read(id, 'test-cases', row.test_case_hash)
+    };
   }
   events(id) { return this.db.prepare('SELECT id,type,data,created_at FROM events WHERE task_id=? ORDER BY created_at,rowid').all(id).map(row => ({ id: row.id, type: row.type, data: JSON.parse(row.data), createdAt: row.created_at })); }
   deliverySha(id) {
