@@ -3,6 +3,10 @@ name: Real Obsidian UI
 on:
   workflow_dispatch:
     inputs:
+      sha:
+        description: Exact delivery commit SHA when triggered by the worker
+        required: false
+        type: string
       target:
         description: Where to run the UI suite
         required: true
@@ -25,7 +29,17 @@ jobs:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
+      - name: Verify requested delivery SHA
+        if: inputs.sha != ''
+        shell: bash
+        env:
+          DELIVERY_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DELIVERY_SHA" =~ ^[0-9a-f]{40}$ && "$DELIVERY_SHA" == "$GITHUB_SHA" ]]
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
@@ -97,7 +111,17 @@ jobs:
     runs-on: [self-hosted, windows, lingxi-ui]
     timeout-minutes: 45
     steps:
+      - name: Verify requested delivery SHA
+        if: inputs.sha != ''
+        shell: bash
+        env:
+          DELIVERY_SHA: ${{ inputs.sha }}
+        run: |
+          set -euo pipefail
+          [[ "$DELIVERY_SHA" =~ ^[0-9a-f]{40}$ && "$DELIVERY_SHA" == "$GITHUB_SHA" ]]
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
       - uses: actions/setup-node@v6
         with:
           node-version: '24'
