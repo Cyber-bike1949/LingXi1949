@@ -60,7 +60,7 @@ try {
   await writeFile(join(vault, '.obsidian', 'community-plugins.json'), JSON.stringify([manifest.id]));
   await writeFile(join(vault, '.obsidian', 'app.json'), JSON.stringify({ safeMode: false }));
   await writeFile(join(vault, '.obsidian', 'core-plugins.json'), JSON.stringify(['command-palette']));
-  await writeFile(join(pluginDir, 'data.json'), JSON.stringify({ lastSeenChangelogVersion: manifest.version, offlineMode: true,
+  await writeFile(join(pluginDir, 'data.json'), JSON.stringify({ lastSeenChangelogVersion: manifest.version, serverConnection: { offlineMode: true },
     platformShells: { linux: 'bash', windows: 'cmd', darwin: 'zsh' }, preferredRenderer: 'dom' }));
   await writeFile(join(userData, 'obsidian.json'), JSON.stringify({ vaults: { '1234567890abcdef': { path: vault, ts: Date.now(), open: true } }, updateDisabled: true }));
   const agentEnv = { ...process.env, XDG_CONFIG_HOME: agentConfig, XDG_RUNTIME_DIR: runtime, APPDATA: agentConfig, LOCALAPPDATA: agentConfig };

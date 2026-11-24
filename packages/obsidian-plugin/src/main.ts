@@ -131,7 +131,7 @@ type ElectronRemoteRuntime = {
  * Main class for the Obsidian Terminal plugin
  */
 export default class TerminalPlugin extends Plugin {
-  settings!: TerminalSettings;
+  declare settings: TerminalSettings;
   featureVisibilityManager!: FeatureVisibilityManager;
   
   // Lazily initialized services

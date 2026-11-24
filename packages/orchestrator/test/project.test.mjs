@@ -4,7 +4,7 @@ import { createHash } from 'node:crypto';
 import { joinRemotePath, runtimeConfig, taskPrompt } from '../src/project.mjs';
 
 const remote = suffix => ({ lingxiCli: '/tmp/lingxi-cli.mjs', session: `session-${suffix}`, worktreeRoot: `/worktrees/${suffix}` });
-const agent = { executable: 'codex', args: ['exec', '-'], target: 'remote' };
+const agent = { executable: 'codex', args: ['exec', '-'], target: 'local' };
 
 test('uses independent development and test remotes when configured', () => {
   const config = runtimeConfig({ runtime: { remotes: { development: remote('dev'), test: remote('test') }, agent, tester: { ...agent, executable: 'claude' }, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } } } });
@@ -22,6 +22,11 @@ test('keeps single-device projects compatible with a separate test worktree', ()
 
 test('rejects an explicit development/test worktree collision on one device', () => {
   assert.throws(() => runtimeConfig({ runtime: { remotes: { development: remote('same'), test: remote('same') }, agent, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } } } }), /WORKTREE_ROOT_COLLISION/);
+});
+
+test('requires Codex to run on the controller', () => {
+  const config = { runtime: { remote: remote('shared'), agent: { ...agent, target: 'remote' }, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } } } };
+  assert.throws(() => runtimeConfig(config), /CODEX_MUST_RUN_ON_CONTROLLER/);
 });
 
 test('joins Windows worktree paths using the remote shell type', () => {
@@ -47,3 +52,7 @@ test('includes the exact approved documents in the agent prompt and verifies the
   assert.equal(prompt.approvedDocuments.testCases, testCaseContent);
   assert.throws(() => taskPrompt(task, 'developer', { commands: [] }, { requirementContent: 'altered', testCaseContent }), /APPROVED_REQUIREMENT_HASH_MISMATCH/);
 });
+
+test('requires explicit persistent Codex resume arguments and rejects ephemeral sessions', () => { const base = { runtime: { remote: remote('resume'), agent: { ...agent, resumeNativeSession: true }, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } } } }; assert.throws(() => runtimeConfig(base), /AGENT_RESUME_ARGS_REQUIRED/); assert.throws(() => runtimeConfig({ runtime: { ...base.runtime, agent: { ...agent, args: ['exec', '--ephemeral', '-'], resumeNativeSession: true, resumeArgs: ['exec', 'resume', '{sessionId}', '-'] } } }), /INCOMPATIBLE_WITH_EPHEMERAL/); const config = runtimeConfig({ runtime: { ...base.runtime, agent: { ...agent, resumeNativeSession: true, resumeArgs: ['exec', 'resume', '{sessionId}', '-'] } } }); assert.equal(config.agent.resumeNativeSession, true); });
+
+test('refuses an enabled sandbox until an enforcing sandbox provider is implemented', () => { assert.throws(() => runtimeConfig({ runtime: { remote: remote('sandbox'), agent, workflows: { required: ['CI'], rc: { workflow: 'rc.yml', required: ['RC'] } }, sandbox: { enabled: true, provider: 'docker' } } }), /SANDBOX_NOT_IMPLEMENTED/); });

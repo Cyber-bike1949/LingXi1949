@@ -1,0 +1,24 @@
+[Unit]
+Description=LingXi1949 unattended development orchestrator
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=lingxi
+Group=lingxi
+WorkingDirectory=/opt/lingxi1949
+EnvironmentFile=-/etc/lingxi-auto-dev/secrets.env
+Environment=CODEX_HOME=/var/lib/lingxi-orchestrator/codex
+ExecStart=/usr/bin/node /opt/lingxi1949/packages/orchestrator/src/cli.mjs worker --project /etc/lingxi-auto-dev/project.json --home /var/lib/lingxi-orchestrator --interval-ms 60000 --auto-retry true
+Restart=always
+RestartSec=5
+StateDirectory=lingxi-orchestrator
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/lingxi-orchestrator
+
+[Install]
+WantedBy=multi-user.target

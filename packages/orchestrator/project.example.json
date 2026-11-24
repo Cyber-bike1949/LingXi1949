@@ -20,7 +20,9 @@
     },
     "agent": {
       "executable": "codex",
-      "args": ["exec", "--ignore-user-config", "--sandbox", "read-only", "--ephemeral", "-"],
+      "args": ["exec", "--ignore-user-config", "--sandbox", "read-only", "--json", "-"],
+      "resumeArgs": ["exec", "resume", "{sessionId}", "--ignore-user-config", "--sandbox", "read-only", "--json", "-"],
+      "resumeNativeSession": true,
       "target": "local",
       "mcp": {
         "name": "lingxi-orchestrator",
@@ -55,6 +57,9 @@
         "inputs": { "artifact_path": "dist" }
       }
     },
+    "quota": { "defaultWaitMs": 1800000, "maxWaitMs": 7200000, "maxTotalWaitMs": 86400000 },
+    "release": { "autoAfterGate": true, "unit": "obsidian-plugin", "required": ["Obsidian Plugin Release"], "approvedBy": "approved-baseline:v6.0" },
+    "notifications": { "feishuWebhookEnv": "LINGXI_FEISHU_WEBHOOK" },
     "taskMirror": {
       "remotePath": ".lingxi-orchestrator\\tasks.json",
       "remoteFinalPath": "/var/lib/lingxi/orchestrator-status/tasks.json"

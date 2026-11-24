@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { agentConfigArgs, remoteAgentCommand } from '../src/agent.mjs';
+import { agentConfigArgs, extractNativeSessionId, remoteAgentCommand, resumeAgentArgs } from '../src/agent.mjs';
 
 test('adds a task-scoped LingXi MCP override without changing Codex user configuration', () => {
   const args = agentConfigArgs({ args: ['exec', '--ignore-user-config', '--sandbox', 'read-only', '--ephemeral', '-'], mcp: { name: 'lingxi-demo', command: '/usr/bin/node', serverArgs: ['/lingxi/cli.mjs', 'serve', '--session', 'session-1'], defaultToolsApprovalMode: 'approve' } });
@@ -28,3 +28,5 @@ test('encodes Windows remote agent prompts without shell interpolation', () => {
   assert.match(script, /安全-1/);
   assert.match(script, /& 'codex' @agentArgs/);
 });
+
+test('captures Codex native session IDs from JSONL events and resumes with explicit arguments', () => { assert.equal(extractNativeSessionId('{\"type\":\"thread.started\",\"thread_id\":\"thread-42\"}'), 'thread-42'); assert.equal(extractNativeSessionId('{\"type\":\"item.completed\"}'), null); assert.deepEqual(resumeAgentArgs({ args: ['exec', '--json', '-'], resumeNativeSession: true, resumeArgs: ['exec', 'resume', '{sessionId}', '--json', '-'] }, 'thread-42'), ['exec', 'resume', 'thread-42', '--json', '-']); assert.deepEqual(resumeAgentArgs({ args: ['exec', '-'] }, 'thread-42'), ['exec', '-']); assert.throws(() => resumeAgentArgs({ resumeNativeSession: true, resumeArgs: ['exec', 'resume'] }, 'thread-42'), /AGENT_RESUME_ARGS_MUST_CONTAIN_SESSION_ID/); });

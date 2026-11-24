@@ -12,19 +12,21 @@ import { parseVerification, verificationCommand } from './git.mjs';
 import { blockedBy, nextNodes, retryKinds } from './scheduler.mjs';
 import { nextAction } from './engine.mjs';
 import { runProcess } from './process.mjs';
-import { dispatchWorkflow, downloadRunArtifacts, getBranchSha, waitForRequiredRuns } from './github.mjs';
+import { dispatchWorkflow, downloadRunArtifacts, getBranchSha, waitForRequiredRuns, waitForRelease } from './github.mjs';
 import { artifactManifest, taskArtifactDirectory } from './artifact.mjs';
 import { worktreeLeaseKey } from './resources.mjs';
 import { formalTagCommand, validFormalTag } from './release.mjs';
 import { documentDraftPrompt } from './draft.mjs';
 import { runnableTasks, wait } from './worker.mjs';
 import { preflightPlan, safeSummary } from './preflight.mjs';
-import { agentConfigArgs, remoteAgentCommand, runAgent } from './agent.mjs';
+import { agentConfigArgs, remoteAgentCommand, resumeAgentArgs, runAgent } from './agent.mjs';
 import { evaluateRcGate } from './gate.mjs';
 import { approvedTaskInput, serve } from './server.mjs';
 import { qualityCommand, worktreeCommand } from './pipeline.mjs';
 import { powershellCommand, powershellLiteral } from './shell.mjs';
 import { publishTaskSnapshot } from './taskSnapshot.mjs';
+import { quotaFailure, quotaRetryAt } from './quota.mjs';
+import { flushNotificationOutbox, notificationConfig } from './notifications.mjs';
 
 const [command, ...argv] = process.argv.slice(2);
 const options = {};
@@ -39,7 +41,10 @@ const store = new OrchestratorStore(databasePath);
 chmodSync(databasePath, 0o600);
 const print = value => process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
 const required = key => { if (!options[key]) throw new Error(`MISSING_${key.toUpperCase().replaceAll('-', '_')}`); return options[key]; };
-async function executeConfiguredAgent({ agent, prompt, remote }) {
+async function executeConfiguredAgent({ agent, prompt, remote, taskId, role }) {
+  const previous = [...store.events(taskId)].reverse().find(event => event.type === 'AGENT_SESSION' && event.data?.role === role)?.data?.sessionId;
+  const args = resumeAgentArgs(agent, previous);
+  const onSession = sessionId => store.event(taskId, 'AGENT_SESSION', { role, sessionId, capturedAt: new Date().toISOString() });
   if (agent.target !== 'remote') {
     const localPrompt = agent.mcp ? {
       ...prompt,
@@ -53,9 +58,9 @@ async function executeConfiguredAgent({ agent, prompt, remote }) {
         ]
       }
     } : prompt;
-    return { ...(await runAgent({ executable: agent.executable, args: agent.args, mcp: agent.mcp, prompt: localPrompt })), target: 'local' };
+    return { ...(await runAgent({ executable: agent.executable, args, mcp: agent.mcp, prompt: localPrompt, onSession })), target: 'local' };
   }
-  const command = remoteAgentCommand({ executable: agent.executable, args: agent.args, prompt, worktree: prompt.worktree, shellKind: remote.shellKind });
+  const command = remoteAgentCommand({ executable: agent.executable, args, prompt, worktree: prompt.worktree, shellKind: remote.shellKind });
   const controller = await runLingxiCommand({ cli: remote.lingxiCli, session: remote.session, command, timeoutMs: agent.timeoutMs ?? 3600000 });
   if (controller.exitCode !== 0) return { ...controller, target: 'remote' };
   const result = decodeLingxiResult(controller.stdout);
@@ -156,25 +161,44 @@ try {
     await new Promise(resolve => { process.once('SIGINT', resolve); process.once('SIGTERM', resolve); });
     await new Promise(resolve => server.close(resolve));
   } else if (command === 'worker') {
-    const project = required('project'); const intervalMs = Number(options['interval-ms'] ?? 30000); const maxSteps = Number(options['max-steps'] ?? 10);
+    const project = required('project'); const workerProject = readProject(project); const noticeConfig = notificationConfig(workerProject.runtime, process.env); const intervalMs = Number(options['interval-ms'] ?? 30000); const maxSteps = Number(options['max-steps'] ?? 10);
     if (!Number.isInteger(intervalMs) || intervalMs < 1000 || intervalMs > 3600000) throw new Error('INVALID_WORKER_INTERVAL');
     if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 20) throw new Error('INVALID_MAX_STEPS');
-    let stopped = false; const stop = () => { stopped = true; };
+    const startupRecovery = store.recover();
+    print({ worker: 'startup-recovery', recovery: startupRecovery });
+    let stopped = false; let notificationFlushPromise = null; const stop = () => { stopped = true; };
+    const flushNotifications = () => {
+      if (notificationFlushPromise) return notificationFlushPromise;
+      notificationFlushPromise = flushNotificationOutbox(store, { config: noticeConfig })
+        .finally(() => { notificationFlushPromise = null; });
+      return notificationFlushPromise;
+    };
+    const backgroundTimer = setInterval(() => {
+      try { store.wakeDueQuotaTasks(Date.now()); }
+      catch (error) { console.error(`QUOTA_SCHEDULER_FAILED:${error.message}`); }
+      void flushNotifications().catch(error => console.error(`NOTIFICATION_FLUSH_FAILED:${error.message}`));
+    }, Math.min(intervalMs, 60_000));
+    backgroundTimer.unref?.();
     process.once('SIGINT', stop); process.once('SIGTERM', stop);
     try {
       while (!stopped) {
+        const awakenedQuotaTasks = store.wakeDueQuotaTasks(Date.now());
         const cycle = [];
-        for (const task of runnableTasks(store.list())) {
+        for (const task of runnableTasks(store.list(), { autoRelease: workerProject.runtime?.release?.autoAfterGate === true })) {
           const args = [fileURLToPath(import.meta.url), 'task-run-all', '--id', task.id, '--project', project, '--home', home, '--max-steps', String(maxSteps)];
           if (options['auto-retry'] === 'true') args.push('--auto-retry', 'true');
           const result = await runProcess(process.execPath, args);
           cycle.push({ taskId: task.id, exitCode: result.exitCode, stdout: result.stdout, stderr: result.stderr });
         }
-        print({ worker: 'cycle-complete', tasks: cycle, nextPollMs: intervalMs });
+        const notifications = await flushNotifications();
+        print({ worker: 'cycle-complete', awakenedQuotaTasks, tasks: cycle, notifications, nextPollMs: intervalMs });
         if (!stopped) await wait(intervalMs);
       }
-    } finally { process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop); }
-  } else if (command === 'preflight') {
+    } finally {
+      clearInterval(backgroundTimer);
+      process.removeListener('SIGINT', stop); process.removeListener('SIGTERM', stop);
+    }
+  } else if (command === 'preflight' || command === 'doctor') {
     print(await validateProjectRuntime(readProject(required('project'))));
   } else if (command === 'task-create') {
     for (const key of ['title', 'repository', 'branch', 'base-sha', 'approved-by']) required(key);
@@ -240,10 +264,15 @@ try {
       const remote = runtime.remotes.development; const worktree = joinRemotePath(remote, task.id);
       leaseWorktree(task, remote, worktree);
       const prompt = { ...taskPrompt(task, 'developer', project, store.approvedDocuments(task.id)), worktree };
-      const result = await executeConfiguredAgent({ agent: runtime.agent, prompt, remote });
+      const result = await executeConfiguredAgent({ agent: runtime.agent, prompt, remote, taskId: task.id, role: 'developer' });
       store.event(task.id, 'AGENT_FINISHED', { role: 'developer', ...result });
-      store.node(task.id, action.kind, result.exitCode === 0 ? 'SUCCEEDED' : 'FAILED', { exitCode: result.exitCode });
-      if (result.exitCode !== 0) store.transition(task.id, 'FIXING', { reason: 'AGENT_FAILED', role: 'developer' });
+      const quota = quotaFailure(result);
+      if (quota) {
+        store.waitForQuota(task.id, action.kind, { retryAt: quotaRetryAt(quota, { ...(runtime.quota ?? {}), attempt: store.events(task.id).filter(event => event.type === 'QUOTA_WAIT_STARTED').length }), evidence: quota, maxTotalWaitMs: runtime.quota?.maxTotalWaitMs ?? 24 * 60 * 60_000 });
+      } else {
+        store.node(task.id, action.kind, result.exitCode === 0 ? 'SUCCEEDED' : 'FAILED', { exitCode: result.exitCode });
+        if (result.exitCode !== 0) store.transition(task.id, 'FIXING', { reason: 'AGENT_FAILED', role: 'developer' });
+      }
       print({ action, ...result });
     } else if (action.kind === 'git-verify') {
       const remote = runtime.remotes.development; const worktree = joinRemotePath(remote, task.id);
@@ -267,10 +296,15 @@ try {
     } else if (action.kind === 'test') {
       const remote = runtime.remotes.test; const worktree = joinRemotePath(remote, task.id); const deliverySha = store.deliverySha(task.id);
       leaseWorktree(task, remote, worktree);
-      const result = await executeConfiguredAgent({ agent: runtime.tester, remote, prompt: { ...taskPrompt(task, 'tester', project, store.approvedDocuments(task.id)), worktree, deliverySha } });
+      const result = await executeConfiguredAgent({ agent: runtime.tester, remote, taskId: task.id, role: 'tester', prompt: { ...taskPrompt(task, 'tester', project, store.approvedDocuments(task.id)), worktree, deliverySha } });
       store.event(task.id, 'AGENT_FINISHED', { role: 'tester', deliverySha, ...result });
-      store.node(task.id, action.kind, result.exitCode === 0 ? 'SUCCEEDED' : 'FAILED', { deliverySha, exitCode: result.exitCode, target: result.target });
-      if (result.exitCode !== 0) store.transition(task.id, 'FIXING', { reason: 'AGENT_FAILED', role: 'tester' });
+      const quota = quotaFailure(result);
+      if (quota) {
+        store.waitForQuota(task.id, action.kind, { retryAt: quotaRetryAt(quota, { ...(runtime.quota ?? {}), attempt: store.events(task.id).filter(event => event.type === 'QUOTA_WAIT_STARTED').length }), evidence: quota, maxTotalWaitMs: runtime.quota?.maxTotalWaitMs ?? 24 * 60 * 60_000 });
+      } else {
+        store.node(task.id, action.kind, result.exitCode === 0 ? 'SUCCEEDED' : 'FAILED', { deliverySha, exitCode: result.exitCode, target: result.target });
+        if (result.exitCode !== 0) store.transition(task.id, 'FIXING', { reason: 'AGENT_FAILED', role: 'tester' });
+      }
       print({ action, ...result });
     } else if (action.kind === 'local-verify') {
       const remote = runtime.remotes.test; const worktree = joinRemotePath(remote, task.id);
@@ -328,8 +362,37 @@ try {
   } else if (command === 'task-run-all') {
     const id = required('id'); const project = required('project'); const maxSteps = Number(options['max-steps'] ?? 10);
     if (!Number.isInteger(maxSteps) || maxSteps < 1 || maxSteps > 20) throw new Error('INVALID_MAX_STEPS');
+    const taskLockHolder = `runner:${process.pid}:${randomUUID()}`;
+    const taskLockKey = `task:${id}`;
+    let taskLockLost = false;
+    store.acquire(taskLockKey, taskLockHolder, 2 * 60_000);
+    const taskLockHeartbeat = setInterval(() => {
+      try { store.acquire(taskLockKey, taskLockHolder, 2 * 60_000); }
+      catch (error) { taskLockLost = true; console.error(`TASK_LOCK_RENEWAL_FAILED:${error.message}`); }
+    }, 30_000);
+    taskLockHeartbeat.unref?.();
+    try {
     const steps = [];
+    const autoRelease = readProject(project).runtime?.release;
+    const rcVersion = () => store.rcRequest(id).version.split('-rc.')[0];
     for (let step = 0; step < maxSteps; step += 1) {
+      if (taskLockLost) throw new Error('TASK_LOCK_LOST');
+      const currentState = store.get(id).state;
+      if (currentState === 'RC_READY' && autoRelease?.autoAfterGate === true) {
+        if (!autoRelease.unit || !Array.isArray(autoRelease.required) || autoRelease.required.length === 0) throw new Error('AUTO_RELEASE_CONFIG_INCOMPLETE');
+        store.approveRelease(id, autoRelease.approvedBy, 'Approved baseline permits formal release after every configured gate passes.');
+      }
+      if (['RELEASE_APPROVED', 'RELEASE_TRIGGERED'].includes(store.get(id).state) && autoRelease?.autoAfterGate === true) {
+        const releaseCommand = store.get(id).state === 'RELEASE_APPROVED' ? 'release-trigger' : 'release-wait';
+        const releaseArgs = releaseCommand === 'release-trigger'
+          ? [fileURLToPath(import.meta.url), releaseCommand, '--id', id, '--project', project, '--home', home, '--unit', autoRelease.unit, '--tag', rcVersion()]
+          : [fileURLToPath(import.meta.url), releaseCommand, '--id', id, '--home', home, '--gh', runtimeConfig(readProject(project)).gh ?? 'gh', '--unit', autoRelease.unit, '--required', autoRelease.required.join(',')];
+        const releaseResult = await runProcess(process.execPath, releaseArgs);
+        steps.push({ releaseCommand, ...releaseResult });
+        if (releaseResult.exitCode !== 0 || releaseCommand === 'release-wait') break;
+        continue;
+      }
+      if (store.get(id).state === 'TEST_CASES_APPROVED') store.transition(id, 'IMPLEMENTING', { startedAt: new Date().toISOString() });
       if (!store.nodes(id).length) store.plan(id, ['prepare-worktree', 'develop', 'git-verify', 'prepare-test-worktree', 'test', 'local-verify', 'ci', 'e2e', 'rc-build', 'rc']);
       const nodes = store.nodes(id);
       if (store.get(id).state === 'FIXING' && options['auto-retry'] === 'true') {
@@ -351,6 +414,7 @@ try {
         }
       }
       const child = await runProcess(process.execPath, [fileURLToPath(import.meta.url), 'task-run-next', '--id', id, '--project', project, '--home', home]);
+      if (taskLockLost) throw new Error('TASK_LOCK_LOST');
       steps.push(child);
       store.event(id, 'TASK_NODE_FINISHED', { kind: action.kind, state: store.nodes(id).find(node => node.kind === action.kind)?.state ?? 'UNKNOWN', finishedAt: new Date().toISOString() });
       if (mirrorPath) {
@@ -363,9 +427,10 @@ try {
       }
       if (child.exitCode !== 0) break;
       const current = store.get(id);
-      if (['FIXING', 'BLOCKED_USER_DECISION', 'RC_READY', 'RELEASE_APPROVED', 'RELEASED'].includes(current.state)) break;
+      if (['FIXING', 'WAITING_QUOTA', 'BLOCKED_USER_DECISION', 'RELEASED'].includes(current.state) || (['RC_READY', 'RELEASE_APPROVED', 'RELEASE_TRIGGERED'].includes(current.state) && autoRelease?.autoAfterGate !== true)) break;
     }
     print({ steps: steps.map(item => ({ exitCode: item.exitCode, stdout: item.stdout, stderr: item.stderr })), task: store.get(id), ready: nextNodes(store.nodes(id)) });
+    } finally { clearInterval(taskLockHeartbeat); store.release(taskLockKey, taskLockHolder); }
   } else if (command === 'task-prepare-worktree') {
     const task = store.get(required('id')); const worktree = join(required('worktree-root'), task.id);
     store.node(task.id, 'prepare-worktree', 'RUNNING', { worktree });
@@ -467,16 +532,30 @@ try {
     const task = store.get(required('id')); const unit = required('unit'); const requiredNames = required('required').split(',').filter(Boolean);
     if (task.state !== 'RELEASE_TRIGGERED') throw new Error('RELEASE_WAIT_REQUIRES_TRIGGERED_RELEASE');
     const sha = store.deliverySha(task.id);
-    const result = await waitForRequiredRuns({ gh: options.gh, repository: task.repository, sha, requiredNames, timeoutMs: Number(options['timeout-ms'] ?? 1800000), intervalMs: Number(options['interval-ms'] ?? 10000) });
-    for (const run of result.selected) store.workflow(task.id, sha, run);
-    if (result.passed) {
-      store.transition(task.id, 'RELEASED', { unit, sha, workflows: result.selected.map(run => run.databaseId) });
+    const releaseEvent = [...store.events(task.id)].reverse().find(event => event.type === 'STATE_CHANGED' && event.data?.state === 'RELEASE_TRIGGERED');
+    const tag = releaseEvent?.data?.tag;
+    if (!tag || !validFormalTag(unit, tag)) {
       store.release(`release:${task.repository}:${unit}`, task.id);
+      store.transition(task.id, 'BLOCKED_USER_DECISION', { reason: 'FORMAL_RELEASE_TAG_NOT_RECORDED', unit, sha });
+      print({ unit, sha, status: 'BLOCKED_USER_DECISION', reason: 'FORMAL_RELEASE_TAG_NOT_RECORDED' });
     } else {
-      store.release(`release:${task.repository}:${unit}`, task.id);
-      store.transition(task.id, 'BLOCKED_USER_DECISION', { reason: result.timedOut ? 'FORMAL_RELEASE_TIMEOUT' : 'FORMAL_RELEASE_FAILED', unit, sha, result });
+      const timeoutMs = Number(options['timeout-ms'] ?? 1800000);
+      const intervalMs = Number(options['interval-ms'] ?? 10000);
+      const workflowResult = await waitForRequiredRuns({ gh: options.gh, repository: task.repository, sha, requiredNames, timeoutMs, intervalMs });
+      for (const run of workflowResult.selected) store.workflow(task.id, sha, run);
+      const releaseResult = workflowResult.passed
+        ? await waitForRelease({ gh: options.gh, repository: task.repository, tag, timeoutMs, intervalMs })
+        : { found: false, tag, lastError: 'REQUIRED_RELEASE_WORKFLOW_FAILED', timedOut: workflowResult.timedOut };
+      if (workflowResult.passed && releaseResult.found) {
+        store.transition(task.id, 'RELEASED', { unit, tag, sha, releaseUrl: releaseResult.url, workflows: workflowResult.selected.map(run => run.databaseId) });
+        store.release(`release:${task.repository}:${unit}`, task.id);
+      } else {
+        store.release(`release:${task.repository}:${unit}`, task.id);
+        const reason = workflowResult.passed ? (releaseResult.timedOut ? 'FORMAL_RELEASE_TIMEOUT' : 'FORMAL_RELEASE_NOT_VERIFIED') : workflowResult.timedOut ? 'FORMAL_RELEASE_TIMEOUT' : 'FORMAL_RELEASE_FAILED';
+        store.transition(task.id, 'BLOCKED_USER_DECISION', { reason, unit, tag, sha, workflows: workflowResult.selected.map(run => run.databaseId), release: releaseResult });
+      }
+      print({ unit, tag, sha, workflows: workflowResult, release: releaseResult });
     }
-    print({ unit, sha, ...result });
   } else if (command === 'rc-request') {
     print(store.requestRc(required('id'), required('version')));
   } else if (command === 'task-retry') {

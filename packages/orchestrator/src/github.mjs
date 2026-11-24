@@ -3,7 +3,10 @@ import { mkdirSync } from 'node:fs';
 
 function run(command, args, cwd) {
   return new Promise((resolve, reject) => {
-    const child = spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
+    const isNodeScript = process.platform === 'win32' && /\.(?:c|m)?js$/i.test(command);
+    const child = isNodeScript
+      ? spawn(process.execPath, [command, ...args], { cwd, stdio: ['ignore', 'pipe', 'pipe'] })
+      : spawn(command, args, { cwd, stdio: ['ignore', 'pipe', 'pipe'] });
     let stdout = ''; let stderr = '';
     child.stdout.on('data', value => { stdout += value; });
     child.stderr.on('data', value => { stderr += value; });
@@ -61,6 +64,26 @@ export async function downloadRunArtifacts({ gh = 'gh', repository, runId, direc
   const result = await run(gh, artifactDownloadArgs({ repository, runId, directory }), undefined);
   if (result.exitCode !== 0) throw new Error(`GITHUB_ARTIFACT_DOWNLOAD_FAILED: ${result.stderr.trim()}`);
   return { runId: String(runId), directory, stdout: result.stdout };
+}
+
+export async function waitForRelease({ gh = 'gh', repository, tag, timeoutMs = 1800000, intervalMs = 10000 }) {
+  if (!repository || !tag) throw new Error('GITHUB_RELEASE_LOOKUP_CONFIGURATION_MISSING');
+  const deadline = Date.now() + timeoutMs;
+  let lastError = '';
+  while (true) {
+    const result = await run(gh, ['release', 'view', tag, '--repo', repository, '--json', 'tagName,url,isDraft'], undefined);
+    if (result.exitCode === 0) {
+      let release;
+      try { release = JSON.parse(result.stdout); }
+      catch { throw new Error('GITHUB_RELEASE_RESPONSE_INVALID'); }
+      if (release.tagName === tag && release.isDraft === false && /^https:\/\/github\.com\//.test(release.url ?? '')) {
+        return { found: true, tagName: release.tagName, url: release.url, isDraft: false };
+      }
+      lastError = 'RELEASE_METADATA_MISMATCH';
+    } else lastError = 'GITHUB_RELEASE_NOT_VISIBLE';
+    if (Date.now() >= deadline) return { found: false, tag, lastError, timedOut: true };
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
 }
 
 export function classifyRuns(runs, requiredNames) {

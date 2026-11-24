@@ -33,6 +33,19 @@ document.querySelector('#taskForm').addEventListener('submit',async e=>{e.preven
 const saved=sessionStorage.getItem('lingxi-token');if(saved){document.querySelector('#token').value=saved;login()}else document.querySelector('#token').focus();setInterval(()=>{if(!app.hidden)load()},10000);
 </script></body></html>`;
 
+function publicEventData(value) {
+  if (Array.isArray(value)) return value.map(publicEventData);
+  if (!value || typeof value !== 'object') return value;
+  const hidden = /stdout|stderr|output|prompt|content|token|secret|credential|authorization|webhook|error|message/i;
+  return Object.fromEntries(Object.entries(value)
+    .filter(([key]) => !hidden.test(key))
+    .map(([key, child]) => [key, publicEventData(child)]));
+}
+
+function publicEvents(events) {
+  return events.map(event => ({ type: event.type, createdAt: event.createdAt, data: publicEventData(event.data) }));
+}
+
 function matchesToken(request, expected) {
   const supplied = /^Bearer (.+)$/.exec(request.headers.authorization ?? '')?.[1] ?? '';
   const actual = Buffer.from(supplied);
@@ -87,7 +100,7 @@ export function serve(store, portOrOptions = 43194) {
     if (request.method === 'GET' && match) {
       try {
         const id = decodeURIComponent(match[1]);
-        return json(response, 200, { task: store.get(id), nodes: store.nodes(id), workflows: store.workflows(id), artifacts: store.artifacts(id), events: store.events(id) });
+        return json(response, 200, { task: store.get(id), nodes: store.nodes(id), workflows: store.workflows(id), artifacts: store.artifacts(id), events: publicEvents(store.events(id)) });
       } catch (error) { return json(response, 404, { error: error.message }); }
     }
     if (request.method !== 'GET' && request.method !== 'POST') return json(response, 405, { error: 'METHOD_NOT_ALLOWED' });

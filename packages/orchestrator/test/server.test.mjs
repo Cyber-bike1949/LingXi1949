@@ -9,6 +9,12 @@ test('serves a loopback-only read-only dashboard and task API', async () => {
   const server = await serve(store, 0); const port = server.address().port;
   const page = await fetch(`http://127.0.0.1:${port}/`);
   assert.match(await page.text(), /LingXi 编排器/);
+  store.event('RND-DASH', 'DIAGNOSTIC', { stdout: 'private agent output', reason: 'QUOTA_WAIT', nested: { authorization: 'Bearer secret' } });
+  const detail = await fetch(`http://127.0.0.1:${port}/tasks/RND-DASH`).then(response => response.json());
+  const publicEvent = detail.events.at(-1);
+  assert.equal(publicEvent.data.reason, 'QUOTA_WAIT');
+  assert.equal('stdout' in publicEvent.data, false);
+  assert.equal('authorization' in publicEvent.data.nested, false);
   const tasks = await fetch(`http://127.0.0.1:${port}/tasks`);
   assert.equal((await tasks.json())[0].id, 'RND-DASH');
   const write = await fetch(`http://127.0.0.1:${port}/tasks`, { method: 'POST' });

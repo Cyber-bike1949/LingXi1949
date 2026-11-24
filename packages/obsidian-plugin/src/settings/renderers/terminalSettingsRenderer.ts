@@ -493,7 +493,6 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       .addSlider(slider => slider
         .setLimits(8, 24, 1)
         .setValue(this.context.plugin.settings.fontSize)
-        .setDynamicTooltip()
         .onChange((value) => {
           void this.updateAppearanceSetting(() => {
             this.context.plugin.settings.fontSize = value;
@@ -1324,7 +1323,6 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       .addSlider(slider => slider
         .setLimits(0, 1, 0.05)
         .setValue(this.context.plugin.settings.backgroundImageOpacity ?? 0.5)
-        .setDynamicTooltip()
         .onChange((value) => {
           void this.updateThemeSetting(() => {
             this.context.plugin.settings.backgroundImageOpacity = value;
@@ -1407,7 +1405,6 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       .addSlider(slider => slider
         .setLimits(0, 1, 0.05)
         .setValue(this.context.plugin.settings.textOpacity ?? 1.0)
-        .setDynamicTooltip()
         .onChange((value) => {
           void this.updateThemeSetting(() => {
             this.context.plugin.settings.textOpacity = value;
@@ -1426,7 +1423,6 @@ export class TerminalSettingsRenderer extends BaseSettingsRenderer {
       .addSlider(slider => slider
         .setLimits(0, 20, 1)
         .setValue(this.context.plugin.settings.blurAmount ?? 10)
-        .setDynamicTooltip()
         .onChange((value) => {
           void this.updateThemeSetting(() => {
             this.context.plugin.settings.blurAmount = value;

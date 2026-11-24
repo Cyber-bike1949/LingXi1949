@@ -36,15 +36,44 @@ export function remoteAgentCommand({ executable, args = [], prompt, worktree, sh
   return `set -e; cd ${shellQuote(worktree)}; printf %s ${shellQuote(encodedPrompt)} | base64 -d | ${command}`;
 }
 
-export function runAgent({ executable, args = [], prompt, mcp }) {
+export function extractNativeSessionId(stdout) {
+  for (const line of String(stdout ?? '').split(/\r?\n/)) {
+    if (!line.trim()) continue;
+    try {
+      const event = JSON.parse(line);
+      const id = event.thread_id ?? event.threadId ?? event.session_id ?? event.sessionId;
+      if (['thread.started', 'session.started', 'thread_started'].includes(event.type) && typeof id === 'string' && id.trim()) return id.trim();
+    } catch {}
+  }
+  return null;
+}
+
+export function resumeAgentArgs(agent, sessionId) {
+  if (!sessionId || agent.resumeNativeSession !== true || !Array.isArray(agent.resumeArgs)) return [...(agent.args ?? [])];
+  if (!agent.resumeArgs.some(argument => String(argument).includes('{sessionId}'))) throw new Error('AGENT_RESUME_ARGS_MUST_CONTAIN_SESSION_ID');
+  return agent.resumeArgs.map(argument => String(argument).replaceAll('{sessionId}', sessionId));
+}
+
+export function runAgent({ executable, args = [], prompt, mcp, onSession }) {
   if (!executable) throw new Error('AGENT_EXECUTABLE_MISSING');
   return new Promise((resolve, reject) => {
     const child = spawn(executable, agentConfigArgs({ args, mcp }), { stdio: ['pipe', 'pipe', 'pipe'] });
-    let stdout = ''; let stderr = '';
-    child.stdout.on('data', value => { stdout += value; });
+    let stdout = ''; let stderr = ''; let pending = ''; let sessionId = null;
+    child.stdout.on('data', value => {
+      const chunk = value.toString(); stdout += chunk; pending += chunk;
+      const lines = pending.split(/\r?\n/); pending = lines.pop() ?? '';
+      for (const line of lines) {
+        const found = extractNativeSessionId(line);
+        if (found && found !== sessionId) { sessionId = found; if (onSession) onSession(sessionId); }
+      }
+    });
     child.stderr.on('data', value => { stderr += value; });
     child.on('error', reject);
-    child.on('close', exitCode => resolve({ exitCode: exitCode ?? 1, stdout, stderr }));
+    child.on('close', exitCode => {
+      const found = extractNativeSessionId(pending);
+      if (found && found !== sessionId) { sessionId = found; if (onSession) onSession(sessionId); }
+      resolve({ exitCode: exitCode ?? 1, stdout, stderr, ...(sessionId ? { sessionId } : {}) });
+    });
     child.stdin.end(`${JSON.stringify(prompt, null, 2)}\n`);
   });
 }

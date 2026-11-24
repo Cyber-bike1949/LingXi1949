@@ -72,6 +72,15 @@ test('marks in-flight nodes unknown during recovery', () => {
   store.close();
 });
 
+test('keeps idle active tasks resumable after a controller restart', () => {
+  const store = new OrchestratorStore(':memory:');
+  const task = store.createTask({ id: 'RND-RESUME', title: 'Resume', repository: 'owner/repo', branch: 'feat/resume', baseSha: 'abc', requirementHash: 'req', testCaseHash: 'tc' });
+  store.transition(task.id, 'IMPLEMENTING');
+  assert.equal(store.recover().tasks, 0);
+  assert.equal(store.get(task.id).state, 'IMPLEMENTING');
+  store.close();
+});
+
 test('limits repair retries and resets downstream nodes atomically', () => {
   const store = new OrchestratorStore(':memory:');
   const task = store.createTask({ id: 'RND-RETRY', title: 'Retry', repository: 'owner/repo', branch: 'feat/retry', baseSha: 'base', requirementHash: 'r', testCaseHash: 't' });
@@ -81,5 +90,34 @@ test('limits repair retries and resets downstream nodes atomically', () => {
   store.transition(task.id, 'FIXING'); store.retry(task.id, 'develop', ['develop', 'ci']); store.transition(task.id, 'FIXING'); store.retry(task.id, 'develop', ['develop', 'ci']); store.transition(task.id, 'FIXING');
   assert.equal(store.retry(task.id, 'develop', ['develop', 'ci']).allowed, false);
   assert.equal(store.get(task.id).state, 'BLOCKED_USER_DECISION');
+  store.close();
+});
+
+test('persists quota wait and wakes exactly when its retry time arrives', () => {
+  const store = new OrchestratorStore(':memory:');
+  const task = store.createTask({ id: 'RND-QUOTA', title: 'Quota', repository: 'owner/repo', branch: 'feat/quota', baseSha: 'abc', requirementHash: 'r', testCaseHash: 't' });
+  store.plan(task.id, ['develop', 'ci']);
+  const retryAt = new Date(Date.now() + 60_000).toISOString();
+  store.waitForQuota(task.id, 'develop', { retryAt, evidence: { code: 'usage_limit_reached' } });
+  assert.equal(store.get(task.id).state, 'WAITING_QUOTA');
+  assert.equal(store.nodes(task.id)[0].state, 'WAITING_QUOTA');
+  assert.deepEqual(store.wakeDueQuotaTasks(Date.now()), []);
+  assert.deepEqual(store.wakeDueQuotaTasks(Date.parse(retryAt)), [task.id]);
+  assert.equal(store.get(task.id).state, 'IMPLEMENTING');
+  assert.equal(store.nodes(task.id)[0].state, 'PENDING');
+  assert.ok(store.events(task.id).some(event => event.type === 'QUOTA_WAIT_ENDED'));
+  store.close();
+});
+
+test('blocks a task after its configured maximum total quota wait', () => {
+  const store = new OrchestratorStore(':memory:');
+  const task = store.createTask({ id: 'RND-QUOTA-LIMIT', title: 'Quota limit', repository: 'owner/repo', branch: 'feat/quota-limit', baseSha: 'abc', requirementHash: 'r', testCaseHash: 't' });
+  store.plan(task.id, ['develop']);
+  store.waitForQuota(task.id, 'develop', { retryAt: new Date(Date.now() + 60_000).toISOString(), evidence: { code: 'quota' } });
+  store.db.prepare("UPDATE events SET created_at=? WHERE task_id=? AND type='QUOTA_WAIT_STARTED'").run(new Date(Date.now() - 25 * 60 * 60_000).toISOString(), task.id);
+  const result = store.waitForQuota(task.id, 'develop', { retryAt: new Date(Date.now() + 60_000).toISOString(), evidence: { code: 'quota' }, maxTotalWaitMs: 24 * 60 * 60_000 });
+  assert.equal(result.state, 'BLOCKED_USER_DECISION');
+  assert.equal(store.get(task.id).state, 'BLOCKED_USER_DECISION');
+  assert.ok(store.events(task.id).some(event => event.type === 'QUOTA_WAIT_LIMIT_REACHED'));
   store.close();
 });
