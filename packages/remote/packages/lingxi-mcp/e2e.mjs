@@ -78,7 +78,7 @@ try {
   assert.equal(duplicate.task_id, writes[0].task_id);
   const read = await b1.call('remote_read', { requestId: 'read', path: 'test.txt' });
   assert.equal(read.result.result.content, '设备 C');
-  const command = await b1.call('remote_exec', { requestId: 'exec', command: process.platform === 'win32' ? '<nul set /p =stdout& <nul set /p =stderr 1>&2& exit /b 7' : 'printf stdout; printf stderr >&2; exit 7' });
+  const command = await b1.call('remote_exec', { requestId: 'exec', command: process.platform === 'win32' ? '<nul set /p =stdout& <nul 1>&2 set /p =stderr& exit /b 7' : 'printf stdout; printf stderr >&2; exit 7' });
   assert.equal(command.status, 'FAILED'); assert.equal(command.stdout, 'stdout'); assert.equal(command.stderr, 'stderr'); assert.equal(command.result.exitCode, 7);
   const timed = await b1.call('remote_exec', { requestId: 'timeout', command: process.platform === 'win32' ? 'ping -n 15 127.0.0.1 >nul' : 'sleep 10', timeoutMs: 30 });
   assert.equal(timed.status, 'TIMED_OUT');
