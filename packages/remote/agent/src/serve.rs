@@ -286,10 +286,17 @@ async fn serve_bi_stream(
 
     let first =
         tokio::time::timeout(OPEN_HANDSHAKE_TIMEOUT, read_frame(&mut recv, &mut decoder)).await;
-    match first {
+    let first = match first {
         Ok(Ok(Some(Frame::Task(payload)))) => {
             crate::tasks::serve(tasks, payload, send, recv, decoder).await;
+            return;
         }
+        other => other,
+    };
+
+    // Non-task streams do not own task bindings or work-directory claims.
+    drop(tasks);
+    match first {
         Ok(Ok(Some(Frame::Open(payload)))) => {
             serve_terminal_session(payload, send, recv, decoder, table, options).await;
         }
@@ -1545,6 +1552,52 @@ mod tests {
             }))
             .await;
         stream
+    }
+
+    #[tokio::test]
+    async fn directory_watch_does_not_retain_task_service() {
+        let endpoint = bind_endpoint(&test_identity(), EndpointProfile::Loopback)
+            .await
+            .unwrap();
+        let code = connection_code(loopback_addr(&endpoint));
+        let root = tempfile::tempdir().unwrap();
+        let options = Arc::new(ServeOptions::new(
+            test_shell(),
+            4,
+            root.path().to_path_buf(),
+        ));
+        let tasks = Arc::new(crate::tasks::TaskService::new(
+            options.task_device_id.clone(),
+            Arc::clone(&options.task_claims),
+        ));
+        let weak_tasks = Arc::downgrade(&tasks);
+        let server = tokio::spawn(async move {
+            let connection = endpoint
+                .accept()
+                .await
+                .unwrap()
+                .accept()
+                .unwrap()
+                .await
+                .unwrap();
+            let (send, recv) = connection.accept_bi().await.unwrap();
+            serve_bi_stream(
+                send,
+                recv,
+                Arc::clone(&options.session_table),
+                options,
+                tasks,
+            )
+            .await;
+        });
+        let (controller, connection) = connect_controller(&code).await;
+        let mut watch = open_fs_stream(&connection, root.path().to_str().unwrap()).await;
+        assert!(matches!(watch.next_frame().await, Frame::FsListResult(_)));
+        assert!(weak_tasks.upgrade().is_none());
+        assert!(!server.is_finished());
+        drop(watch);
+        controller.close().await;
+        within(server).await.unwrap();
     }
 
     #[test]
