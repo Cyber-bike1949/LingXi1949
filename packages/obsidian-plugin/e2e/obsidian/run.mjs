@@ -2,9 +2,9 @@ import { chromium } from 'playwright';
 import { parseArgs } from 'node:util';
 import { createRequire } from 'node:module';
 import { spawn, execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, writeFile, readFile, cp } from 'node:fs/promises';
+import { mkdir, mkdtemp, writeFile, readFile, cp, rename } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { tmpdir } from 'node:os';
+import { tmpdir, cpus, totalmem } from 'node:os';
 import { randomBytes } from 'node:crypto';
 import { createInterface } from 'node:readline';
 import { once } from 'node:events';
@@ -14,7 +14,7 @@ const { values: args } = parseArgs({ options: Object.fromEntries(['obsidian','ag
 const output = resolve(args.output ?? 'test-results/obsidian');
 await mkdir(output, { recursive: true });
 const cases = ['插件加载','打开本地终端','界面输入命令与输出','添加并连接远程设备','断开后重连','研发任务进度与测试报告'].map(name => ({ name, status: 'not-run' }));
-const report = { platform: process.platform, arch: process.arch, node: process.version, startedAt: new Date().toISOString(), cases };
+const report = { platform: process.platform, arch: process.arch, node: process.version, startedAt: new Date().toISOString(), cases }; report.host = { cpuModel: cpus()[0]?.model, logicalCpuCount: cpus().length, totalMemoryBytes: totalmem() };
 let application, page, agent, obsidianProcess;
 let current = 0;
 const logs = [];
@@ -250,7 +250,7 @@ try {
     await tasksView.waitFor({ state: 'visible' });
     await tasksView.locator('input[type="text"]').fill(fixturePath);
     await tasksView.getByRole('button', { name: '刷新任务' }).click();
-    const task = tasksView.locator('details').filter({ hasText: 'RND-UI-001' });
+    const task = tasksView.locator('details').filter({ hasText: /^RND-UI-001/ });
     await task.waitFor();
     await task.locator(':scope > summary').click();
     await task.getByText('端到端测试：执行中').waitFor();
@@ -291,13 +291,112 @@ try {
     await history.getByText('没有符合筛选条件的事件。').waitFor();
     await history.getByLabel('搜索事件').fill('');
     report.taskEventCoverage = ['pagination', 'error-filter', 'event-id', 'search', 'empty-results'];
-    const filterStartedAt = await page.evaluate(() => performance.now());
-    await history.getByLabel('搜索事件').fill('TRACE_MARKER_1998');
-    const filterAndRenderMs = await page.evaluate(startedAt => performance.now() - startedAt, filterStartedAt);
-    const renderedRows = await history.locator('.termesh-task-event').count();
-    report.traceStress = { eventCount: 2000, filterAndRenderMs, renderedRows };
-    if (renderedRows !== 1) throw new Error('TRACE stress search did not isolate the final event');
-    await history.getByLabel('搜索事件').fill('');
+    const secondTask = structuredClone(snapshot.tasks[0]);
+    secondTask.id = 'RND-UI-002';
+    secondTask.title = '持续 TRACE 写入期间的切换目标';
+    secondTask.events = [];
+    secondTask.eventCount = 0;
+    secondTask.eventsTruncated = false;
+    snapshot.tasks.push(secondTask);
+    await writeFile(fixturePath, JSON.stringify(snapshot));
+    await tasksView.getByRole('button', { name: '刷新任务' }).click();
+    await page.waitForFunction(() => [...document.querySelectorAll('.termesh-remote-tasks-view details')].some(el => el.textContent.includes('RND-UI-002')));
+    const otherTask = tasksView.locator('details').filter({ hasText: /^RND-UI-002/ });
+
+    // Fixed before the run: simulate 100 TRACE/s for 10 seconds. During writes,
+    // refresh and exercise scrolling, filtering, searching, details and task switching.
+    const criteria = { durationMs: 10000, eventsPerSecond: 100, minimumRatePerSecond: 80, p95InteractionMsMax: 500, maxRunnerRssGrowthBytes: 128 * 1024 * 1024, maxRendererHeapGrowthBytes: 64 * 1024 * 1024, maxRunnerCpuPercent: 100 };
+    const rssBefore = process.memoryUsage().rss;
+    const cpuBefore = process.cpuUsage();
+    const rendererHeapBefore = await page.evaluate(() => performance.memory?.usedJSHeapSize ?? null);
+    const interactionSamples = [];
+    const measureInteraction = async (name, fn) => {
+      const startedAt = Date.now();
+      await fn();
+      interactionSamples.push({ name, durationMs: Date.now() - startedAt });
+    };
+    const setTaskOpen = async (locator, open) => {
+      if (await locator.evaluate(el => el.open) !== open) await locator.locator(':scope > summary').click();
+    };
+    let generatedEvents = 0;
+    let writerError;
+    let pendingWrite = Promise.resolve();
+    const startedAt = Date.now();
+    const writer = setInterval(() => {
+      pendingWrite = pendingWrite.then(async () => {
+        const base = generatedEvents;
+        const batch = Array.from({ length: 10 }, (_, index) => ({
+          id: 'LOAD-' + (base + index), type: 'TRACE', createdAt: new Date().toISOString(),
+          data: { reason: 'TRACE_LOAD_' + (base + index) },
+        }));
+        snapshot.tasks[0].events.push(...batch);
+        snapshot.tasks[0].eventCount = snapshot.tasks[0].events.length;
+        generatedEvents += batch.length;
+        const temporaryPath = fixturePath + '.stress';
+        await writeFile(temporaryPath, JSON.stringify(snapshot));
+        await rename(temporaryPath, fixturePath);
+      }).catch(error => { writerError = error; clearInterval(writer); });
+    }, 100);
+    try {
+      for (let cycle = 0; cycle < 10; cycle += 1) {
+        await page.waitForTimeout(1000);
+        await pendingWrite;
+        if (writerError) throw writerError;
+        const expectedCount = snapshot.tasks[0].eventCount;
+        await measureInteraction('refresh', async () => {
+          await tasksView.getByRole('button', { name: '刷新任务' }).click();
+          await page.waitForFunction(count => [...document.querySelectorAll('.termesh-task-events h4')].some(el => Number(el.textContent.match(/共 (\d+) 条/)?.[1] ?? 0) >= count), expectedCount);
+        });
+        await setTaskOpen(task, true);
+        await measureInteraction('scroll', () => history.evaluate(el => el.scrollIntoView({ block: 'end' })));
+        await measureInteraction('filter', async () => {
+          await history.getByLabel('事件类别').selectOption('error');
+          if (await history.locator('.termesh-task-event').count() !== 1) throw new Error('TRACE stress error filter lost its failure event');
+          await history.getByLabel('事件类别').selectOption('all');
+        });
+        const heading = await history.locator('h4').innerText();
+        const loadedCount = Number(heading.match(/共 (\d+) 条/)?.[1]);
+        const marker = 'TRACE_LOAD_' + (loadedCount - 2001);
+        await measureInteraction('search', async () => {
+          await history.getByLabel('搜索事件').fill(marker);
+          if (await history.locator('.termesh-task-event').count() !== 1) throw new Error('TRACE stress search did not isolate the latest written event');
+          await history.getByLabel('搜索事件').fill('');
+        });
+        await measureInteraction('event-details', async () => {
+          const summary = history.locator('.termesh-task-event').first().locator('summary');
+          await summary.click();
+          await summary.click();
+        });
+        await measureInteraction('task-switch', async () => {
+          await setTaskOpen(task, false);
+          await setTaskOpen(otherTask, true);
+          await setTaskOpen(otherTask, false);
+          await setTaskOpen(task, true);
+        });
+      }
+    } finally {
+      clearInterval(writer);
+      await pendingWrite;
+    }
+    const durationMs = Date.now() - startedAt;
+    const sortedInteractions = interactionSamples.map(sample => sample.durationMs).sort((a, b) => a - b);
+    const p95InteractionMs = sortedInteractions[Math.ceil(sortedInteractions.length * 0.95) - 1] ?? null;
+    const rendererHeapAfter = await page.evaluate(() => performance.memory?.usedJSHeapSize ?? null);
+    const rendererHeapGrowthBytes = rendererHeapBefore === null || rendererHeapAfter === null ? null : rendererHeapAfter - rendererHeapBefore;
+    const runnerCpuUsageMicros = process.cpuUsage(cpuBefore);
+    const runnerCpuPercent = (runnerCpuUsageMicros.user + runnerCpuUsageMicros.system) / (durationMs * 1000) * 100;
+    const rssGrowthBytes = process.memoryUsage().rss - rssBefore;
+    report.traceStress = {
+      initialEvents: 2000, generatedEvents, durationMs, generationRatePerSecond: generatedEvents * 1000 / durationMs,
+      refreshCount: 10, interactionSamples, p95InteractionMs, runnerRssGrowthBytes: rssGrowthBytes,
+      runnerCpuUsageMicros, runnerCpuPercent,
+      rendererHeapGrowthBytes, criteria,
+    };
+    if (generatedEvents < criteria.minimumRatePerSecond * durationMs / 1000) throw new Error('TRACE generator fell below the fixed minimum event rate');
+    if (p95InteractionMs > criteria.p95InteractionMsMax) throw new Error('TRACE interaction p95 exceeded the fixed response limit');
+    if (runnerCpuPercent > criteria.maxRunnerCpuPercent) throw new Error('TRACE test runner CPU use exceeded the fixed single-core limit');
+    if (rssGrowthBytes > criteria.maxRunnerRssGrowthBytes) throw new Error('TRACE test runner RSS growth exceeded the fixed resource limit');
+    if (rendererHeapGrowthBytes !== null && rendererHeapGrowthBytes > criteria.maxRendererHeapGrowthBytes) throw new Error('TRACE renderer heap growth exceeded the fixed resource limit');
     // Keep the rendered snapshot visible while ensuring screenshots contain no absolute paths.
     await tasksView.locator('input[type="text"]').fill('');
     await tasksView.locator('input[type="text"]').blur();
