@@ -1,36 +1,68 @@
 import { DatabaseSync } from 'node:sqlite';
 import { randomUUID } from 'node:crypto';
+import { ApprovedDocumentStore } from './approvedDocuments.mjs';
 
-const taskStates = new Set(['REQUIREMENT_APPROVED', 'TEST_CASES_APPROVED', 'IMPLEMENTING', 'LOCAL_VERIFYING', 'CI_VERIFYING', 'FIXING', 'RC_BUILDING', 'RC_READY', 'USER_ACCEPTING', 'RELEASE_APPROVED', 'RELEASE_TRIGGERED', 'RELEASED', 'BLOCKED_USER_DECISION', 'CANCELLED']);
+const taskStates = new Set(['REQUIREMENT_APPROVED', 'TEST_CASES_APPROVED', 'WAITING_QUOTA', 'IMPLEMENTING', 'LOCAL_VERIFYING', 'CI_VERIFYING', 'FIXING', 'RC_BUILDING', 'RC_READY', 'USER_ACCEPTING', 'RELEASE_APPROVED', 'RELEASE_TRIGGERED', 'RELEASED', 'BLOCKED_USER_DECISION', 'CANCELLED']);
 
 export class OrchestratorStore {
   constructor(filename) {
     this.db = new DatabaseSync(filename);
-    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000;
-      CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, repository TEXT NOT NULL, branch TEXT NOT NULL UNIQUE, base_sha TEXT NOT NULL, state TEXT NOT NULL, requirement_hash TEXT NOT NULL, test_case_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, requirement_content TEXT, test_case_content TEXT);
+    this.approvedDocumentStore = new ApprovedDocumentStore(filename);
+    this.db.exec(`PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000; PRAGMA secure_delete=ON;
+      CREATE TABLE IF NOT EXISTS tasks (id TEXT PRIMARY KEY, title TEXT NOT NULL, repository TEXT NOT NULL, branch TEXT NOT NULL UNIQUE, base_sha TEXT NOT NULL, state TEXT NOT NULL, requirement_hash TEXT NOT NULL, test_case_hash TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS nodes (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, kind TEXT NOT NULL, state TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, UNIQUE(task_id, kind));
       CREATE TABLE IF NOT EXISTS artifacts (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, kind TEXT NOT NULL, location TEXT NOT NULL, sha TEXT, created_at TEXT NOT NULL);
       CREATE TABLE IF NOT EXISTS workflow_runs (task_id TEXT NOT NULL, sha TEXT NOT NULL, name TEXT NOT NULL, run_id TEXT NOT NULL, url TEXT NOT NULL, status TEXT NOT NULL, conclusion TEXT, recorded_at TEXT NOT NULL, PRIMARY KEY(task_id, run_id));
       CREATE TABLE IF NOT EXISTS retry_attempts (task_id TEXT NOT NULL, root_kind TEXT NOT NULL, attempt INTEGER NOT NULL, created_at TEXT NOT NULL, PRIMARY KEY(task_id, root_kind, attempt));
       CREATE TABLE IF NOT EXISTS events (id TEXT PRIMARY KEY, task_id TEXT NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL, created_at TEXT NOT NULL);
-      CREATE TABLE IF NOT EXISTS locks (key TEXT PRIMARY KEY, holder TEXT NOT NULL, expires_at TEXT NOT NULL);`);
+      CREATE TABLE IF NOT EXISTS locks (key TEXT PRIMARY KEY, holder TEXT NOT NULL, expires_at TEXT NOT NULL);
+      CREATE TABLE IF NOT EXISTS notification_outbox (id TEXT PRIMARY KEY, dedupe_key TEXT NOT NULL UNIQUE, task_id TEXT NOT NULL, event_type TEXT NOT NULL, payload TEXT NOT NULL, status TEXT NOT NULL, attempts INTEGER NOT NULL, next_attempt_at TEXT NOT NULL, last_error TEXT, created_at TEXT NOT NULL, sent_at TEXT);`);
     const columns = new Set(this.db.prepare('PRAGMA table_info(tasks)').all().map(column => column.name));
-    if (!columns.has('requirement_content')) this.db.exec('ALTER TABLE tasks ADD COLUMN requirement_content TEXT');
-    if (!columns.has('test_case_content')) this.db.exec('ALTER TABLE tasks ADD COLUMN test_case_content TEXT');
+    const legacyRequirement = columns.has('requirement_content');
+    const legacyTestCases = columns.has('test_case_content');
+    if (legacyRequirement || legacyTestCases) {
+      const requirementColumn = legacyRequirement ? 'requirement_content' : 'NULL AS requirement_content';
+      const testCasesColumn = legacyTestCases ? 'test_case_content' : 'NULL AS test_case_content';
+      const rows = this.db.prepare(`SELECT id,requirement_hash,test_case_hash,${requirementColumn},${testCasesColumn} FROM tasks`).all();
+      for (const row of rows) {
+        if (row.requirement_content === null && row.test_case_content === null) continue;
+        this.approvedDocumentStore.writePair(row.id, row.requirement_content, row.test_case_content, row.requirement_hash, row.test_case_hash, true);
+        const cleared = [];
+        if (legacyRequirement) cleared.push('requirement_content=NULL');
+        if (legacyTestCases) cleared.push('test_case_content=NULL');
+        this.db.prepare(`UPDATE tasks SET ${cleared.join(',')} WHERE id=?`).run(row.id);
+      }
+      if (legacyRequirement) this.db.exec('ALTER TABLE tasks DROP COLUMN requirement_content');
+      if (legacyTestCases) this.db.exec('ALTER TABLE tasks DROP COLUMN test_case_content');
+      this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');
+    }
   }
   createTask(input) {
     const id = input.id ?? `RND-${randomUUID().slice(0, 8).toUpperCase()}`;
     const now = new Date().toISOString();
     const task = { id, title: input.title, repository: input.repository, branch: input.branch, baseSha: input.baseSha, state: 'TEST_CASES_APPROVED', requirementHash: input.requirementHash, testCaseHash: input.testCaseHash, createdAt: now, updatedAt: now };
-    this.db.prepare('INSERT INTO tasks (id,title,repository,branch,base_sha,state,requirement_hash,test_case_hash,created_at,updated_at,requirement_content,test_case_content) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)').run(task.id, task.title, task.repository, task.branch, task.baseSha, task.state, task.requirementHash, task.testCaseHash, now, now, input.requirementContent ?? null, input.testCaseContent ?? null);
+    this.approvedDocumentStore.writePair(id, input.requirementContent, input.testCaseContent, task.requirementHash, task.testCaseHash);
+    this.db.prepare('INSERT INTO tasks (id,title,repository,branch,base_sha,state,requirement_hash,test_case_hash,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)').run(task.id, task.title, task.repository, task.branch, task.baseSha, task.state, task.requirementHash, task.testCaseHash, now, now);
     this.event(id, 'TASK_CREATED', { ...task, approvalFrozen: true, requirementApprovedBy: input.approvedBy ?? null, testCasesApprovedBy: input.approvedBy ?? null, approvedAt: now });
     return task;
   }
   transition(id, state, data = {}) {
     if (!taskStates.has(state)) throw new Error('INVALID_TASK_STATE');
     const now = new Date().toISOString();
-    if (this.db.prepare('UPDATE tasks SET state=?,updated_at=? WHERE id=?').run(state, now, id).changes !== 1) throw new Error('TASK_NOT_FOUND');
-    this.event(id, 'STATE_CHANGED', { state, ...data });
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const changed = this.db.prepare('UPDATE tasks SET state=?,updated_at=? WHERE id=?').run(state, now, id).changes;
+      if (changed !== 1) throw new Error('TASK_NOT_FOUND');
+      this.event(id, 'STATE_CHANGED', { state, ...data });
+      if (['IMPLEMENTING', 'WAITING_QUOTA', 'BLOCKED_USER_DECISION', 'RC_READY', 'RELEASED'].includes(state)) {
+        const task = this.get(id);
+        this.enqueueNotification({ dedupeKey: `${id}:${state}:${now}`, taskId: id, eventType: state, payload: { taskId: id, title: task.title, state, branch: task.branch, reason: data.reason ?? null, retryAt: data.retryAt ?? null, occurredAt: now } });
+      }
+      this.db.exec('COMMIT');
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
   }
   approveRelease(id, approvedBy, note = '') {
     const task = this.get(id);
@@ -72,12 +104,14 @@ export class OrchestratorStore {
     return { id: row.id, title: row.title, repository: row.repository, branch: row.branch, baseSha: row.base_sha, state: row.state, requirementHash: row.requirement_hash, testCaseHash: row.test_case_hash, createdAt: row.created_at, updatedAt: row.updated_at };
   }
   approvedDocuments(id) {
-    const row = this.db.prepare('SELECT requirement_content,test_case_content FROM tasks WHERE id=?').get(id);
+    const row = this.db.prepare('SELECT requirement_hash,test_case_hash FROM tasks WHERE id=?').get(id);
     if (!row) throw new Error('TASK_NOT_FOUND');
-    if (row.requirement_content === null || row.test_case_content === null) throw new Error('APPROVED_DOCUMENT_CONTENT_MISSING');
-    return { requirementContent: row.requirement_content, testCaseContent: row.test_case_content };
+    return {
+      requirementContent: this.approvedDocumentStore.read(id, 'requirement', row.requirement_hash),
+      testCaseContent: this.approvedDocumentStore.read(id, 'test-cases', row.test_case_hash)
+    };
   }
-  events(id) { return this.db.prepare('SELECT type,data,created_at FROM events WHERE task_id=? ORDER BY created_at').all(id).map(row => ({ type: row.type, data: JSON.parse(row.data), createdAt: row.created_at })); }
+  events(id) { return this.db.prepare('SELECT id,type,data,created_at FROM events WHERE task_id=? ORDER BY created_at,rowid').all(id).map(row => ({ id: row.id, type: row.type, data: JSON.parse(row.data), createdAt: row.created_at })); }
   deliverySha(id) {
     const row = this.db.prepare("SELECT data FROM events WHERE task_id=? AND type='GIT_VERIFIED' ORDER BY created_at DESC LIMIT 1").get(id);
     if (!row) throw new Error('DELIVERY_SHA_NOT_VERIFIED');
@@ -117,19 +151,139 @@ export class OrchestratorStore {
     this.transition(id, 'IMPLEMENTING', { retry: { rootKind, attempt, maxAttempts, reset: kinds } });
     return { allowed: true, attempts: attempt, maxAttempts, reset: kinds };
   }
+  enqueueNotification({ dedupeKey, taskId, eventType, payload }) {
+    const now = new Date().toISOString();
+    const id = randomUUID();
+    this.db.prepare("INSERT OR IGNORE INTO notification_outbox (id,dedupe_key,task_id,event_type,payload,status,attempts,next_attempt_at,last_error,created_at,sent_at) VALUES(?,?,?,?,?,'PENDING',0,?,NULL,?,NULL)").run(id, dedupeKey, taskId, eventType, JSON.stringify(payload), now, now);
+    return this.db.prepare('SELECT id,dedupe_key,task_id,event_type,payload,status,attempts,next_attempt_at,last_error,created_at,sent_at FROM notification_outbox WHERE dedupe_key=?').get(dedupeKey);
+  }
+  pendingNotifications(now = Date.now(), limit = 50) {
+    const at = new Date(now).toISOString();
+    return this.db.prepare("SELECT * FROM notification_outbox WHERE status='PENDING' AND next_attempt_at<=? ORDER BY created_at LIMIT ?").all(at, limit).map(row => ({ ...row, payload: JSON.parse(row.payload) }));
+  }
+  markNotificationSent(id, sentAt = new Date().toISOString()) {
+    this.db.prepare("UPDATE notification_outbox SET status='SENT',sent_at=?,last_error=NULL WHERE id=?").run(sentAt, id);
+  }
+  markNotificationFailed(id, error, retryAt, maxAttempts = 8) {
+    const current = this.db.prepare('SELECT attempts FROM notification_outbox WHERE id=?').get(id);
+    if (!current) throw new Error('NOTIFICATION_NOT_FOUND');
+    const attempts = current.attempts + 1;
+    this.db.prepare("UPDATE notification_outbox SET attempts=?,status=?,next_attempt_at=?,last_error=? WHERE id=?").run(attempts, attempts >= maxAttempts ? 'DEAD' : 'PENDING', retryAt, String(error).slice(0, 1000), id);
+    return { attempts, dead: attempts >= maxAttempts, retryAt };
+  }
+  notifications(taskId) {
+    return this.db.prepare('SELECT id,event_type,status,attempts,next_attempt_at,last_error,created_at,sent_at FROM notification_outbox WHERE task_id=? ORDER BY created_at').all(taskId);
+  }
+  waitForQuota(id, kind, { retryAt, evidence, maxTotalWaitMs = 24 * 60 * 60_000 }) {
+    if (!Number.isFinite(Date.parse(retryAt))) throw new Error('QUOTA_RETRY_TIME_INVALID');
+    this.get(id);
+    const now = new Date().toISOString();
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const firstWait = this.db.prepare("SELECT created_at FROM events WHERE task_id=? AND type='QUOTA_WAIT_STARTED' ORDER BY created_at LIMIT 1").get(id);
+      const exceeded = firstWait && Date.now() - Date.parse(firstWait.created_at) >= maxTotalWaitMs;
+      const state = exceeded ? 'BLOCKED_USER_DECISION' : 'WAITING_QUOTA';
+      const nodeState = exceeded ? 'FAILED' : 'WAITING_QUOTA';
+      const nodeData = exceeded
+        ? { retryAt, quotaEvidence: evidence, reason: 'QUOTA_WAIT_LIMIT_REACHED' }
+        : { retryAt, quotaEvidence: evidence };
+      const nodeChanged = this.db.prepare('UPDATE nodes SET state=?,data=?,updated_at=? WHERE task_id=? AND kind=?').run(nodeState, JSON.stringify(nodeData), now, id, kind).changes;
+      if (nodeChanged !== 1) throw new Error('NODE_NOT_FOUND');
+      this.event(id, 'NODE_CHANGED', { kind, state: nodeState, ...nodeData });
+      const taskChanged = this.db.prepare('UPDATE tasks SET state=?,updated_at=? WHERE id=?').run(state, now, id).changes;
+      if (taskChanged !== 1) throw new Error('TASK_NOT_FOUND');
+      const transitionData = exceeded
+        ? { reason: 'QUOTA_WAIT_LIMIT_REACHED', kind, retryAt, quotaEvidence: evidence }
+        : { kind, retryAt, quotaEvidence: evidence };
+      this.event(id, 'STATE_CHANGED', { state, ...transitionData });
+      const task = this.get(id);
+      this.enqueueNotification({ dedupeKey: `${id}:${state}:${now}`, taskId: id, eventType: state, payload: { taskId: id, title: task.title, state, branch: task.branch, reason: transitionData.reason ?? null, retryAt, occurredAt: now } });
+      if (exceeded) {
+        this.event(id, 'QUOTA_WAIT_LIMIT_REACHED', { kind, maxTotalWaitMs, firstWaitAt: firstWait.created_at });
+      } else {
+        this.event(id, 'QUOTA_WAIT_STARTED', { kind, retryAt, quotaEvidence: evidence });
+      }
+      this.db.exec('COMMIT');
+      return exceeded
+        ? { id, kind, state, reason: 'QUOTA_WAIT_LIMIT_REACHED' }
+        : { id, kind, state, retryAt };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
+    }
+  }
+  wakeDueQuotaTasks(now = Date.now()) {
+    const tasks = this.db.prepare("SELECT id FROM tasks WHERE state='WAITING_QUOTA'").all();
+    const awakened = [];
+    for (const { id } of tasks) {
+      const row = this.db.prepare("SELECT data FROM events WHERE task_id=? AND type='QUOTA_WAIT_STARTED' ORDER BY created_at DESC LIMIT 1").get(id);
+      if (!row) continue;
+      const wait = JSON.parse(row.data);
+      if (Date.parse(wait.retryAt) > now) continue;
+      this.db.exec('BEGIN IMMEDIATE');
+      try {
+        const changed = this.db.prepare("UPDATE tasks SET state='IMPLEMENTING',updated_at=? WHERE id=? AND state='WAITING_QUOTA'").run(new Date(now).toISOString(), id).changes;
+        if (changed) {
+          this.db.prepare("UPDATE nodes SET state='PENDING',data='{}',updated_at=? WHERE task_id=? AND kind=? AND state='WAITING_QUOTA'").run(new Date(now).toISOString(), id, wait.kind);
+          this.db.exec('COMMIT');
+          this.event(id, 'QUOTA_WAIT_ENDED', { kind: wait.kind, retryAt: wait.retryAt, awakenedAt: new Date(now).toISOString() });
+          awakened.push(id);
+        } else this.db.exec('ROLLBACK');
+      } catch (error) {
+        this.db.exec('ROLLBACK');
+        throw error;
+      }
+    }
+    return awakened;
+  }
   recover() {
     const now = new Date().toISOString();
-    const interrupted = this.db.prepare("SELECT DISTINCT task_id FROM nodes WHERE state='RUNNING'").all().map(row => row.task_id);
-    const active = this.db.prepare("SELECT id FROM tasks WHERE state IN ('IMPLEMENTING','LOCAL_VERIFYING','CI_VERIFYING','FIXING','RC_BUILDING')").all().map(row => row.id);
-    const taskIds = [...new Set([...interrupted, ...active])];
-    const nodes = this.db.prepare("UPDATE nodes SET state='UNKNOWN',updated_at=? WHERE state='RUNNING'").run(now).changes;
-    const update = this.db.prepare("UPDATE tasks SET state='BLOCKED_USER_DECISION',updated_at=? WHERE id=? AND state NOT IN ('RC_READY','RELEASE_APPROVED','RELEASE_TRIGGERED','RELEASED','CANCELLED','BLOCKED_USER_DECISION')");
-    let tasks = 0;
-    for (const id of taskIds) {
-      tasks += update.run(now, id).changes;
-      this.event(id, 'RECOVERY_REQUIRES_RECONCILIATION', { interrupted: interrupted.includes(id), recoveredAt: now });
+    const safeToResume = new Set(['git-verify', 'local-verify', 'ci', 'rc']);
+    this.db.exec('BEGIN IMMEDIATE');
+    try {
+      const interrupted = this.db.prepare("SELECT task_id,kind,data FROM nodes WHERE state='RUNNING' ORDER BY task_id,rowid").all();
+      const byTask = new Map();
+      let unknownNodes = 0;
+      for (const node of interrupted) {
+        const recovered = safeToResume.has(node.kind);
+        const data = { ...JSON.parse(node.data), recoveredAt: now, recoveryAction: recovered ? 'safe-retry' : 'manual-reconciliation' };
+        const state = recovered ? 'PENDING' : 'UNKNOWN';
+        this.db.prepare('UPDATE nodes SET state=?,data=?,updated_at=? WHERE task_id=? AND kind=? AND state=?').run(state, JSON.stringify(data), now, node.task_id, node.kind, 'RUNNING');
+        this.event(node.task_id, 'NODE_CHANGED', { kind: node.kind, state, recoveredAt: now, recoveryAction: data.recoveryAction });
+        if (!recovered) unknownNodes += 1;
+        const kinds = byTask.get(node.task_id) ?? { resumable: [], unknown: [] };
+        kinds[recovered ? 'resumable' : 'unknown'].push(node.kind);
+        byTask.set(node.task_id, kinds);
+      }
+      let blockedTasks = 0;
+      let resumedTasks = 0;
+      const updateBlocked = this.db.prepare("UPDATE tasks SET state='BLOCKED_USER_DECISION',updated_at=? WHERE id=? AND state NOT IN ('RC_READY','RELEASE_APPROVED','RELEASE_TRIGGERED','RELEASED','CANCELLED','BLOCKED_USER_DECISION')");
+      for (const [id, kinds] of byTask) {
+        if (kinds.unknown.length) {
+          const changed = updateBlocked.run(now, id).changes;
+          blockedTasks += changed;
+          const task = this.get(id);
+          this.event(id, 'RECOVERY_REQUIRES_RECONCILIATION', { interruptedKinds: [...kinds.resumable, ...kinds.unknown], unknownKinds: kinds.unknown, recoveredAt: now, state: changed ? 'BLOCKED_USER_DECISION' : task.state });
+          if (changed) {
+            this.event(id, 'STATE_CHANGED', { state: 'BLOCKED_USER_DECISION', reason: 'INTERRUPTED_STAGE_REQUIRES_RECONCILIATION', recoveredAt: now });
+            this.enqueueNotification({
+              dedupeKey: `${id}:RECOVERY_REQUIRES_RECONCILIATION:${now}`,
+              taskId: id,
+              eventType: 'BLOCKED_USER_DECISION',
+              payload: { taskId: id, title: task.title, state: 'BLOCKED_USER_DECISION', branch: task.branch, reason: 'INTERRUPTED_STAGE_REQUIRES_RECONCILIATION', occurredAt: now }
+            });
+          }
+        } else {
+          resumedTasks += 1;
+          this.event(id, 'RECOVERY_AUTO_RESUMED', { kinds: kinds.resumable, recoveredAt: now, strategy: 'repeat-read-only-or-verification-stage' });
+        }
+      }
+      this.db.exec('COMMIT');
+      return { tasks: blockedTasks, nodes: interrupted.length, interruptedNodes: interrupted.length, unknownNodes, blockedTasks, resumedTasks, taskIds: [...byTask.keys()] };
+    } catch (error) {
+      this.db.exec('ROLLBACK');
+      throw error;
     }
-    return { tasks, nodes };
   }
   list() { return this.db.prepare('SELECT * FROM tasks ORDER BY created_at DESC').all().map(row => ({ id: row.id, title: row.title, repository: row.repository, branch: row.branch, baseSha: row.base_sha, state: row.state, updatedAt: row.updated_at })); }
   close() { this.db.close(); }

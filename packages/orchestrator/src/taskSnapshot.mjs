@@ -10,6 +10,7 @@ function projectTask(store, task) {
   const events = store.events(task.id);
   const testOutput = [...events].reverse().find(event => event.type === 'AGENT_FINISHED' && event.data?.role === 'tester')?.data?.stdout ?? '';
   const reportUrl = testOutput.match(/handoffReport[^\n]*(https:\/\/github\.com\/[^\s)\]]+)/i)?.[1] ?? null;
+  const released = [...events].reverse().find(event => event.type === 'STATE_CHANGED' && event.data?.state === 'RELEASED')?.data ?? null;
   const testResults = testOutput.match(/testResults[^\n]*/i)?.[0]?.replace(/^[-*\s]+/, '') ?? null;
   const nodes = store.nodes(task.id).map(node => ({
     kind: node.kind,
@@ -20,9 +21,20 @@ function projectTask(store, task) {
       : value])),
   }));
   let currentNode = null;
+  const nodeStartedAt = new Map();
+  const eventDurations = new Map();
   for (const event of events) {
-    if (event.type === 'TASK_NODE_DISPATCHED') currentNode = event.data?.kind ?? null;
-    if (event.type === 'TASK_NODE_FINISHED' && currentNode === event.data?.kind) currentNode = null;
+    if (event.type === 'TASK_NODE_DISPATCHED') {
+      currentNode = event.data?.kind ?? null;
+      if (currentNode) nodeStartedAt.set(currentNode, Date.parse(event.createdAt));
+    }
+    if (event.type === 'TASK_NODE_FINISHED' && currentNode === event.data?.kind) {
+      const startedAt = nodeStartedAt.get(currentNode);
+      const finishedAt = Date.parse(event.createdAt);
+      if (Number.isFinite(startedAt) && Number.isFinite(finishedAt) && finishedAt >= startedAt) eventDurations.set(event.id, finishedAt - startedAt);
+      nodeStartedAt.delete(currentNode);
+      currentNode = null;
+    }
   }
   return {
     ...task,
@@ -31,11 +43,16 @@ function projectTask(store, task) {
     workflows: store.workflows(task.id).map(({ sha, name, runId, url, status, conclusion, recordedAt }) => ({ sha, name, runId, url, status, conclusion, recordedAt })),
     artifacts: store.artifacts(task.id).map(({ kind, sha }) => ({ kind, sha })),
     testReport: { url: reportUrl, results: testResults },
-    events: events.slice(-20).map(event => ({
-      type: event.type,
-      createdAt: event.createdAt,
-      data: Object.fromEntries(Object.entries(event.data ?? {}).filter(([key]) => ['kind', 'state', 'reason', 'role', 'sha', 'workflow', 'version', 'exitCode'].includes(key))),
-    })),
+    release: released ? { tag: released.tag ?? null, url: released.releaseUrl ?? null, sha: released.sha ?? null } : null,
+    eventCount: events.length,
+    eventsTruncated: events.length > 100,
+    events: events.slice(-100).map(event => {
+      const data = Object.fromEntries(Object.entries(event.data ?? {}).filter(([key]) => ['kind', 'state', 'reason', 'role', 'source', 'sha', 'workflow', 'version', 'tag', 'releaseUrl', 'exitCode', 'errorCode', 'traceId', 'executionId'].includes(key)));
+      if (typeof data.reason === 'string') data.reason = data.reason.slice(0, 200);
+      const durationMs = eventDurations.get(event.id);
+      if (durationMs !== undefined) data.durationMs = durationMs;
+      return { id: event.id, type: event.type, createdAt: event.createdAt, data };
+    }),
   };
 }
 

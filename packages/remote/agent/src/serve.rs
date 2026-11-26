@@ -286,10 +286,17 @@ async fn serve_bi_stream(
 
     let first =
         tokio::time::timeout(OPEN_HANDSHAKE_TIMEOUT, read_frame(&mut recv, &mut decoder)).await;
-    match first {
+    let first = match first {
         Ok(Ok(Some(Frame::Task(payload)))) => {
             crate::tasks::serve(tasks, payload, send, recv, decoder).await;
+            return;
         }
+        other => other,
+    };
+
+    // Non-task streams do not own task bindings or work-directory claims.
+    drop(tasks);
+    match first {
         Ok(Ok(Some(Frame::Open(payload)))) => {
             serve_terminal_session(payload, send, recv, decoder, table, options).await;
         }
@@ -1145,6 +1152,85 @@ fn spawn_output_pump(mut reader: Box<dyn std::io::Read + Send>, tx: mpsc::Sender
 
         let _ = tx.blocking_send(PtyEvent::Exited);
     });
+}
+
+#[cfg(test)]
+mod task_ownership_tests {
+    use super::*;
+    use crate::identity::DeviceIdentity;
+    use crate::p2p::{bind_endpoint, loopback_addr, EndpointProfile};
+
+    #[tokio::test]
+    async fn directory_watch_does_not_retain_task_service() {
+        tokio::time::timeout(std::time::Duration::from_secs(20), async {
+            let root = tempfile::tempdir().unwrap();
+            let identity = DeviceIdentity::load_or_create(&root.path().join("agent.json")).unwrap();
+            let endpoint = bind_endpoint(&identity, EndpointProfile::Loopback)
+                .await
+                .unwrap();
+            let addr = loopback_addr(&endpoint);
+            let options = Arc::new(ServeOptions::new(
+                ShellConfig {
+                    program: String::new(),
+                    args: Vec::new(),
+                },
+                4,
+                root.path().to_path_buf(),
+            ));
+            let tasks = Arc::new(crate::tasks::TaskService::new(
+                options.task_device_id.clone(),
+                Arc::clone(&options.task_claims),
+            ));
+            let weak_tasks = Arc::downgrade(&tasks);
+            let server = tokio::spawn(async move {
+                let connection = endpoint
+                    .accept()
+                    .await
+                    .unwrap()
+                    .accept()
+                    .unwrap()
+                    .await
+                    .unwrap();
+                let (send, recv) = connection.accept_bi().await.unwrap();
+                serve_bi_stream(
+                    send,
+                    recv,
+                    Arc::clone(&options.session_table),
+                    options,
+                    tasks,
+                )
+                .await;
+            });
+
+            let identity =
+                DeviceIdentity::load_or_create(&root.path().join("controller.json")).unwrap();
+            let controller = bind_endpoint(&identity, EndpointProfile::Loopback)
+                .await
+                .unwrap();
+            let connection = controller.connect(addr, ALPN_TERMINAL).await.unwrap();
+            let (mut send, mut recv) = connection.open_bi().await.unwrap();
+            write_frame(
+                &mut send,
+                &Frame::FsList(FsListPayload {
+                    path: root.path().to_str().unwrap().to_owned(),
+                    metadata_version: None,
+                }),
+            )
+            .await
+            .unwrap();
+            let response = read_frame(&mut recv, &mut FrameDecoder::new())
+                .await
+                .unwrap();
+            assert!(matches!(response, Some(Frame::FsListResult(_))));
+            assert!(weak_tasks.upgrade().is_none());
+            assert!(!server.is_finished());
+            send.finish().unwrap();
+            server.await.unwrap();
+            controller.close().await;
+        })
+        .await
+        .expect("directory watch test timed out");
+    }
 }
 
 #[cfg(all(test, unix))]

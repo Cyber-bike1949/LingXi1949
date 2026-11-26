@@ -6,7 +6,7 @@
   "engines": { "node": ">=24" },
   "bin": { "lingxi-orchestrator": "src/cli.mjs" },
   "scripts": {
-    "build": "node --check src/cli.mjs && node --check src/store.mjs && node --check src/remote.mjs && node --check src/project.mjs && node --check src/github.mjs && node --check src/artifact.mjs && node --check src/resources.mjs && node --check src/release.mjs && node --check src/draft.mjs && node --check src/worker.mjs && node --check src/preflight.mjs && node --check src/agent.mjs && node --check src/gate.mjs && node --check src/server.mjs && node --check src/pipeline.mjs && node --check src/git.mjs && node --check src/scheduler.mjs && node --check src/engine.mjs && node --check src/process.mjs && node --check src/taskSnapshot.mjs",
+    "build": "node --check src/cli.mjs && node --check src/store.mjs && node --check src/remote.mjs && node --check src/project.mjs && node --check src/github.mjs && node --check src/artifact.mjs && node --check src/resources.mjs && node --check src/release.mjs && node --check src/draft.mjs && node --check src/worker.mjs && node --check src/preflight.mjs && node --check src/agent.mjs && node --check src/dockerSandbox.mjs && node --check src/gate.mjs && node --check src/server.mjs && node --check src/pipeline.mjs && node --check src/git.mjs && node --check src/scheduler.mjs && node --check src/engine.mjs && node --check src/process.mjs && node --check src/quota.mjs && node --check src/notifications.mjs && node --check src/taskSnapshot.mjs",
     "test": "node --test test/*.test.mjs"
   }
 }

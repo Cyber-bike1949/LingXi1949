@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { posix, win32 } from 'node:path';
+import { validateDockerSandbox } from './dockerSandbox.mjs';
 
 export function sha256File(path) { return createHash('sha256').update(readFileSync(path)).digest('hex'); }
 
@@ -25,6 +26,16 @@ export function taskPrompt(task, role, project, documents) {
 
 export function runtimeConfig(project) {
   const runtime = project.runtime;
+  validateDockerSandbox(runtime?.sandbox);
+  if (runtime?.release?.autoAfterGate === true && (typeof runtime.release.approvedBy !== 'string' || !runtime.release.approvedBy.trim())) throw new Error('AUTO_RELEASE_APPROVER_REQUIRED');
+  if (runtime?.quota !== undefined) {
+    if (!runtime.quota || typeof runtime.quota !== 'object' || Array.isArray(runtime.quota)) throw new Error('PROJECT_RUNTIME_QUOTA_INVALID');
+    const { defaultWaitMs = 30 * 60_000, maxWaitMs = 2 * 60 * 60_000, maxTotalWaitMs = 24 * 60 * 60_000 } = runtime.quota;
+    for (const [name, value] of Object.entries({ defaultWaitMs, maxWaitMs, maxTotalWaitMs })) {
+      if (!Number.isSafeInteger(value) || value < 60_000) throw new Error(`PROJECT_RUNTIME_QUOTA_${name.replace(/[A-Z]/g, letter => `_${letter}`).toUpperCase()}_INVALID`);
+    }
+    if (defaultWaitMs > maxWaitMs || maxWaitMs > maxTotalWaitMs) throw new Error('PROJECT_RUNTIME_QUOTA_INTERVALS_INVALID');
+  }
   const developmentRemote = runtime?.remotes?.development ?? runtime?.remote;
   const testRemote = runtime?.remotes?.test ?? (developmentRemote && { ...developmentRemote, worktreeRoot: joinRemotePath(developmentRemote, 'test') });
   for (const remote of [developmentRemote, testRemote]) if (!remote?.lingxiCli || !remote.session || !remote.worktreeRoot) throw new Error('PROJECT_RUNTIME_REMOTE_REQUIRED');
@@ -37,10 +48,20 @@ export function runtimeConfig(project) {
   const normalizeAgent = agent => {
     if (!agent?.executable || !Array.isArray(agent.args)) throw new Error('PROJECT_RUNTIME_TESTER_REQUIRED');
     const target = agent.target ?? 'local';
+    if (agent.resumeArgs !== undefined && (!Array.isArray(agent.resumeArgs) || agent.resumeArgs.some(argument => typeof argument !== 'string'))) throw new Error('PROJECT_RUNTIME_AGENT_RESUME_ARGS_INVALID');
+    if (agent.resumeNativeSession === true && (!Array.isArray(agent.resumeArgs) || !agent.resumeArgs.some(argument => argument.includes('{sessionId}')))) throw new Error('PROJECT_RUNTIME_AGENT_RESUME_ARGS_REQUIRED');
+    if (agent.resumeNativeSession === true && [...agent.args, ...(agent.resumeArgs ?? [])].some(argument => argument === '--ephemeral')) throw new Error('NATIVE_SESSION_RESUME_INCOMPATIBLE_WITH_EPHEMERAL');
     if (!['local', 'remote'].includes(target)) throw new Error('PROJECT_RUNTIME_AGENT_TARGET_INVALID');
+    if (target === 'remote' && agent.executable.toLowerCase().includes('codex')) throw new Error('CODEX_MUST_RUN_ON_CONTROLLER');
     if (agent.mcp && (!agent.mcp.name || !agent.mcp.command || !Array.isArray(agent.mcp.serverArgs))) throw new Error('PROJECT_RUNTIME_AGENT_MCP_INVALID');
     return { ...agent, target };
   };
   const normalizedDevelopment = normalizeRemote(developmentRemote); const normalizedTest = normalizeRemote(testRemote);
-  return { ...runtime, remote: normalizedDevelopment, remotes: { development: normalizedDevelopment, test: normalizedTest }, agent: normalizeAgent(runtime.agent), tester: normalizeAgent(runtime.tester ?? runtime.agent) };
+  const agent = normalizeAgent(runtime.agent);
+  const tester = normalizeAgent(runtime.tester ?? runtime.agent);
+  if (runtime.sandbox?.enabled === true && [agent, tester].some(role =>
+    role.target !== 'local' || !role.mcp || !/(?:^|\/)codex$/.test(role.executable))) {
+    throw new Error('DOCKER_SANDBOX_REQUIRES_LOCAL_CODEX_WITH_LINGXI_MCP');
+  }
+  return { ...runtime, remote: normalizedDevelopment, remotes: { development: normalizedDevelopment, test: normalizedTest }, agent, tester };
 }

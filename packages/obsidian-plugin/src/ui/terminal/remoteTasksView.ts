@@ -14,6 +14,8 @@ export class RemoteTasksView extends ItemView {
   private snapshotPath = '';
   private source: 'orchestrator' | 'mcp' = 'orchestrator';
   private busy = false;
+  private lastOrchestratorSnapshot: Record<string, unknown> | null = null;
+  private lastSyncAt = '';
 
   private readonly plugin: TerminalPlugin;
 
@@ -81,6 +83,8 @@ export class RemoteTasksView extends ItemView {
       if (this.source === 'orchestrator' && !isOrchestrator) throw new Error('该文件不是 LingXi 编排器任务镜像。');
       if (this.source === 'mcp' && isOrchestrator) throw new Error('请选择“研发编排任务”数据类型以查看此镜像。');
       if (this.source === 'orchestrator' && isRecord(raw)) {
+        this.lastOrchestratorSnapshot = raw;
+        this.lastSyncAt = new Date().toISOString();
         this.renderOrchestratorSnapshot(container, raw);
         return;
       }
@@ -96,7 +100,16 @@ export class RemoteTasksView extends ItemView {
         card.createEl('pre', { text: ['taskId', 'deviceId', 'sessionId', 'startedAt', 'updatedAt', 'stdout', 'stderr', 'error'].map(key => `${key}: ${value(key)}`).join('\n') });
       }
       if (!tasks.length) container.createEl('p', { text: '暂无任务记录。' });
-    } catch (error) { container.createEl('p', { text: error instanceof Error ? error.message : String(error) }); }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      container.empty();
+      if (this.source === 'orchestrator' && this.lastOrchestratorSnapshot) {
+        this.renderOrchestratorSnapshot(container, this.lastOrchestratorSnapshot);
+        const notice = container.createEl('p', { text: `连接中断：${message} · 最近同步：${this.lastSyncAt || '未知'}` });
+        notice.addClass('termesh-task-sync-warning');
+        container.prepend(notice);
+      } else container.createEl('p', { text: message });
+    }
     finally { this.busy = false; }
   }
 
@@ -105,7 +118,7 @@ export class RemoteTasksView extends ItemView {
     const text = (item: unknown): string => typeof item === 'string' || typeof item === 'number' ? String(item) : '';
     const tasks = Array.isArray(raw.tasks) ? raw.tasks : [];
     container.empty();
-    container.createEl('p', { text: `仓库：${text(raw.repository)} · 镜像更新：${text(raw.updatedAt)}` });
+    container.createEl('p', { text: `仓库：${text(raw.repository)} · 镜像更新：${text(raw.updatedAt)} · 本机同步：${this.lastSyncAt || '尚未同步'}` });
     const nodeLabels: Record<string, string> = {
       'prepare-worktree': '准备开发工作区', develop: 'AI 开发', 'git-verify': '提交与工作区校验',
       'prepare-test-worktree': '准备测试工作区', test: '独立测试', 'local-verify': '本地质量检查',
@@ -113,12 +126,13 @@ export class RemoteTasksView extends ItemView {
     };
     const stateLabels: Record<string, string> = {
       PENDING: '等待中', RUNNING: '执行中', SUCCEEDED: '成功', FAILED: '失败', UNKNOWN: '结果待核对',
+      WAITING_QUOTA: '额度等待', WAITING_DEVICE: '等待设备', WAITING_APPROVAL: '等待审批', SKIPPED: '已跳过',
     };
     const taskStateLabels: Record<string, string> = {
-      TEST_CASES_APPROVED: '待启动', IMPLEMENTING: '执行中', LOCAL_VERIFYING: '本地验证中',
+      REQUIREMENT_APPROVED: '等待用例审批', TEST_CASES_APPROVED: '待启动', IMPLEMENTING: '执行中', WAITING_QUOTA: '等待额度恢复', LOCAL_VERIFYING: '本地验证中',
       CI_VERIFYING: 'CI 验证中', FIXING: '修复中', RC_BUILDING: '候选版本构建中',
       RC_READY: '候选版本就绪', BLOCKED_USER_DECISION: '需要人工处理', RELEASE_APPROVED: '已批准发布',
-      RELEASE_TRIGGERED: '已触发发布', RELEASED: '已发布', CANCELLED: '已取消',
+      RELEASE_TRIGGERED: '已触发发布', RELEASED: '已发布', USER_ACCEPTING: '等待用户验收', CANCELLED: '已取消',
     };
     for (const task of tasks) {
       const id = text(value(task, 'id'));
@@ -148,6 +162,14 @@ export class RemoteTasksView extends ItemView {
         if (results) report.createEl('p', { text: results });
         if (reportUrl.startsWith('https://github.com/')) report.createEl('a', { text: '打开交接报告', attr: { href: reportUrl, target: '_blank', rel: 'noopener noreferrer' } });
       }
+      const release = value(task, 'release');
+      if (release && typeof release === 'object') {
+        const releaseUrl = text(value(release, 'url'));
+        const releaseLine = card.createEl('p');
+        releaseLine.createEl('strong', { text: `正式发布：${text(value(release, 'tag')) || '已验证'}` });
+        releaseLine.createEl('span', { text: ` · SHA ${text(value(release, 'sha')).slice(0, 12)}` });
+        if (releaseUrl.startsWith('https://github.com/')) releaseLine.createEl('a', { text: '查看 release', attr: { href: releaseUrl, target: '_blank', rel: 'noopener noreferrer' } });
+      }
       const workflows = value(task, 'workflows');
       if (Array.isArray(workflows) && workflows.length) {
         card.createEl('strong', { text: 'GitHub 工作流' });
@@ -162,11 +184,57 @@ export class RemoteTasksView extends ItemView {
       }
       const artifacts = value(task, 'artifacts');
       if (Array.isArray(artifacts) && artifacts.length) card.createEl('p', { text: `构建制品：${artifacts.map(item => text(value(item, 'kind'))).filter(Boolean).join('、')}` });
-      const events = value(task, 'events');
-      if (Array.isArray(events) && events.length) {
-        const history = card.createEl('details');
-        history.createEl('summary', { text: '任务事件' });
-        history.createEl('pre', { text: JSON.stringify(events, null, 2) });
+      const rawEvents = value(task, 'events');
+      const events: unknown[] = Array.isArray(rawEvents) ? rawEvents as unknown[] : [];
+      if (events.length) {
+        const history = card.createDiv({ cls: 'termesh-task-events' });
+        const totalEvents = text(value(task, 'eventCount')) || String(events.length);
+        history.createEl('h4', { text: `事件时间线（显示最近 ${events.length} 条 / 共 ${totalEvents} 条）` });
+        if (value(task, 'eventsTruncated') === true) history.createEl('p', { text: '此设备镜像为控制文件大小仅包含最近 100 条事件。' });
+        const toolbar = history.createDiv({ cls: 'termesh-task-events-toolbar' });
+        const filter = toolbar.createEl('select', { attr: { 'aria-label': '事件类别' } });
+        filter.createEl('option', { text: '全部事件', attr: { value: 'all' } });
+        filter.createEl('option', { text: '阶段事件', attr: { value: 'stage' } });
+        filter.createEl('option', { text: '异常事件', attr: { value: 'error' } });
+        const search = toolbar.createEl('input', { attr: { type: 'search', placeholder: '搜索事件', 'aria-label': '搜索事件' } });
+        const list = history.createDiv({ cls: 'termesh-task-events-list' });
+        let visibleCount = 50;
+        const renderEvents = (): void => {
+          list.empty();
+          const query = search.value.trim().toLowerCase();
+          const visible = [...events].reverse().filter(item => {
+            const type = text(value(item, 'type'));
+            const data = value(item, 'data');
+            const state = text(value(data, 'state'));
+            const reason = text(value(data, 'reason'));
+            const isError = /fail|error|blocked|unknown|timeout|denied/i.test(`${type} ${state} ${reason}`);
+            const isStage = type.includes('NODE') || Boolean(value(data, 'kind'));
+            if (filter.value === 'error' && !isError) return false;
+            if (filter.value === 'stage' && !isStage) return false;
+            return !query || JSON.stringify(item).toLowerCase().includes(query);
+          });
+          for (const item of visible.slice(0, visibleCount)) {
+            const type = text(value(item, 'type')) || '事件';
+            const date = text(value(item, 'createdAt'));
+            const data = value(item, 'data');
+            const durationMs = value(data, 'durationMs');
+            const duration = typeof durationMs === 'number' ? `${(durationMs / 1000).toFixed(1)} 秒` : '';
+            const summary = [type, text(value(data, 'kind')), text(value(data, 'state')), text(value(data, 'source')) || text(value(data, 'role')), duration, text(value(data, 'reason'))].filter(Boolean).join(' · ');
+            const row = list.createEl('details', { cls: 'termesh-task-event' });
+            row.createEl('summary', { text: `${date} · ${summary}` });
+            const eventId = text(value(item, 'id'));
+            if (eventId) row.createEl('p', { text: `事件 ID：${eventId}` });
+            row.createEl('pre', { text: JSON.stringify(data ?? {}, null, 2) });
+          }
+          if (!visible.length) list.createEl('p', { text: '没有符合筛选条件的事件。' });
+          else if (visible.length > visibleCount) {
+            const more = list.createEl('button', { text: `加载更多（还有 ${visible.length - visibleCount} 条）` });
+            more.addEventListener('click', () => { visibleCount += 50; renderEvents(); });
+          }
+        };
+        filter.addEventListener('change', () => { visibleCount = 50; renderEvents(); });
+        search.addEventListener('input', () => { visibleCount = 50; renderEvents(); });
+        renderEvents();
       }
     }
     if (!tasks.length) container.createEl('p', { text: '暂无研发任务。' });

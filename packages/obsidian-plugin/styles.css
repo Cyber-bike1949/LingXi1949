@@ -3212,3 +3212,117 @@
     flex: 1 1 0;
   }
 }
+
+
+/* v6.0: task timeline and diagnostics use host theme tokens. */
+.termesh-task-events {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+.termesh-task-events h4 {
+  margin: 0 0 10px;
+  color: var(--text-normal);
+  font-size: var(--font-ui-medium);
+}
+.termesh-task-events-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.termesh-task-events-toolbar select,
+.termesh-task-events-toolbar input {
+  min-width: 0;
+  max-width: 100%;
+}
+.termesh-task-events-toolbar input {
+  flex: 1 1 180px;
+}
+.termesh-task-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: min(420px, 55vh);
+  overflow: auto;
+  padding-right: 4px;
+}
+.termesh-task-event {
+  min-width: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-secondary);
+}
+.termesh-task-event > summary {
+  padding: 8px 10px;
+  color: var(--text-normal);
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.termesh-task-event > p {
+  margin: 0 10px 8px;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  overflow-wrap: anywhere;
+}
+.termesh-task-event > pre {
+  max-height: 240px;
+  margin: 0 10px 10px;
+  padding: 8px;
+  overflow: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.termesh-task-sync-warning {
+  padding: 8px 10px;
+  border-left: 3px solid var(--color-orange);
+  background: var(--background-secondary);
+  color: var(--color-orange);
+  overflow-wrap: anywhere;
+}
+@media (max-width: 900px) {
+  .termesh-task-events-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .termesh-task-events-toolbar select,
+  .termesh-task-events-toolbar input {
+    width: 100%;
+  }
+}
+
+/* Keep task cards and event diagnostics inside narrow Obsidian panes. */
+.termesh-remote-tasks-view,
+.termesh-remote-tasks-view > *,
+.termesh-remote-tasks-view details,
+.termesh-remote-tasks-view ul,
+.termesh-remote-tasks-view li {
+  min-width: 0;
+  max-width: 100%;
+}
+.termesh-remote-tasks-view summary,
+.termesh-remote-tasks-view a {
+  overflow-wrap: anywhere;
+}
+
+.termesh-remote-tasks-view ul {
+  padding-inline-start: 1.25em;
+}
+.termesh-remote-tasks-view details,
+.termesh-remote-tasks-view ul,
+.termesh-remote-tasks-view li {
+  box-sizing: border-box;
+}
+
+.termesh-remote-tasks-view details > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.termesh-remote-tasks-view li {
+  overflow-wrap: anywhere;
+}

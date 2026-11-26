@@ -7,7 +7,7 @@ import type { IrohModule } from './irohStreams.ts';
 
 test('resolves plugin directory as absolute on POSIX when the manifest path is vault-relative', () => {
   assert.equal(
-    resolvePluginDirectory('/tmp/vault', '.obsidian', 'lingxi-bridge', '.obsidian/plugins/lingxi-bridge'),
+    resolvePluginDirectory('/tmp/vault', '.obsidian', 'lingxi-bridge', '.obsidian/plugins/lingxi-bridge', path.posix),
     '/tmp/vault/.obsidian/plugins/lingxi-bridge',
   );
 });
@@ -23,7 +23,7 @@ test('resolves plugin directory as absolute on Windows when the manifest path is
 
 test('preserves an absolute plugin path supplied by Obsidian', () => {
   assert.equal(
-    resolvePluginDirectory('/tmp/vault', '.obsidian', 'lingxi-bridge', '/custom/plugins/lingxi-bridge'),
+    resolvePluginDirectory('/tmp/vault', '.obsidian', 'lingxi-bridge', '/custom/plugins/lingxi-bridge', path.posix),
     '/custom/plugins/lingxi-bridge',
   );
 });

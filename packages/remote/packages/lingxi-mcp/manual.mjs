@@ -104,12 +104,19 @@ export async function runManual(service, command, options) {
 
 export async function shell(service) {
   const terminal = new RemoteTerminal(service.adapter, service.binding);
-  const opened = await terminal.open();
   const stdin = process.stdin;
   const rawCapable = stdin.isTTY && typeof stdin.setRawMode === 'function';
   let control = false;
   let controlBuffer = '';
-  const render = data => process.stdout.write(data);
+  let interactive = false;
+  const openingOutput = [];
+  terminal.onData(data => {
+    if (interactive) process.stdout.write(data);
+    else openingOutput.push(data);
+  });
+  let stop;
+  const stopped = new Promise(resolve => { stop = resolve; });
+  terminal.onClose(stop);
   const runControl = async line => {
     const reader = createInterface({ input: process.stdin, output: process.stdout });
     try {
@@ -126,8 +133,6 @@ export async function shell(service) {
       return true;
     } finally { reader.close(); }
   };
-  process.stdout.write(`已连接至 ${service.binding.deviceId} 的持续远程终端（${opened.shell}）。\nCtrl+] 打开控制命令（/ls、/upload、/download、/exit）；其余按键按字节透传。\n`);
-  terminal.onData(render);
   const onData = async data => {
     if (!control) {
       const marker = data.indexOf('\x1d');
@@ -158,14 +163,36 @@ export async function shell(service) {
       }
     }
   };
-  if (!rawCapable) {
-    await terminal.close();
-    throw new Error('INTERACTIVE_TTY_REQUIRED');
-  }
-  stdin.setRawMode(true); stdin.resume(); stdin.on('data', onData);
+  if (!rawCapable) throw new Error('INTERACTIVE_TTY_REQUIRED');
+  let interrupted = false;
+  const interrupt = () => {
+    interrupted = true;
+    if (!interactive) service.adapter.close();
+    stop();
+  };
+  process.once('SIGINT', interrupt);
+  process.once('SIGTERM', interrupt);
   try {
-    await new Promise(resolve => terminal.onClose(resolve));
+    const opened = await terminal.open();
+    if (interrupted) return;
+    stdin.setRawMode(true);
+    interactive = true;
+    stdin.on('data', onData);
+    stdin.resume();
+    for (const data of openingOutput) process.stdout.write(data);
+    openingOutput.length = 0;
+    process.stdout.write(`已连接至 ${service.binding.deviceId} 的持续远程终端（${opened.shell}）。\nCtrl+] 打开控制命令（/ls、/upload、/download、/exit）；其余按键按字节透传。\n`);
+    await stopped;
+  } catch (error) {
+    if (!interrupted) throw error;
   } finally {
-    stdin.off('data', onData); stdin.setRawMode(false); await terminal.close();
+    process.removeListener('SIGINT', interrupt);
+    process.removeListener('SIGTERM', interrupt);
+    if (interactive) {
+      stdin.off('data', onData);
+      stdin.setRawMode(false);
+      stdin.pause();
+    }
+    await terminal.close();
   }
 }

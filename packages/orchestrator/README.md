@@ -24,7 +24,7 @@ Copy [`project.example.json`](project.example.json) into the new Web project and
 
 For a conventional pnpm Web project, copy [`templates/lingxi-rc.yml`](templates/lingxi-rc.yml) to the target repository's `.github/workflows/lingxi-rc.yml`. Adjust `artifact_path` if the build output is not `dist`. The project configuration's `runtime.workflows.rc` names this workflow and its visible job name, so the orchestrator can dispatch it at the verified SHA and download its artifacts.
 
-The `runtime` section only references an existing LingXi CLI/session and installed AI command. It does not contain credentials and does not replace manual control or the existing AI MCP binding. Set `runtime.agent.target` to `remote` to start that command inside the selected controlled device's worktree. Set it to `local` when the AI CLI runs on the controller. An optional `agent.mcp` starts a task-scoped LingXi MCP server by passing Codex CLI configuration overrides; this does not write or replace the user's Codex configuration. The prompt explicitly limits local Codex to the bound device's `remote_*` tools for project operations. The controller's Codex login is used; the controlled Windows device does not need a Codex login.
+The `runtime` section only references an existing LingXi CLI/session and installed AI command. It does not contain credentials and does not replace manual control or the existing AI MCP binding. Codex runs on the controller (`target: "local"`) and uses the existing LingXi MCP binding for project operations. Other supported AI CLIs may run locally or through an existing LingXi session (`target: "remote"`). An optional `agent.mcp` starts a task-scoped LingXi MCP server by passing Codex CLI configuration overrides; this does not write or replace the user's Codex configuration. The prompt explicitly limits local Codex to the bound device's `remote_*` tools for project operations. The controller's Codex login is used; the controlled Windows device does not need a Codex login.
 
 For the Obsidian read-only task panel, optionally configure `runtime.taskMirror`. The orchestrator remains on the controller because that is where the approved AI CLI and GitHub credentials live; after each workflow node it publishes a sanitized snapshot to the already-connected controlled device using LingXi's encrypted file-transfer channel. The Agent-hosted file is a view mirror, not the source of truth, and no new device port is opened:
 
@@ -37,7 +37,7 @@ For the Obsidian read-only task panel, optionally configure `runtime.taskMirror`
 
 `remotePath` is a temporary path relative to the selected Agent session's bound directory. `remoteFinalPath` is an absolute path on that same controlled device, outside the project checkout; use a directory writable by the Agent account and configure that exact path in Obsidian's “研发任务进度” panel for the paired device. The transfer uses an atomic replacement and is capped at 512 KiB. The mirror contains task/node/workflow summaries and a test handoff link, not approved requirement bodies, raw AI output, local artifact paths, or credentials. If a mirror write fails, task execution continues and the failure is recorded on the controller; the UI timestamp makes stale mirrors visible.
 
-Before the first real run, use the read-only preflight to check the selected LingXi sessions, remote Git, configured AI commands, GitHub authentication, and every named workflow. It neither creates a worktree nor dispatches a workflow:
+Before the first real run, use `doctor` (alias: `preflight`) to check the selected LingXi sessions, remote Git, configured AI commands, GitHub authentication, and every named workflow. It neither creates a worktree nor dispatches a workflow. The configuration shape is documented in [`project.schema.json`](project.schema.json):
 
 ```sh
 node packages/orchestrator/src/cli.mjs preflight --project ./project.json
@@ -69,11 +69,11 @@ node packages/orchestrator/src/cli.mjs rc-request --id RND-001 --version 0.1.0-r
 node packages/orchestrator/src/cli.mjs task-run-next --id RND-001 --project ./project.json
 ```
 
-`document-draft` only creates a draft and prints `approved: false`; it never creates a task or changes its acceptance criteria. Review the Markdown first. `task-create` requires `--approved-by`, reads both approved files, calculates and freezes their byte-level SHA-256 values, and writes the approval identity/time to the immutable event trail. The private orchestrator database retains the approved text so agents receive the exact reviewed requirements and test cases; normal task/list/dashboard responses expose hashes and metadata only.
+`document-draft` only creates a draft and prints `approved: false`; it never creates a task or changes its acceptance criteria. Review the Markdown first. `task-create` requires `--approved-by`, reads both approved files, calculates and freezes their byte-level SHA-256 values, and writes the approval identity/time to the immutable event trail. Approved text is retained in private task-scoped document files; SQLite retains document hashes rather than the document bodies. Agents receive the exact reviewed requirements and test cases after integrity validation; normal task/list/dashboard responses expose hashes and metadata only.
 
 Run `task-run-next` again after each external stage completes. On the first run it creates the execution plan automatically, then selects the next dependency-ready node in this order: development worktree → development AI → pushed/clean Git SHA verification → independent test worktree → test AI → local quality commands → CI/E2E → RC gate. If configured, E2E dispatches its named workflow against the verified delivery SHA before waiting for its result.
 
-For unattended progression, use `task-run-all`; it repeatedly invokes the same guarded next-node executor and stops after a failure, block, RC readiness, or the configured step cap.
+For unattended progression, use `task-run-all`; it repeatedly invokes the same guarded next-node executor and stops after a failure, block, quota wait, RC readiness, or the configured step cap. The task state and quota retry time are persisted, so a restarted worker can resume eligible tasks and wake quota waits when their retry time arrives.
 
 ```sh
 node packages/orchestrator/src/cli.mjs task-run-all \
@@ -147,7 +147,7 @@ node packages/orchestrator/src/cli.mjs workflow-download-artifacts \
   --id RND-001 --run-id 123456789 --gh gh
 ```
 
-If the process is interrupted, run `recover`. Every task with an in-flight node becomes `BLOCKED_USER_DECISION` and its in-flight nodes become `UNKNOWN`; no remote command, Push, Tag, or workflow result is guessed. Inspect the recorded task evidence, Git SHA, LingXi task history, and Actions run before explicitly retrying a node.
+On every worker startup, `recover` reconciles interrupted nodes before scheduling. The read-only verification stages `git-verify`, `local-verify`, `ci`, and `rc` return to `PENDING` and rerun from persisted dependencies; Actions are queried by the recorded SHA. Interrupted stages that may have side effects or need an AI session (`prepare-worktree`, `develop`, `prepare-test-worktree`, `test`, `e2e`, `rc-build`) become `UNKNOWN` and block for evidence-based reconciliation; they are never blindly replayed. Recovery records events and queues a blocked notification. Formal release retries treat an existing remote tag at the verified delivery SHA as already triggered, reject a tag pointing elsewhere, and mark a task `RELEASED` only after required workflows succeed and GitHub reports a published, non-draft Release for that tag. The authenticated dashboard filters raw command output, prompts, credentials, and error text from its event feed.
 
 ## Task dashboard and authenticated intake UI
 
@@ -166,16 +166,48 @@ node packages/orchestrator/src/cli.mjs serve --project ./project.json --port 431
 
 Open `http://127.0.0.1:43194/`. Authenticated routes require a Bearer token; the UI keeps it in the current browser tab's session storage. The service binds to loopback by default. Binding to a non-loopback address is refused unless both an auth token and `--tls-terminated true` are supplied; prefer keeping this service loopback-only behind an HTTPS tunnel/reverse proxy. Never expose the task runner over unauthenticated HTTP. `GET /health`, `GET /meta`, `GET /tasks`, and `GET /tasks/:id` are available; authenticated `POST /tasks` requires an explicit approval checkbox and `POST /tasks/:id/run` starts only a task in the configured repository.
 
+## Optional rootless Docker runner
+
+On a Linux controller with rootless Docker, set `runtime.sandbox` to enable
+containerized local Codex for the configured development and test stages.
+
+```json
+{
+  "enabled": true,
+  "provider": "docker",
+  "trustedProject": true,
+  "dockerExecutable": "/home/lingxi-orchestrator/bin/docker",
+  "image": "sha256:<64 lowercase hexadecimal digits>",
+  "authFile": "/home/lingxi-orchestrator/.codex/auth.json"
+}
+```
+
+Build or provision a trusted Linux image with `/usr/local/bin/codex`,
+`/usr/local/bin/codex-code-mode-host`, `/usr/local/bin/node`, and the CA
+certificates required by Codex. Reference
+the local image ID or an immutable registry digest. Use a controller-managed
+Codex login file. The container mounts that file read-only, so renew the
+login on the controller if it expires. Each stage starts a fresh container.
+Disposable workspace state lives in the container, and Codex session state
+is retained under the Orchestrator task home by task and role. Keep native
+resume enabled for roles that must restore prior Codex sessions.
+
+The configured remote session stays on the controller. The container connects
+to it through a task-scoped Unix socket using the existing LingXi bridge.
+The controller pairing profile, worker GitHub credential and Feishu webhook
+stay on the controller. Enable this mode for approved trusted projects.
+Enforce controlled-device isolation and least-privilege separately on Windows.
+
 ## Local worker
 
-Run the scheduler as a local foreground service on the controller when continuous progression is wanted:
+Run the scheduler as a local foreground service on the controller when continuous progression is wanted. Configure `runtime.notifications.feishuWebhookEnv` with the name of an environment variable holding the Feishu/Lark HTTPS webhook URL; the URL itself is never saved in project configuration. The worker persists notification delivery attempts in its outbox and retries failures with backoff:
 
 ```sh
 node packages/orchestrator/src/cli.mjs worker \
   --project ./project.json --interval-ms 30000 --auto-retry true
 ```
 
-The worker only selects non-terminal execution states. `RC_READY`, `RELEASE_APPROVED`, `RELEASED`, and `BLOCKED_USER_DECISION` are never advanced by it. Stop it with `Ctrl+C`; it does not alter LingXi sessions, manual terminals, or existing AI bindings.
+The worker selects active execution states. `RC_READY`, `RELEASE_APPROVED`, and `RELEASE_TRIGGERED` are advanced only when `runtime.release.autoAfterGate` is enabled; otherwise release remains a CLI action. `RELEASED` and `BLOCKED_USER_DECISION` are terminal. Stop it with `Ctrl+C`; it does not alter LingXi sessions, manual terminals, or existing AI bindings.
 
 ## Release approval record
 
@@ -200,3 +232,11 @@ node packages/orchestrator/src/cli.mjs release-wait \
 ```
 
 These commands intentionally do not bypass GitHub Environment protection. A tag failure or a failed/timeout formal workflow moves the task to `BLOCKED_USER_DECISION` rather than attempting another tag.
+
+
+## Codex native-session recovery
+
+For controller-local Codex, add `--json` to the configured exec arguments so the runner can persist the native session ID from JSONL session-start events. Set `resumeNativeSession: true` and provide `resumeArgs` with a literal `{sessionId}` slot to opt into native resume on a subsequent attempt. The session ID is checkpoint metadata in SQLite; the approved task prompt and task events remain the fallback recovery package. Do not combine native resume with `--ephemeral`. CLI argument syntax is deliberately project-configured. Verify the resume invocation against the installed Codex version before enabling it; preflight currently checks the executable/version and authentication, but does not execute a resume command. Remote agents do not currently stream native-session events to the controller.
+
+
+The optional `runtime.sandbox.enabled` flag selects the rootless Docker provider described above. It requires a Linux controller, an explicitly trusted project, and a pinned image. Container isolation on the controller does not establish controlled-device isolation on Windows.
