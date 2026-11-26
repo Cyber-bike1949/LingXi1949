@@ -3295,3 +3295,34 @@
     width: 100%;
   }
 }
+
+/* Keep task cards and event diagnostics inside narrow Obsidian panes. */
+.termesh-remote-tasks-view,
+.termesh-remote-tasks-view > *,
+.termesh-remote-tasks-view details,
+.termesh-remote-tasks-view ul,
+.termesh-remote-tasks-view li {
+  min-width: 0;
+  max-width: 100%;
+}
+.termesh-remote-tasks-view summary,
+.termesh-remote-tasks-view a {
+  overflow-wrap: anywhere;
+}
+
+.termesh-remote-tasks-view ul {
+  padding-inline-start: 1.25em;
+}
+.termesh-remote-tasks-view details,
+.termesh-remote-tasks-view ul,
+.termesh-remote-tasks-view li {
+  box-sizing: border-box;
+}
+
+.termesh-remote-tasks-view details > * {
+  min-width: 0;
+  max-width: 100%;
+}
+.termesh-remote-tasks-view li {
+  overflow-wrap: anywhere;
+}

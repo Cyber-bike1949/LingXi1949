@@ -230,7 +230,14 @@ try {
         ],
         artifacts: [{ kind: 'test-report', sha: 'b'.repeat(64) }],
         testReport: { url: 'https://github.com/example/web-app/blob/main/TEST-HANDOFF.md', results: '用例 8 项，通过 8 项，失败 0 项。' },
-        events: [],
+        events: Array.from({ length: 2000 }, (_, index) => ({
+          id: 'UI-EVENT-' + index,
+          type: index === 1999 ? 'NODE_FAILED' : 'TRACE',
+          createdAt: new Date(1700000000000 + index * 1000).toISOString(),
+          data: { reason: index === 1999 ? 'UI_DIAGNOSTIC_MARKER' : 'TRACE_MARKER_' + index },
+        })),
+        eventCount: 2000,
+        eventsTruncated: false,
       }],
     };
     const fixturePath = join(work, 'orchestrator-status', 'tasks.json');
@@ -241,19 +248,60 @@ try {
     await page.locator('.termesh-home-actions button').filter({ hasText: '研发任务' }).click();
     const tasksView = page.locator('.termesh-remote-tasks-view');
     await tasksView.waitFor({ state: 'visible' });
-    await tasksView.locator('input').fill(fixturePath);
+    await tasksView.locator('input[type="text"]').fill(fixturePath);
     await tasksView.getByRole('button', { name: '刷新任务' }).click();
     const task = tasksView.locator('details').filter({ hasText: 'RND-UI-001' });
     await task.waitFor();
-    await task.locator('summary').click();
+    await task.locator(':scope > summary').click();
     await task.getByText('端到端测试：执行中').waitFor();
     await task.getByText('用例 8 项，通过 8 项，失败 0 项。').waitFor();
     await task.getByText('打开交接报告').waitFor();
     await task.getByText('Web Demo CI · success').waitFor();
+    const history = task.locator('.termesh-task-events');
+    const themeResults = {};
+    for (const theme of ['theme-dark', 'theme-light']) {
+      await page.evaluate(value => {
+        document.body.classList.remove('theme-dark', 'theme-light');
+        document.body.classList.add(value);
+      }, theme);
+      const colors = await tasksView.evaluate(el => {
+        const style = getComputedStyle(el);
+        return { background: style.backgroundColor, color: style.color, width: el.getBoundingClientRect().width, scrollWidth: el.scrollWidth };
+      });
+      if (!colors.color || colors.width <= 0) throw new Error('Task view is not visible in ' + theme);
+      themeResults[theme] = colors;
+      await page.screenshot({ path: join(output, theme + '.png') });
+    }
+    await page.evaluate(() => document.body.classList.remove('theme-dark', 'theme-light'));
+    await page.setViewportSize({ width: 720, height: 900 });
+    const narrow = await tasksView.evaluate(el => ({ width: el.getBoundingClientRect().width, scrollWidth: el.scrollWidth }));
+    if (narrow.scrollWidth > narrow.width + 2) throw new Error('Task view overflows at narrow width: ' + JSON.stringify(narrow));
+    report.themeCoverage = themeResults;
+    report.narrowLayout = narrow;
+    await history.getByRole('button', { name: /加载更多/ }).click();
+    if (await history.locator('.termesh-task-event').count() !== 100) throw new Error('Event pagination lost rows');
+    await history.getByLabel('事件类别').selectOption('error');
+    if (await history.locator('.termesh-task-event').count() !== 1) throw new Error('Error filter mixed unrelated events');
+    await history.locator('.termesh-task-event summary').click();
+    await history.getByText('事件 ID：UI-EVENT-1999', { exact: true }).waitFor();
+    await history.getByLabel('事件类别').selectOption('all');
+    await history.getByLabel('搜索事件').fill('TRACE_MARKER_1042');
+    if (await history.locator('.termesh-task-event').count() !== 1) throw new Error('Search did not isolate requested event');
+    await history.getByLabel('搜索事件').fill('NO_MATCH_MARKER');
+    await history.getByText('没有符合筛选条件的事件。').waitFor();
+    await history.getByLabel('搜索事件').fill('');
+    report.taskEventCoverage = ['pagination', 'error-filter', 'event-id', 'search', 'empty-results'];
+    const filterStartedAt = await page.evaluate(() => performance.now());
+    await history.getByLabel('搜索事件').fill('TRACE_MARKER_1998');
+    const filterAndRenderMs = await page.evaluate(startedAt => performance.now() - startedAt, filterStartedAt);
+    const renderedRows = await history.locator('.termesh-task-event').count();
+    report.traceStress = { eventCount: 2000, filterAndRenderMs, renderedRows };
+    if (renderedRows !== 1) throw new Error('TRACE stress search did not isolate the final event');
+    await history.getByLabel('搜索事件').fill('');
     // Keep the rendered snapshot visible while ensuring screenshots contain no absolute paths.
-    await tasksView.locator('input').fill('');
-    await tasksView.locator('input').blur();
-    await tasksView.locator('input').evaluate(input => input.setAttribute('placeholder', ''));
+    await tasksView.locator('input[type="text"]').fill('');
+    await tasksView.locator('input[type="text"]').blur();
+    await tasksView.locator('input[type="text"]').evaluate(input => input.setAttribute('placeholder', ''));
     await page.evaluate(() => {
       for (const leaf of window.app.workspace.getLeavesOfType('terminal-view')) leaf.detach();
     });
